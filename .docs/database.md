@@ -7,6 +7,7 @@
 - job_batches
 - failed_jobs
 - personal_access_tokens
+- password_reset_tokens 
 
 
 # Sơ đồ nhóm bảng và phụ thuộc
