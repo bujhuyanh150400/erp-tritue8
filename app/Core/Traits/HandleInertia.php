@@ -2,7 +2,12 @@
 
 namespace App\Core\Traits;
 
-class HandleInertia
-{
+use Inertia\Inertia;
 
+trait HandleInertia
+{
+    protected function rendering(string $view, array $data = []): \Inertia\Response
+    {
+        return Inertia::render($view, $data);
+    }
 }
