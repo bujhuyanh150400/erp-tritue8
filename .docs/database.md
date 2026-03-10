@@ -1,5 +1,7 @@
 # Database use: Postgres
+
 # các bảng mặc dịnh của laravel
+
 - sessions
 - cache
 - cache_locks
@@ -7,26 +9,27 @@
 - job_batches
 - failed_jobs
 - personal_access_tokens
-- password_reset_tokens 
-
+- password_reset_tokens
 
 # Sơ đồ nhóm bảng và phụ thuộc
+
 - G1 – Auth & Users & Profile
-  + Phụ thuộc: ---
+    + Phụ thuộc: ---
 - G2 – Học vụ
-  + Phụ thuộc: G1
+    + Phụ thuộc: G1
 - G3 – Lịch học
-  + Phụ thuộc: G1, G2
+    + Phụ thuộc: G1, G2
 - G4 – Điểm danh & Điểm số
-  + Phụ thuộc: G1, G2, G3
+    + Phụ thuộc: G1, G2, G3
 - G5 – Tài chính
-  + Phụ thuộc: G1, G2, G3, G4, G5
-- G6 - Hệ thống 
-  + Phụ thuộc: ---
+    + Phụ thuộc: G1, G2, G3, G4, G5
+- G6 - Hệ thống
+    + Phụ thuộc: ---
 
 # ---G1: Auth & Users & Profile
 
-## users 
+## users
+
     # note
     -  Quản lý tài khoản, vai trò, phân quyền
 
@@ -43,6 +46,7 @@
     - index(role)
 
 ## students
+
     # note
     - Quản lý hồ sơ học sinh
 
@@ -62,6 +66,7 @@
     - updated_at (timestamp) - Thời gian cập nhật
 
 ## teachers
+
     # note
     - Quản lý hồ sơ giáo viên
 
@@ -80,8 +85,8 @@
     - created_at (timestamp) - Thời gian tạo
     - updated_at (timestamp) - Thời gian cập nhật
 
-
 ## staff
+
     # note
     - Quản lý nhân viên (lễ tân, kế toán...)
 
@@ -102,6 +107,7 @@
 # --- G2: Học vụ
 
 ## subjects
+
     # note
     - Quản lý môn học
 
@@ -112,8 +118,9 @@
     - is_active (boolean default true) - Trạng thái hoạt động
     - created_at (timestamp) - Thời gian tạo
     - updated_at (timestamp) - Thời gian cập nhật
-    
+
 ## rooms
+
     # note
     - Quản lý phòng học
 
@@ -125,9 +132,9 @@
     - status (unsigned tinyint) - Trạng thái, lưu trong RoomStatus
     - created_at (timestamp) - Thời gian tạo
     - updated_at (timestamp) - Thời gian cập nhật
-    
 
 ## classes
+
     # note
     - Quản lý lớp học
 
@@ -154,8 +161,9 @@
     - index(grade_level)
     - index(teacher_id)
     - index(status)
-    
-## class_enrollments 
+
+## class_enrollments
+
     # note
     - Quản lý đăng ký lớp học
 
@@ -179,6 +187,7 @@
     - index(student_id)
 
 ## monthly_reports
+
     # note
     - Quản lý báo cáo nhận xét của giáo viên
     
@@ -199,7 +208,8 @@
 
 # --- G3: Lịch học
 
-## class_schedule_templates 
+## class_schedule_templates
+
     # note
     - Quản lý Lịch học cố định
 
@@ -225,6 +235,7 @@
     - index(class_id, end_date)
 
 ## schedule_instances
+
     # note
     - Quản lý Lịch học chi tiết
     - Đây là bảng trung tâm của toàn bộ hệ thống. Mọi module đều join về bảng này.
@@ -265,6 +276,7 @@
     - index(schedule_type, date)  
 
 ## schedule_change_requests
+
     # note
     - Quản lý yêu cầu thay đổi lịch học
 
@@ -288,7 +300,8 @@
 
 # --- G4: Điểm danh & Điểm số
 
-## attendance_sessions 
+## attendance_sessions
+
     # note
     - Quản lý phiên điểm danh
     - Mỗi buổi học có 1 attendance_session tương ứng. Tách riêng để không làm nặng schedule_instances.
@@ -316,7 +329,8 @@
     - index(class_id, session_date)
     - index(status)
 
-## attendance_records 
+## attendance_records
+
     # note
     - Bảng ghi nhận điểm danh từng học sinh trong từng buổi học.
 
@@ -338,7 +352,8 @@
     - unique(session_id, student_id)
     - index(student_id)
 
-## scores 
+## scores
+
     # note
     - Bảng ghi nhận điểm số từng học sinh trong từng buổi học.
 
@@ -358,7 +373,8 @@
     - unique(attendance_record_id, exam_slot)
     - index(exam_slot)
 
-## reward_points 
+## reward_points
+
     # note
     - Bảng ghi nhận điểm thưởng từng học sinh trong từng buổi học.
 
@@ -378,7 +394,8 @@
     - foreign(awarded_by) references users(id)
     - index(student_id)
 
-## reward_items 
+## reward_items
+
     # note
     - Bảng ghi nhận danh mục phần thưởng.
 
@@ -396,7 +413,8 @@
     - index(reward_type)
     - index(is_active)
 
-## reward_redemptions 
+## reward_redemptions
+
     # note
     - Bảng ghi nhận lịch sử đổi thưởng.
 
@@ -419,7 +437,8 @@
 
 # --- G5: Nhân sự - tài chính
 
-## teacher_salary_configs 
+## teacher_salary_configs
+
     # note
     - Cấu hình lương giáo viên
 
@@ -438,8 +457,8 @@
     - foreign(class_id) references classes(id)
     - index(teacher_id, class_id)
 
+## staff_shifts
 
-## staff_shifts 
     # note
     - Bảng ghi nhận ca làm việc của nhân viên
 
@@ -460,9 +479,9 @@
     # index
     - foreign(staff_id) references staff(id)
     - index(staff_id, shift_date)
-    
 
-## staff_salary_configs 
+## staff_salary_configs
+
     # note
     - Cấu hình lương nhân viên
 
@@ -476,7 +495,8 @@
     - created_at (timestamp) - Thời gian tạo
     - updated_at (timestamp) - Thời gian cập nhật
 
-## tuition_invoices 
+## tuition_invoices
+
     # note
     - Bảng ghi nhận hóa đơn học phí
 
@@ -527,6 +547,7 @@
     - foreign(changed_by) references users(id)
 
 ## teacher_salary_invoices
+
     # note
     - Bảng ghi nhận hóa đơn lương giáo viên
 
@@ -551,7 +572,6 @@
     - foreign(class_id) references classes.id
     - unique(teacher_id, class_id, month) 
 
-    
 ## teacher_salary_invoice_logs
 
     # note
@@ -574,8 +594,8 @@
     - foreign(invoice_id) references teacher_salary_invoices.id
     - foreign(changed_by) references users(id)
 
-   
 ## staff_salary_invoices
+
     # note
     - Bảng ghi nhận hóa đơn lương nhân viên
 
@@ -622,8 +642,8 @@
     - foreign(invoice_id) references staff_salary_invoices.id
     - foreign(changed_by) references users(id)
 
+## expense_categories
 
-## expense_categories 
     # note
     - Danh mục chi phí vận hành
 
@@ -638,6 +658,7 @@
     - unique(name)
 
 ## expense_invoices
+
     # note
     - Bảng ghi nhận chi phí 
 
@@ -665,6 +686,7 @@
 # --- G6: Hệ thống
 
 ## user_logs
+
     # note
     - Bảng ghi nhận lịch sử hoạt động của người dùng
 
@@ -680,6 +702,7 @@
     - foreign(user_id) references users.id
 
 ## notifications
+
     # note
     - Bảng lưu trữ các thông báo gửi cho người dùng
 
