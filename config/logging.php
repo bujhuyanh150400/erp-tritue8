@@ -56,15 +56,15 @@ return [
          * |--------------------------------------------------------------------------
          * | KÊNH LOG HÀNH ĐỘNG (ACTION)
          * |--------------------------------------------------------------------------
-         * | Ghi log nghiệp vụ
+         * | Ghi log hoạt động người dùng
          *
-         * | Sẽ lưu vào file: storage/logs/actions-YYYY-MM-DD.log
+         * | Sẽ lưu vào file: storage/logs/user_activity-YYYY-MM-DD.log
          */
-        'actions' => [
+        'user_activity' => [
             'driver' => 'daily', // <-- Yêu cầu 1: Lưu hàng ngày
-            'path' => storage_path('logs/actions.log'),
-            'level' => 'info', // Bắt đầu ghi từ level 'info' trở lên
-            'days' => 30,     // Xóa log cũ sau 30 ngày
+            'path' => storage_path('logs/user_activity.log'),
+            'formatter' => \Monolog\Formatter\JsonFormatter::class, // Ép ra JSON
+            'days' => 10,     // Xóa log cũ sau 10 ngày
         ],
 
         /**

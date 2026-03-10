@@ -9,7 +9,7 @@ import {
 } from '@/components/ui/breadcrumb';
 import { Separator } from '@/components/ui/separator';
 import { SidebarTrigger } from '@/components/ui/sidebar';
-import type { IBreadcrumbItem } from '@/types';
+import type { IBreadcrumbItem } from '@/lib/types';
 
 type Props = {
     breadcrumbs?: IBreadcrumbItem[];

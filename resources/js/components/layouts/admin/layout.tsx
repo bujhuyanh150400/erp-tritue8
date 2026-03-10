@@ -4,7 +4,7 @@ import type { FC, ReactNode } from 'react';
 import { AppHeader, AppSidebar } from '@/components/layouts/admin/components';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import type { IBreadcrumbItem } from '@/types';
+import type { IBreadcrumbItem } from '@/lib/types';
 
 type Props = {
     children: ReactNode;

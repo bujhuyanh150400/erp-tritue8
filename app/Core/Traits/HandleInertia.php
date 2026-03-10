@@ -6,8 +6,13 @@ use Inertia\Inertia;
 
 trait HandleInertia
 {
-    protected function rendering(string $view, array $data = []): \Inertia\Response
+    /**
+     * @param string $component
+     * @param array $props
+     * @return \Inertia\Response
+     */
+    protected function rendering(string $component, array $props = []): \Inertia\Response
     {
-        return Inertia::render($view, $data);
+        return inertia($component, $props);
     }
 }

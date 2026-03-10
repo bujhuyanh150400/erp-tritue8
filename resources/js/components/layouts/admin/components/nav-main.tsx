@@ -16,7 +16,7 @@ import {
     SidebarMenuSubButton,
     SidebarMenuSubItem,
 } from '@/components/ui/sidebar';
-import type { IMenu } from '@/types';
+import type { IMenu } from '@/lib/types';
 
 export function NavMain({ menus }: { menus: IMenu[] }) {
 
