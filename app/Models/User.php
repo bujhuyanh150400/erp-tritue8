@@ -89,4 +89,19 @@ class User extends Authenticatable
     {
         return $this->role === UserRole::Student;
     }
+
+    public function getUsername(): string
+    {
+        return $this->username;
+    }
+
+    public function getRole(): UserRole
+    {
+        return $this->role;
+    }
+
+    public function getIsActive(): bool
+    {
+        return $this->is_active;
+    }
 }

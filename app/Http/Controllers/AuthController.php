@@ -6,6 +6,7 @@ use App\Constants\UserRole;
 use App\Core\Controller\BaseController;
 use App\Http\Requests\LoginRequest;
 use App\Services\AuthService;
+use App\Http\Requests\RegisterRequest;
 
 class AuthController extends BaseController
 {
@@ -45,5 +46,26 @@ class AuthController extends BaseController
         $this->authService->handleLogout();
 
         return redirect('/login');
+    }
+
+    public function registerView()
+    {
+        return $this->rendering('register');
+    }
+
+    public function registerUser(RegisterRequest $request)
+    {
+        $data = $request->validated();
+
+        $result = $this->authService->handleRegister($data);
+
+        if ($result->isSuccess()) {
+            return redirect()->intended('/login')
+                ->with('success', 'Đăng ký thành công');
+        }
+
+        return back()->withErrors([
+            'username' => $result->getMessage()
+        ]);
     }
 }

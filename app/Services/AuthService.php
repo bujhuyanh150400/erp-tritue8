@@ -9,6 +9,7 @@ use App\Repositories\UserLogRepository;
 use App\Repositories\UserRepository;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
+use App\Models\User;
 
 class AuthService extends BaseService
 {
@@ -68,5 +69,35 @@ class AuthService extends BaseService
 
             return ServiceReturn::success(null, 'Đăng xuất thành công');
         });
+    }
+
+    public function handleRegister(array $data): ServiceReturn
+    {
+        return $this->execute(
+            callback: function () use ($data) {
+
+                $exists = $this->userRepository->findByUsername($data['username']);
+                if ($exists) {
+                    return ServiceReturn::error('Tên đăng nhập đã tồn tại.');
+                }
+                $createdData = [
+                    'username' => $data['username'],
+                    'password' => $data['password'],
+                    'role' => $data['role'],
+                    'is_active' => true,
+                ];
+                $user = $this->userRepository->create($createdData);
+                if(!$user){
+                    return ServiceReturn::error('Đăng ký thất bại!');
+                }
+                Logging::userActivity(
+                    userId: $user->id,
+                    action: 'Đăng ký',
+                    description: 'Người dùng đăng ký tài khoản'
+                );
+
+                return ServiceReturn::success($user, 'Đăng ký thành công');
+            }
+        );
     }
 }
