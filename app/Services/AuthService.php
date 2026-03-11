@@ -4,8 +4,8 @@ namespace App\Services;
 
 use App\Core\Logs\Logging;
 use App\Core\Services\BaseService;
+use App\Core\Services\ServiceException;
 use App\Core\Services\ServiceReturn;
-use App\Repositories\UserLogRepository;
 use App\Repositories\UserRepository;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
@@ -25,12 +25,12 @@ class AuthService extends BaseService
             callback: function () use ($username, $password) {
                 $user = $this->userRepository->findByUsername($username);
                 if (! $user || ! Hash::check($password, $user->password)) {
-                    return ServiceReturn::error('Tên đăng nhập hoặc mật khẩu không đúng.');
+                    throw new ServiceException('Tên đăng nhập hoặc mật khẩu không đúng.');
                 }
 
                 // Check if user is active
                 if (! $user->is_active) {
-                    return ServiceReturn::error('Tài khoản đã bị khóa, liên hệ admin.');
+                    throw new ServiceException('Tài khoản đã bị khóa, liên hệ admin.');
                 }
 
                 // Attempt login session
