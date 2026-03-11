@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Constants\UserRole;
 use App\Core\Controller\BaseController;
 use App\Http\Requests\LoginRequest;
 use App\Services\AuthService;
@@ -24,7 +23,9 @@ class AuthController extends BaseController
         $result = $this->authService->handleLogin($data['username'], $data['password']);
 
         if ($result->isSuccess()) {
-            return redirect()->intended('/admin/dashboard');
+            $this->success('Đăng nhập thành công');
+
+            return redirect()->intended(route('dashboard'));
         }
 
         return back()->withErrors(['username' => $result->getMessage()]);
@@ -34,6 +35,6 @@ class AuthController extends BaseController
     {
         $this->authService->handleLogout();
 
-        return redirect('/login');
+        return redirect()->route('login');
     }
 }

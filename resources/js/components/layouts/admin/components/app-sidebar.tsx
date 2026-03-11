@@ -1,167 +1,63 @@
-import {
-    GalleryVerticalEndIcon,
-    AudioLinesIcon,
-    TerminalIcon,
-    TerminalSquareIcon,
-    BotIcon,
-    BookOpenIcon,
-    Settings2Icon,
-    FrameIcon,
-    PieChartIcon,
-    MapIcon,
-} from 'lucide-react';
+import { Link } from '@inertiajs/react';
 import * as React from 'react';
+import Logo from '@/assets/images/logo.png';
 import { NavMain } from '@/components/layouts/admin/components/nav-main';
 import { NavUser } from '@/components/layouts/admin/components/nav-user';
+import { Avatar, AvatarImage } from '@/components/ui/avatar';
 import {
     Sidebar,
     SidebarContent,
     SidebarFooter,
     SidebarHeader,
+    SidebarMenu,
+    SidebarMenuButton,
+    SidebarMenuItem,
     SidebarRail,
 } from '@/components/ui/sidebar';
+import type { User } from '@/lib/types';
+import { useMenu } from '@/modules/application/hooks';
+import { dashboard } from '@/routes';
 
-// This is sample data.
-const data = {
-    user: {
-        name: 'shadcn',
-        email: 'm@example.com',
-        avatar: '/avatars/shadcn.jpg',
-    },
-    teams: [
-        {
-            name: 'Acme Inc',
-            logo: <GalleryVerticalEndIcon />,
-            plan: 'Enterprise',
-        },
-        {
-            name: 'Acme Corp.',
-            logo: <AudioLinesIcon />,
-            plan: 'Startup',
-        },
-        {
-            name: 'Evil Corp.',
-            logo: <TerminalIcon />,
-            plan: 'Free',
-        },
-    ],
-    navMain: [
-        {
-            title: 'Playground',
-            url: '#',
-            icon: <TerminalSquareIcon />,
-            isActive: true,
-            items: [
-                {
-                    title: 'History',
-                    url: '#',
-                },
-                {
-                    title: 'Starred',
-                    url: '#',
-                },
-                {
-                    title: 'Settings',
-                    url: '#',
-                },
-            ],
-        },
-        {
-            title: 'Models',
-            url: '#',
-            icon: <BotIcon />,
-            items: [
-                {
-                    title: 'Genesis',
-                    url: '#',
-                },
-                {
-                    title: 'Explorer',
-                    url: '#',
-                },
-                {
-                    title: 'Quantum',
-                    url: '#',
-                },
-            ],
-        },
-        {
-            title: 'Documentation',
-            url: '#',
-            icon: <BookOpenIcon />,
-            items: [
-                {
-                    title: 'Introduction',
-                    url: '#',
-                },
-                {
-                    title: 'Get Started',
-                    url: '#',
-                },
-                {
-                    title: 'Tutorials',
-                    url: '#',
-                },
-                {
-                    title: 'Changelog',
-                    url: '#',
-                },
-            ],
-        },
-        {
-            title: 'Settings',
-            url: '#',
-            icon: <Settings2Icon />,
-            items: [
-                {
-                    title: 'General',
-                    url: '#',
-                },
-                {
-                    title: 'Team',
-                    url: '#',
-                },
-                {
-                    title: 'Billing',
-                    url: '#',
-                },
-                {
-                    title: 'Limits',
-                    url: '#',
-                },
-            ],
-        },
-    ],
-    projects: [
-        {
-            name: 'Design Engineering',
-            url: '#',
-            icon: <FrameIcon />,
-        },
-        {
-            name: 'Sales & Marketing',
-            url: '#',
-            icon: <PieChartIcon />,
-        },
-        {
-            name: 'Travel',
-            url: '#',
-            icon: <MapIcon />,
-        },
-    ],
-};
 
-export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+export function AppSidebar({ user, url, appName }: { user: User, url: string, appName: string }) {
+    const menus = useMenu(user, url);
     return (
-        <Sidebar collapsible="icon" {...props}>
+        <Sidebar collapsible="icon">
+            {/* Header */}
             <SidebarHeader>
-                {/* Header làm sau */}
+                <SidebarMenu>
+                    <SidebarMenuItem>
+                        <SidebarMenuButton
+                            size="lg"
+                            asChild
+                            className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+                        >
+                            {/* Dùng asChild để bọc Link của Inertia mà không làm hỏng CSS */}
+                            <Link href={dashboard()}>
+                                <div className="flex aspect-square size-8 items-center justify-center rounded-lg">
+                                    <Avatar className="size-8 rounded-lg">
+                                        <AvatarImage src={Logo} alt={appName} />
+                                    </Avatar>
+                                </div>
+
+                                <div className="grid flex-1 text-left text-sm leading-tight">
+                                    <span className="truncate font-semibold">
+                                        {appName}
+                                    </span>
+                                    <span className="truncate text-xs text-muted-foreground">
+                                        Quản lý trường học
+                                    </span>
+                                </div>
+                            </Link>
+                        </SidebarMenuButton>
+                    </SidebarMenuItem>
+                </SidebarMenu>
             </SidebarHeader>
             <SidebarContent>
-                <NavMain menus={[]} />
+                <NavMain menus={menus} />
             </SidebarContent>
             <SidebarFooter>
-                <NavUser user={data.user} />
+                <NavUser user={user} />
             </SidebarFooter>
             <SidebarRail />
         </Sidebar>
