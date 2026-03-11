@@ -2,16 +2,9 @@ import type { ReactNode } from 'react';
 import Layout from '@/components/layouts/admin/layout';
 
 export default function Page() {
-    return (
-        <>
-            test
-        </>
-    );
+    return <>Bảng điều khiển</>;
 }
 
-
 Page.layout = (page: ReactNode) => (
-    <Layout>
-        {page}
-    </Layout>
+    <Layout breadcrumbs={[{ title: 'Bảng điều khiển' }]}>{page}</Layout>
 );

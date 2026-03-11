@@ -55,7 +55,7 @@ class AuthService extends BaseService
     {
         return $this->execute(function () {
             if (Auth::check()) {
-                $this->userLogRepository->log(
+                Logging::userActivity(
                     userId: Auth::id(),
                     action: 'Đăng xuất',
                     description: 'Người dùng đăng xuất khỏi hệ thống'
