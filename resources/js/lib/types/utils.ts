@@ -6,17 +6,20 @@ export interface IMenu {
     url?: string;
     icon?: JSX.Element;
     active?: boolean;
-    can_show?: boolean;
     items?: {
         title: string;
         url: string;
         active?: boolean;
-        can_show?: boolean;
     }[];
 }
 export interface IBreadcrumbItem {
     title: string;
     href?: string;
+}
+
+export type ToastData = {
+    message: string;
+    title: string;
 }
 
 type PaginatorLink = {

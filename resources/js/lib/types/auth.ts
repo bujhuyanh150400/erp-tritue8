@@ -1,13 +1,17 @@
+export enum UserRole {
+    Admin = 0,
+    Teacher = 1,
+    Staff = 2,
+    Student = 3,
+}
 export type User = {
     id: number;
-    name: string;
-    email: string;
-    avatar?: string;
-    email_verified_at: string | null;
+    username: string;
+    role: UserRole;
     created_at: string;
     updated_at: string;
-    [key: string]: unknown; // This allows for additional properties...
 };
+
 
 export type Auth = {
     user: User;

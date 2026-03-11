@@ -1,3 +1,4 @@
-export type * from './auth';
+export * from './auth';
+
 export type * from './utils';
 export * from  './error-api'

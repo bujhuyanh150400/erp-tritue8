@@ -4,20 +4,16 @@ import Banner from '@/assets/images/banner_1.png';
 import Logo from '@/assets/images/logo.png';
 import { Avatar, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
-import {
-    Field,
-    FieldGroup,
-    FieldSeparator,
-} from '@/components/ui/field';
+import { Field, FieldGroup, FieldSeparator } from '@/components/ui/field';
+import { Spinner } from '@/components/ui/spinner';
 import { FormFieldInput } from '@/components/utils';
 import { cn } from '@/lib/utils';
 import { useLogin } from '@/modules/auth/hooks';
 
 export default function LoginPage() {
-
     const { form, submitForm } = useLogin();
 
-    const { data, setData, post, processing, errors } = form;
+    const { data, setData, processing, errors } = form;
 
     return (
         <div className="grid min-h-svh lg:grid-cols-2">
@@ -77,7 +73,12 @@ export default function LoginPage() {
                                 />
 
                                 <Field>
-                                    <Button type="submit">Đăng nhập</Button>
+                                    <Button type="submit" disabled={processing}>
+                                        {processing && (
+                                            <Spinner data-icon="inline-start" />
+                                        )}
+                                        Đăng nhập
+                                    </Button>
                                 </Field>
                                 <FieldSeparator>
                                     Bạn chưa có tài khoản? Liên hệ quản trị viên
