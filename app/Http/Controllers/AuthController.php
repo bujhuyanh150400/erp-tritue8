@@ -38,25 +38,4 @@ class AuthController extends BaseController
 
         return redirect()->route('login');
     }
-
-    public function registerView()
-    {
-        return $this->rendering('register');
-    }
-
-    public function registerUser(RegisterRequest $request)
-    {
-        $data = $request->validated();
-
-        $result = $this->authService->handleRegister($data);
-
-        if ($result->isSuccess()) {
-            return redirect()->intended('/login')
-                ->with('success', 'Đăng ký thành công');
-        }
-
-        return back()->withErrors([
-            'username' => $result->getMessage()
-        ]);
-    }
 }
