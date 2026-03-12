@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Core\Controller\BaseController;
 use App\Http\Requests\LoginRequest;
 use App\Services\AuthService;
+use App\Http\Requests\RegisterRequest;
 
 class AuthController extends BaseController
 {

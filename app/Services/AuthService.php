@@ -9,6 +9,7 @@ use App\Core\Services\ServiceReturn;
 use App\Repositories\UserRepository;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
+use App\Models\User;
 
 class AuthService extends BaseService
 {
