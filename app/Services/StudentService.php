@@ -2,12 +2,13 @@
 
 namespace App\Services;
 
+use App\Core\DTOs\FilterDTO;
+use App\Core\Logs\Logging;
 use App\Core\Services\BaseService;
 use App\Core\Services\ServiceException;
 use App\Core\Services\ServiceReturn;
 use App\Repositories\StudentRepository;
 use App\Repositories\UserRepository;
-use App\Core\Logs\Logging;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Auth;
 
@@ -15,8 +16,10 @@ class StudentService extends BaseService
 {
     public function __construct(
         protected StudentRepository $studentRepository,
-        protected UserRepository $userRepository
-    ) {}
+        protected UserRepository    $userRepository
+    )
+    {
+    }
 
     public function createStudent(array $data): ServiceReturn
     {
@@ -47,15 +50,14 @@ class StudentService extends BaseService
                 $student = $this->studentRepository->create($studentData);
 
                 if (!$student) {
-                    throw new ServiceException(message:'Tạo hồ sơ học sinh thất bại.');
+                    throw new ServiceException(message: 'Tạo hồ sơ học sinh thất bại.');
                 }
                 Logging::userActivity(
-                    userId: $user->id,
                     action: 'Tạo học sinh',
                     description: 'Tạo hồ sơ học sinh ' . $student->full_name
                 );
 
-                return ServiceReturn::success($student, message:'Tạo hồ sơ học sinh thành công');
+                return ServiceReturn::success($student, message: 'Tạo hồ sơ học sinh thành công');
             }
         );
     }
@@ -86,10 +88,10 @@ class StudentService extends BaseService
                     throw new ServiceException('Cập nhật học sinh thất bại.');
                 }
                 Logging::userActivity(
-                    userId: auth()->id(),
                     action: 'Cập nhật học sinh',
                     description: 'Cập nhật hồ sơ học sinh ' . $student->full_name
                 );
+
                 return ServiceReturn::success($updated, 'Cập nhật học sinh thành công');
             }
         );
@@ -108,21 +110,26 @@ class StudentService extends BaseService
                     throw new ServiceException('Xóa học sinh thất bại.');
                 }
                 Logging::userActivity(
-                    userId: auth()->id(),
                     action: 'Xóa học sinh',
                     description: 'Xóa hồ sơ học sinh ' . $student->full_name
                 );
+
                 return ServiceReturn::success(null, 'Xóa học sinh thành công');
             }
         );
     }
 
-    public function getListStudents(array $filters): ServiceReturn
+    public function getListStudents(FilterDTO $dto): ServiceReturn
     {
-        return $this->execute(callback: function () use ($filters) {
-                $students = $this->studentRepository->getList(filter: $filters, perPage: $filters['limit'] ?? 10);
-                return ServiceReturn::success($students, 'Lấy danh sách học sinh thành công');
-            }
-        );
+        return $this->execute(callback: function () use ($dto) {
+            $students = $this->studentRepository->paginate(
+                filters: $dto->getFilters(),
+                perPage: $dto->getPerPage(),
+                page: $dto->getPage(),
+                orderBy: $dto->getSortBy(),
+                orderDirection: $dto->getDirection()
+            );
+            return ServiceReturn::success($students, 'Lấy danh sách học sinh thành công');
+        });
     }
 }

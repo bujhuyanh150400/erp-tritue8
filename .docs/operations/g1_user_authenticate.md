@@ -13,6 +13,34 @@ users (1) ──── (0..1) teachers
 users (1) ──── (0..1) staff
 users (1) ──── (0..1) students
 ```
+### Trạng thái tài khoản — 2 tầng độc lập
+
+| Tầng | Cột | Ý nghĩa |
+|---|---|---|
+| Auth | `users.is_active` | Có được đăng nhập không |
+| Nghiệp vụ | `teachers.status` / `staff.status` | Có đang hoạt động trong hệ thống không |
+
+---
+
+### Bảo mật dữ liệu nhạy cảm
+```
+* Thông tin ngân hàng
+- Chỉ Admin được xem và sửa (`bank_account_number`, `bank_account_holder`).
+- API trả về profile cho **chính GV** → mask: `****1234`.
+
+* Password
+- Lưu dạng bcrypt hash, không bao giờ trả về trong response.
+```
+### Các edge case cần xử lý
+
+| Tình huống | Xử lý |
+|---|---|
+| Transaction tạo GV lỗi giữa chừng | Rollback toàn bộ |
+| Username bị trùng | Báo lỗi ngay khi nhập, gợi ý username khác |
+| Admin tự khóa mình | Chặn ở tầng backend, không phụ thuộc UI |
+| GV nghỉ việc còn buổi dạy tương lai | Cảnh báo trước khi khóa, admin phải xử lý lịch dạy trước |
+| Học sinh chuyển khối (lên lớp) | Cập nhật `students.grade_level`, không tạo user mới |
+| Đăng nhập sai nhiều lần | Không yêu cầu trong spec, bỏ qua ở giai đoạn này |
 
 ---
 
@@ -197,42 +225,52 @@ Admin bấm "Mở khóa"
 
 ---
 
-## 8. Trạng thái tài khoản — 2 tầng độc lập
 
-| Tầng | Cột | Ý nghĩa |
-|---|---|---|
-| Auth | `users.is_active` | Có được đăng nhập không |
-| Nghiệp vụ | `teachers.status` / `staff.status` | Có đang hoạt động trong hệ thống không |
+## 11. Danh sách Học sinh
 
-Ví dụ minh họa:
+### 11.1 Bộ lọc & Tìm kiếm
 
-| Tình huống | users.is_active | teachers.status |
-|---|---|---|
-| GV đang dạy bình thường | true | active |
-| GV nghỉ thai sản | true | inactive — vẫn đăng nhập xem lịch sử được |
-| GV nghỉ việc hẳn | false | terminated — không đăng nhập được, dữ liệu giữ nguyên |
+```
+Tìm kiếm nhanh (full-text):
+  - Họ tên học sinh
+  - Mã học sinh (students.id)
+  - SĐT phụ huynh
+ 
+Bộ lọc:
+  - Tháng              — lọc dữ liệu báo cáo theo tháng
+  - Khối               — grade_level (6–12)
+  - Lớp                — class_id
+  - Môn học            — subject_id
+  - Giáo viên          — teacher_id
+  - Tình trạng báo cáo: Tất cả | Chưa nộp | Đã nộp chờ duyệt | Đã duyệt
+  - Trạng thái tài khoản: Tất cả | Hoạt động | Đã khóa
+ 
+Hiển thị tổng số học sinh tìm thấy
+Nút: [Xóa bộ lọc]
+```
 
----
+### 11.2 Bảng hiển thị
 
-## 9. Bảo mật dữ liệu nhạy cảm
-
-### Thông tin ngân hàng
-- Chỉ Admin được xem và sửa (`bank_account_number`, `bank_account_holder`).
-- API trả về profile cho **chính GV** → mask: `****1234`.
-- Mỗi lần Admin xem/sửa thông tin ngân hàng → ghi `user_logs`.
-
-### Password
-- Lưu dạng bcrypt hash, không bao giờ trả về trong response.
-- `password_changed_at = NULL` → tài khoản đang dùng mật khẩu tạm → hiển thị cảnh báo trên UI.
-
-
-## 10. Các edge case cần xử lý
-
-| Tình huống | Xử lý |
-|---|---|
-| Transaction tạo GV lỗi giữa chừng | Rollback toàn bộ |
-| Username bị trùng | Báo lỗi ngay khi nhập, gợi ý username khác |
-| Admin tự khóa mình | Chặn ở tầng backend, không phụ thuộc UI |
-| GV nghỉ việc còn buổi dạy tương lai | Cảnh báo trước khi khóa, admin phải xử lý lịch dạy trước |
-| Học sinh chuyển khối (lên lớp) | Cập nhật `students.grade_level`, không tạo user mới |
-| Đăng nhập sai nhiều lần | Không yêu cầu trong spec, bỏ qua ở giai đoạn này |
+```
+Cột:
+    - Học sinh: chứa - id, tên, ngày sinh
+    - Giới tính
+    - Khối
+    - Môn đang học (triển khai sau)
+    - Phụ huynh: chứa - tên, SĐT
+    - Tình trạng tài khoản
+    - Số sao
+    - Tình trạng báo cáo
+    - Action
+        + Xem chi tiết
+        + Chỉnh sửa thông tin
+        + Xem lịch sử đổi thưởng (popup)
+        + Khóa / Mở khóa tài khoản
+ 
+Lưu ý:
+  - "Môn đang học" hiển thị dạng tag vì 1 HS học nhiều môn
+    vd: [Toán 8] [Văn 8] [Anh 8]
+  - "Số sao" = tổng reward_points hiện tại
+  - "Tình trạng báo cáo" theo tháng đang lọc
+  - "Tài khoản" hiển thị: Hoạt động / Đã khóa
+```

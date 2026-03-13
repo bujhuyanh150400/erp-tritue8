@@ -9,20 +9,21 @@ use Illuminate\Validation\Rule;
 class ListRequest extends FormRequest
 {
     // --- Các giá trị mặc định ---
-    protected int $defaultPerPage = 15;
-    protected string $defaultSortBy = 'created_at';
-    protected string $defaultDirection = 'desc';
+    protected int $defaultPerPage = 10;
 
+    protected string $defaultSortBy = 'created_at';
+
+    protected string $defaultDirection = 'desc';
 
     /**
      * @var array Các cột được phép sort.
-     * Class con NÊN override lại thuộc tính này.
+     *            Class con NÊN override lại thuộc tính này.
      */
     protected array $allowedSorts = ['id', 'created_at'];
 
     /**
      * @var array Các key được phép filter.
-     * Class con NÊN override lại thuộc tính này.
+     *            Class con NÊN override lại thuộc tính này.
      */
     protected array $allowedFilters = [];
 
@@ -41,17 +42,16 @@ class ListRequest extends FormRequest
     public function rules(): array
     {
         $rules = [
-            'page'      => 'sometimes|integer|min:1',
-            'per_page'  => 'sometimes|integer|min:1|max:100', // Giới hạn max để bảo vệ DB
-            'sort_by'   => ['sometimes', 'string', Rule::in($this->allowedSorts)], // Chỉ cho phép sort các cột trong list
+            'page' => 'sometimes|integer|min:1',
+            'per_page' => 'sometimes|integer|min:1|max:100', // Giới hạn max để bảo vệ DB
+            'sort_by' => ['sometimes', 'string', Rule::in($this->allowedSorts)], // Chỉ cho phép sort các cột trong list
             'direction' => ['sometimes', 'string', Rule::in(['asc', 'desc'])],
-            'filter'    => 'sometimes|array',
+            'filters' => 'sometimes|array',
         ];
-
         // Tự động thêm rules cơ bản cho các filter được phép
         foreach ($this->allowedFilters as $filterKey) {
             // Rule cơ bản là 'string', class con có thể override
-            $rules["filter.{$filterKey}"] = 'sometimes|nullable|string|max:255';
+            $rules["filters.{$filterKey}"] = 'sometimes|nullable|string|max:255';
         }
 
         return $rules;
@@ -73,16 +73,16 @@ class ListRequest extends FormRequest
 
         // Xử lý filter: Chỉ lấy các filter có trong $allowedFilters
         $filters = [];
-        if (!empty($validated['filter'])) {
-            if (!empty($this->allowedFilters)) {
+        if (! empty($validated['filters'])) {
+            if (! empty($this->allowedFilters)) {
                 foreach ($this->allowedFilters as $key) {
                     // Chỉ lấy key-value nếu nó tồn tại và không null
-                    if (isset($validated['filter'][$key])) {
-                        $filters[$key] = $validated['filter'][$key];
+                    if (isset($validated['filters'][$key])) {
+                        $filters[$key] = $validated['filters'][$key];
                     }
                 }
-            }else{
-                $filters = $validated['filter'];
+            } else {
+                $filters = $validated['filters'];
             }
         }
 

@@ -4,15 +4,7 @@ namespace App\Core\Traits;
 
 trait ToastInertia
 {
-    private function flashToast(string $type, string $message, ?string $title = null): self
-    {
-        session()->flash($type, [
-            'message' => $message,
-            'title' => $title ?? $this->getDefaultTitle($type),
-        ]);
 
-        return $this;
-    }
 
     public function success(string $message, ?string $title = null): self
     {
@@ -34,6 +26,15 @@ trait ToastInertia
         return $this->flashToast('info', $message, $title);
     }
 
+    private function flashToast(string $type, string $message, ?string $title = null): self
+    {
+        session()->flash($type, [
+            'title' => $title ?? $this->getDefaultTitle($type),
+            'message' => $message,
+        ]);
+
+        return $this;
+    }
     private function getDefaultTitle(string $type): string
     {
         return match ($type) {
