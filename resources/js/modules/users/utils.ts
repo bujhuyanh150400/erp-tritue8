@@ -1,3 +1,4 @@
+import { mapEnumToOptions } from '@/lib/utils';
 import { Gender, GradeLevel } from '@/modules/users/consts';
 
 export const getGenderLabel = (gender: Gender) => {
@@ -56,3 +57,6 @@ export const getGradeLevelLabel = (gradeLevel: number) => {
             return 'Không xác định';
     }
 }
+
+export const gradeOptions = mapEnumToOptions(GradeLevel, getGradeLevelLabel, 'Tất cả');
+

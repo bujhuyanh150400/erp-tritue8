@@ -63,7 +63,6 @@ class StudentController extends BaseController
         }
         $this->error($result->getMessage());
 
-        return back()->withErrors(['error' => $result->getMessage(),
-        ]);
+        return redirect()->back();
     }
 }

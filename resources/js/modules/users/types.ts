@@ -18,7 +18,7 @@ export type StudentList = {
     note: string | null;
 };
 
-export type StudentSearch = BaseSearchRequest<{
+export type StudentSearchRequest = BaseSearchRequest<{
     keyword?: string;
     grade_level?: GradeLevel;
 }>;

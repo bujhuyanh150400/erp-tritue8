@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\TeacherController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\DashboardController;
 use Illuminate\Support\Facades\Route;
@@ -21,15 +22,26 @@ Route::prefix('admin')->group(function () {
         Route::prefix('dashboard')->group(function () {
             Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
         });
-        Route::prefix('student')->group(function () {
-            // Student
-            Route::middleware('check-role:admin')->group(function () {
-                Route::get('/list', [StudentController::class, 'listStudent'])->name('student.list');
-                Route::post('/create', [StudentController::class, 'createStudent'])->name('student.create');
-                Route::post('/{id}/update', [StudentController::class, 'updateStudent'])->name('student.update');
-                Route::delete('/{id}/delete', [StudentController::class, 'deletedStudent'])->name('student.delete');
-            });
 
+        Route::group([
+            'prefix' => 'student',
+            'middleware' => ['check-role:admin']
+        ], function () {
+            Route::get('/list', [StudentController::class, 'listStudent'])->name('student.list');
+            Route::get('/create', [StudentController::class, 'viewCreate'])->name('student.create');
+            Route::post('/create', [StudentController::class, 'createStudent'])->name('student.create');
+            Route::post('/{id}/update', [StudentController::class, 'updateStudent'])->name('student.update');
+            Route::put('/{id}/disabled', [StudentController::class, 'disabledStudent'])->name('student.disabled');
+        });
+
+        Route::group([
+            'prefix' => 'teacher',
+            'middleware' => ['check-role:admin']
+        ], function () {
+            Route::get('/list', [TeacherController::class, 'listTeacher'])->name('teacher.list');
+            Route::get('/create', [TeacherController::class, 'viewCreate'])->name('teacher.create');
+            Route::post('/create', [TeacherController::class, 'createTeacher'])->name('teacher.create');
+            Route::post('/{id}/disabled', [TeacherController::class, 'updateTeacher'])->name('teacher.update');
         });
     });
 });
