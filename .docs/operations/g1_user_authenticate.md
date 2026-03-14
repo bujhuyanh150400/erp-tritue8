@@ -135,6 +135,8 @@ POST /logout
 ```
 1. Admin nhập: 
     - full_name - Họ và tên đầy đủ (required)
+    - user_name - Tên đăng nhập (required) - tự render Ví dụ(hs_nguyenvana)
+    - password - Mật khẩu (required, min: 8 ký tự, 1 chữ hoa, 1 chữ thường, 1 số, 1 ký tự đặc biệt) - có nút random để tạo password tạm thời
     - dob (date) - Ngày sinh (required)
     - gender  - Giới tính Gender (required)
     - grade_level - Học kỳ GradeLevel (required)
@@ -233,12 +235,12 @@ Admin bấm "Mở khóa"
 ```
 Tìm kiếm nhanh (full-text):
   - Họ tên học sinh
-  - Mã học sinh (students.id)
+  - Mã học sinh (user.id)
   - SĐT phụ huynh
  
 Bộ lọc:
   - Tháng              — lọc dữ liệu báo cáo theo tháng
-  - Khối               — grade_level (6–12)
+  - Khối               — grade_level
   - Lớp                — class_id
   - Môn học            — subject_id
   - Giáo viên          — teacher_id

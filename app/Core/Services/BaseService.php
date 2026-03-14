@@ -18,7 +18,8 @@ abstract class BaseService
         ?string $actionName = null,
         ?callable $catchCallback = null,
         bool $logServiceError = false,
-        ?callable $afterCommitCallback = null
+        ?callable $afterCommitCallback = null,
+        ?callable $returnCatchCallback = null
     ): ServiceReturn {
         if ($useTransaction) {
             DB::beginTransaction();
@@ -58,6 +59,14 @@ abstract class BaseService
                 }
 
                 return ServiceReturn::error($e->getMessage(), $e);
+            }
+
+            if ($returnCatchCallback) {
+                $catchResult = $returnCatchCallback($e);
+                // Đảm bảo kết quả luôn là ServiceReturn
+                return $catchResult instanceof ServiceReturn
+                    ? $catchResult
+                    : ServiceReturn::error('Có lỗi xảy ra. Vui lòng thử lại sau.');
             }
 
             // Lỗi hệ thống nghiêm trọng

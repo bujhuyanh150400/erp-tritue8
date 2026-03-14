@@ -27,6 +27,7 @@ const Layout: FC<Props> = ({ children, breadcrumbs }) => {
             if (data) {
                 toast[type](data.title || 'Thông báo', {
                     description: data.message,
+                    descriptionClassName: '!text-slate-700',
                     duration: 3000,
                 });
             }

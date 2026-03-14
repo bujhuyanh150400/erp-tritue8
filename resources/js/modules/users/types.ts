@@ -18,6 +18,20 @@ export type StudentList = {
     note: string | null;
 };
 
+export type StudentItem = {
+    id: string;
+    user_id: string;
+    user_name: string;
+    full_name: string;
+    dob: string;
+    gender: Gender;
+    grade_level: GradeLevel;
+    parent_name: string;
+    parent_phone: string;
+    address: string;
+    note: string | null;
+};
+
 export type StudentSearchRequest = BaseSearchRequest<{
     keyword?: string;
     grade_level?: GradeLevel;
@@ -25,3 +39,17 @@ export type StudentSearchRequest = BaseSearchRequest<{
 
 
 export type StudentListPaginator = LaravelPaginator<StudentList>
+
+
+export type StudentForm = {
+    full_name: string;
+    user_name: string;
+    password: string;
+    dob: string;
+    gender: Gender;
+    grade_level: GradeLevel;
+    parent_name: string;
+    parent_phone: string;
+    address: string;
+    note?: string;
+}

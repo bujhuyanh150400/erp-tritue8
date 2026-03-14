@@ -10,19 +10,26 @@ import {
 } from '@/components/ui/field';
 import {
     InputGroup,
-    InputGroupAddon, InputGroupButton,
+    InputGroupAddon,
+    InputGroupButton,
     InputGroupInput,
+    InputGroupText,
+    InputGroupTextarea,
 } from '@/components/ui/input-group';
+import { cn } from '@/lib/utils';
 
-export interface FormFieldInputProps extends React.InputHTMLAttributes<HTMLInputElement> {
+export interface FormFieldInputProps extends React.InputHTMLAttributes<
+    HTMLInputElement | HTMLTextAreaElement
+> {
     label?: string;
     description?: string;
     error?: string;
     leftIcon?: React.ReactNode;
+    rightElement?: React.ReactNode;
 }
 
 export const FormFieldInput = React.forwardRef<
-    HTMLInputElement,
+    HTMLInputElement & HTMLTextAreaElement,
     FormFieldInputProps
 >(
     (
@@ -32,6 +39,7 @@ export const FormFieldInput = React.forwardRef<
             description,
             error,
             leftIcon,
+            rightElement,
             type = 'text',
             required,
             className,
@@ -39,19 +47,16 @@ export const FormFieldInput = React.forwardRef<
         },
         ref,
     ) => {
-        // State cho toggle password
         const [showPassword, setShowPassword] = React.useState(false);
-        const isPassword = React.useMemo(
-            () => type === 'password',
-            [type],
-        )
 
-        // Xác định type thực sự của thẻ input
-        const inputType = React.useMemo(() => isPassword
+        const isPassword = type === 'password';
+        const isTextarea = type === 'textarea';
+
+        const inputType = isPassword
             ? showPassword
                 ? 'text'
                 : 'password'
-            : type,[isPassword, showPassword, type])
+            : type;
 
         return (
             <Field className="w-full">
@@ -59,33 +64,67 @@ export const FormFieldInput = React.forwardRef<
                     <FieldLabel htmlFor={id}>
                         {label}
                         {required && (
-                            <span className="text-destructive">*</span>
+                            <span className="ml-1 text-destructive">*</span>
                         )}
                     </FieldLabel>
                 )}
 
-                <InputGroup>
-                    {/* Vị trí render Icon bên trái (Tùy thuộc vào cách InputGroup của bạn định nghĩa, có thể cần wrapper hoặc không) */}
+                {/* BỌC TẤT CẢ VÀO TRONG INPUT GROUP */}
+                <InputGroup
+                    className={
+                        error ? 'border-destructive ring-destructive' : ''
+                    }
+                >
+                    {/* LEFT ICON HOẶC TEXT */}
                     {leftIcon && (
-                        <InputGroupAddon align={'inline-start'}>
-                            {leftIcon}
+                        <InputGroupAddon align="inline-start">
+                            {/* Nếu truyền vào là string (vd: "https://"), bọc bằng InputGroupText để format chuẩn */}
+                            {typeof leftIcon === 'string' ? (
+                                <InputGroupText>{leftIcon}</InputGroupText>
+                            ) : (
+                                leftIcon
+                            )}
                         </InputGroupAddon>
                     )}
 
-                    <InputGroupInput
-                        ref={ref}
-                        id={id}
-                        type={inputType}
-                        required={required}
-                        className={className}
-                        aria-invalid={!!error}
-                        {...props}
-                    />
+                    {/* RENDER DỰA THEO TYPE */}
+                    {isTextarea ? (
+                        <InputGroupTextarea
+                            ref={ref as React.Ref<HTMLTextAreaElement>}
+                            id={id}
+                            required={required}
+                            className={cn('min-h-20 resize-y', className)}
+                            aria-invalid={!!error}
+                            {...(props as React.TextareaHTMLAttributes<HTMLTextAreaElement>)}
+                        />
+                    ) : (
+                        <InputGroupInput
+                            ref={ref as React.Ref<HTMLInputElement>}
+                            id={id}
+                            type={inputType}
+                            required={required}
+                            className={className}
+                            aria-invalid={!!error}
+                            {...(props as React.InputHTMLAttributes<HTMLInputElement>)}
+                        />
+                    )}
 
+                    {/* RIGHT ELEMENT TÙY CHỈNH */}
+                    {rightElement && (
+                        <InputGroupAddon align="inline-end">
+                            {typeof rightElement === 'string' ? (
+                                <InputGroupText>{rightElement}</InputGroupText>
+                            ) : (
+                                rightElement
+                            )}
+                        </InputGroupAddon>
+                    )}
+
+                    {/* NÚT TOGGLE PASSWORD */}
                     {isPassword && (
                         <InputGroupAddon align="inline-end">
                             <InputGroupButton
-                                type="button" // Thêm cái này để tránh submit form
+                                type="button"
                                 aria-label={
                                     showPassword
                                         ? 'Ẩn mật khẩu'
@@ -99,13 +138,16 @@ export const FormFieldInput = React.forwardRef<
                                 size="icon-xs"
                                 onClick={() => setShowPassword((prev) => !prev)}
                             >
-                                {showPassword ? <EyeOff /> : <Eye />}
+                                {showPassword ? (
+                                    <EyeOff className="h-4 w-4" />
+                                ) : (
+                                    <Eye className="h-4 w-4" />
+                                )}
                             </InputGroupButton>
                         </InputGroupAddon>
                     )}
                 </InputGroup>
 
-                {/* Xử lý Description hoặc Error bằng component chuẩn */}
                 {error ? (
                     <FieldError>{error}</FieldError>
                 ) : description ? (

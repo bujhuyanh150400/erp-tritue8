@@ -1,3 +1,4 @@
+import { UserRole } from '@/lib/types';
 import { mapEnumToOptions } from '@/lib/utils';
 import { Gender, GradeLevel } from '@/modules/users/consts';
 
@@ -23,7 +24,7 @@ export const getGenderClassStyleBadge = (gender: Gender) => {
         default:
             return 'inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium bg-gray-50 text-gray-700 border-gray-200';
     }
-}
+};
 
 export const getGradeLevelLabel = (gradeLevel: number) => {
     switch (gradeLevel) {
@@ -56,7 +57,28 @@ export const getGradeLevelLabel = (gradeLevel: number) => {
         default:
             return 'Không xác định';
     }
-}
+};
 
-export const gradeOptions = mapEnumToOptions(GradeLevel, getGradeLevelLabel, 'Tất cả');
+const ROLE_PREFIX: Record<UserRole, string> = {
+    [UserRole.Admin]: 'ad',
+    [UserRole.Teacher]: 'gv',
+    [UserRole.Staff]: 'nv',
+    [UserRole.Student]: 'hs',
+};
 
+export const generateUsername = (fullName: string, role: UserRole): string => {
+    if (!fullName) return '';
+
+    const normalized = fullName
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '') // Xóa dấu
+        .replace(/đ/g, 'd')
+        .replace(/[^a-z0-9\s]/g, '') // Xóa ký tự đặc biệt
+        .trim()
+        .replace(/\s+/g, ''); // Xóa khoảng trắng
+
+    const prefix = ROLE_PREFIX[role] || 'user';
+
+    return `${prefix}_${normalized}`;
+};

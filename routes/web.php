@@ -1,11 +1,10 @@
 <?php
 
 use App\Http\Controllers\AuthController;
-use App\Http\Controllers\TeacherController;
-use App\Http\Controllers\UserController;
 use App\Http\Controllers\DashboardController;
-use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\StudentController;
+use App\Http\Controllers\TeacherController;
+use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
     return redirect('/admin/dashboard');
@@ -25,18 +24,18 @@ Route::prefix('admin')->group(function () {
 
         Route::group([
             'prefix' => 'student',
-            'middleware' => ['check-role:admin']
+            'middleware' => ['check-role:admin'],
         ], function () {
             Route::get('/list', [StudentController::class, 'listStudent'])->name('student.list');
-            Route::get('/create', [StudentController::class, 'viewCreate'])->name('student.create');
-            Route::post('/create', [StudentController::class, 'createStudent'])->name('student.create');
-            Route::post('/{id}/update', [StudentController::class, 'updateStudent'])->name('student.update');
-            Route::put('/{id}/disabled', [StudentController::class, 'disabledStudent'])->name('student.disabled');
+            Route::get('/create', [StudentController::class, 'viewCreate'])->name('student.view_create');
+            Route::post('/create', [StudentController::class, 'create'])->name('student.create');
+            Route::get('/{id}/update', [StudentController::class, 'viewUpdate'])->name('student.view_update');
+            Route::put('/{id}/update', [StudentController::class, 'update'])->name('student.update');
         });
 
         Route::group([
             'prefix' => 'teacher',
-            'middleware' => ['check-role:admin']
+            'middleware' => ['check-role:admin'],
         ], function () {
             Route::get('/list', [TeacherController::class, 'listTeacher'])->name('teacher.list');
             Route::get('/create', [TeacherController::class, 'viewCreate'])->name('teacher.create');

@@ -1,9 +1,17 @@
 import { Head, Link } from '@inertiajs/react';
 import { Download, FileUp, PlusCircle, Search } from 'lucide-react';
 import type { ReactNode } from 'react';
-
+import { viewCreate } from '@/actions/App/Http/Controllers/StudentController';
 import Layout from '@/components/layouts/admin/layout';
 import { Button } from '@/components/ui/button';
+import {
+    Empty,
+    EmptyContent,
+    EmptyDescription,
+    EmptyHeader,
+    EmptyMedia,
+    EmptyTitle,
+} from '@/components/ui/empty';
 import {
     FilterCard,
     FormFieldInput,
@@ -11,15 +19,24 @@ import {
     FormFieldSelect,
 } from '@/components/utils';
 import { DataTable } from '@/components/utils/data-table';
+import { isFilterActive, mapEnumToOptions } from '@/lib/utils';
 import { columnStudentList } from '@/modules/users/components';
-import type { GradeLevel } from '@/modules/users/consts';
+import { GradeLevel } from '@/modules/users/consts';
 import { useStudentList } from '@/modules/users/hooks';
 import type {
     StudentListPaginator,
     StudentSearchRequest,
 } from '@/modules/users/types';
-import { gradeOptions } from '@/modules/users/utils';
-import { isFilterActive } from '@/lib/utils';
+import {  getGradeLevelLabel } from '@/modules/users/utils';
+
+
+
+const gradeOptions = mapEnumToOptions(
+    GradeLevel,
+    getGradeLevelLabel,
+    'Tất cả',
+);
+
 
 interface Props {
     students: StudentListPaginator;
@@ -61,9 +78,11 @@ export default function Page({ filters, students }: Props) {
                     <span className="lg:hidden">Xuất</span>
                 </Button>
 
-                <Button variant="default" className="">
-                    <PlusCircle className="mr-2 h-4 w-4" />
-                    Thêm học sinh
+                <Button variant="default" className="" asChild>
+                    <Link href={viewCreate()}>
+                        <PlusCircle className="mr-2 h-4 w-4" />
+                        Thêm học sinh
+                    </Link>
                 </Button>
             </PageHeader>
 
@@ -109,23 +128,26 @@ export default function Page({ filters, students }: Props) {
                     columns={columnStudentList}
                     paginator={students}
                     emptyState={
-                        <div className="flex flex-col items-center justify-center py-20 text-center">
-                            <div className="mb-4 flex size-16 items-center justify-center rounded-full bg-slate-50 ring-8 ring-slate-50/50">
-                                <Search className="h-8 w-8 text-slate-400" />
-                            </div>
-                            <h3 className="text-lg font-semibold text-slate-900">
-                                Không tìm thấy học sinh
-                            </h3>
-                            <p className="mx-auto mt-2 mb-6 text-sm text-slate-500">
-                                Không có kết quả nào khớp với bộ lọc hiện tại.
-                            </p>
-                            <Button asChild>
-                                <Link href="#">
-                                    <PlusCircle className="mr-2 h-4 w-4" />
-                                    Thêm học sinh ngay
-                                </Link>
-                            </Button>
-                        </div>
+                        <Empty>
+                            <EmptyHeader>
+                                <EmptyMedia variant="icon">
+                                    <Search className="h-8 w-8 text-slate-400" />
+                                </EmptyMedia>
+                                <EmptyTitle>Không tìm thấy học sinh</EmptyTitle>
+                                <EmptyDescription>
+                                    Không có kết quả nào khớp với bộ lọc hiện
+                                    tại.
+                                </EmptyDescription>
+                            </EmptyHeader>
+                            <EmptyContent className="flex-row justify-center gap-2">
+                                <Button asChild>
+                                    <Link href={viewCreate()}>
+                                        <PlusCircle className="mr-2 h-4 w-4" />
+                                        Thêm học sinh ngay
+                                    </Link>
+                                </Button>
+                            </EmptyContent>
+                        </Empty>
                     }
                 />
             </div>
