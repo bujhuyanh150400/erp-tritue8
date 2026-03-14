@@ -67,3 +67,28 @@ export const isFilterActive = (filters: Record<string, any>) => {
         (v) => v !== undefined && v !== null && v !== '',
     );
 };
+
+/**
+ * Tạo mật khẩu ngẫu nhiên có ít nhất 1 chữ hoa, 1 chữ thường, 1 số và 1 ký tự đặc biệt
+ */
+export const generateRandomPassword = (): string => {
+    const upper = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    const lower = 'abcdefghijklmnopqrstuvwxyz';
+    const numbers = '0123456789';
+    const special = '!@%&';
+    const all = upper + lower + numbers + special;
+
+    let pwd = '';
+    pwd += upper[Math.floor(Math.random() * upper.length)];
+    pwd += lower[Math.floor(Math.random() * lower.length)];
+    pwd += numbers[Math.floor(Math.random() * numbers.length)];
+    pwd += special[Math.floor(Math.random() * special.length)];
+
+    for (let i = 0; i < 6; i++) {
+        pwd += all[Math.floor(Math.random() * all.length)];
+    }
+    return pwd
+        .split('')
+        .sort(() => 0.5 - Math.random())
+        .join('');
+};

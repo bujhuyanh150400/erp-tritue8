@@ -7,4 +7,8 @@ use Illuminate\Foundation\Http\FormRequest;
 
 class ListStudentRequest extends ListRequest
 {
+    protected array $allowedFilters = [
+        'keyword',
+        'grade_level',
+    ];
 }

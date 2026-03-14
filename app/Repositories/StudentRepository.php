@@ -32,20 +32,28 @@ class StudentRepository extends BaseRepository implements Paginate
     {
         $query = $this->model->query();
 
-        if (! empty($filter['full_name'])) {
-            $query->where('full_name', 'LIKE', '%'.$filter['full_name'].'%');
+        if (! empty($filters['keyword']) && ! empty(trim($filters['keyword']))) {
+            $keyword = trim($filters['keyword']);
+            $query->where('full_name', 'like', "%{$keyword}%")
+                ->orWhere('parent_phone', 'like', "%{$keyword}%")
+                ->orWhereHas('user', function ($userQuery) use ($keyword) {
+                    if (is_numeric($keyword)) {
+                        $userQuery->where('id', (int) $keyword);
+                    }
+                    $userQuery->orWhere('username', 'like', "%{$keyword}%");
+                });
         }
 
-        if (! empty($filter['grade_level'])) {
-            $query->where('grade_level', $filter['grade_level']);
+        if (! empty($filters['grade_level'])) {
+            $query->where('grade_level', $filters['grade_level']);
         }
 
-        if (! empty($filter['gender'])) {
-            $query->where('gender', $filter['gender']);
+        if (! empty($filters['gender'])) {
+            $query->where('gender', $filters['gender']);
         }
 
-        if (! empty($filter['parent_phone'])) {
-            $query->where('parent_phone', 'LIKE', '%'.$filter['parent_phone'].'%');
+        if (! empty($filters['parent_phone'])) {
+            $query->where('parent_phone', 'LIKE', '%'.$filters['parent_phone'].'%');
         }
 
         return $query;
@@ -54,5 +62,16 @@ class StudentRepository extends BaseRepository implements Paginate
     public function sort(Builder $query, string $orderBy, string $orderDirection): Builder
     {
         return $query->orderBy($orderBy, $orderDirection);
+    }
+
+    /**
+     * Tìm học sinh theo ID người dùng
+     */
+    public function findStudentByUserId(int $userId): ?Student
+    {
+        return $this->model->query()
+            ->with('user')
+            ->where('user_id', $userId)
+            ->first();
     }
 }

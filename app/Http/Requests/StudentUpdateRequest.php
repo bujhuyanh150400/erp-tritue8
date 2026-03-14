@@ -2,7 +2,10 @@
 
 namespace App\Http\Requests;
 
+use App\Constants\Gender;
+use App\Constants\GradeLevel;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class StudentUpdateRequest extends FormRequest
 {
@@ -14,34 +17,56 @@ class StudentUpdateRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'full_name' => ['sometimes', 'string', 'max:255'],
-            'dob' => ['sometimes', 'date'],
-            'gender' => ['sometimes', 'integer'],
-            'grade_level' => ['sometimes', 'integer'],
-            'parent_name' => ['sometimes', 'string', 'max:255'],
-            'parent_phone' => ['sometimes', 'string', 'max:20'],
-            'address' => ['sometimes', 'string'],
-            'zalo_id' => ['sometimes', 'nullable', 'string', 'max:255'],
-            'note' => ['sometimes', 'nullable', 'string'],
+            'password' => [
+                'nullable',
+                'string',
+                \Illuminate\Validation\Rules\Password::min(8)
+                    ->mixedCase()
+                    ->numbers()
+                    ->symbols(),
+            ],
+            'full_name' => ['required', 'string', 'max:255'],
+            'dob' => ['required', 'date'],
+            'gender' => ['required', Rule::enum(Gender::class)],
+            'grade_level' => ['required', Rule::enum(GradeLevel::class)],
+            'parent_name' => ['required', 'string', 'max:255'],
+            'parent_phone' => ['required', 'string', 'max:20'],
+            'address' => ['required', 'string'],
+            'note' => ['nullable', 'string'],
         ];
     }
 
     public function messages(): array
     {
         return [
-            'full_name.string' => 'Họ tên học sinh không hợp lệ.',
+            // Password
+            'password.min' => 'Mật khẩu phải có ít nhất :min ký tự.',
+            'password.mixed_case' => 'Mật khẩu phải bao gồm cả chữ hoa và chữ thường.',
+            'password.numbers' => 'Mật khẩu phải chứa ít nhất một chữ số.',
+            'password.symbols' => 'Mật khẩu phải chứa ít nhất một ký tự đặc biệt.',
 
-            'dob.date' => 'Ngày sinh không hợp lệ.',
+            // Full Name
+            'full_name.required' => 'Họ và tên không được để trống.',
+            'full_name.max' => 'Họ và tên không được vượt quá 255 ký tự.',
 
-            'gender.integer' => 'Giới tính không hợp lệ.',
+            // Date of Birth
+            'dob.required' => 'Vui lòng chọn ngày sinh.',
+            'dob.date' => 'Ngày sinh không đúng định dạng ngày tháng.',
 
-            'grade_level.integer' => 'Lớp không hợp lệ.',
+            // Enum: Gender & Grade Level
+            'gender.required' => 'Vui lòng chọn giới tính.',
+            'gender.enum' => 'Giới tính đã chọn không hợp lệ.',
 
-            'parent_name.string' => 'Tên phụ huynh không hợp lệ.',
+            'grade_level.required' => 'Vui lòng chọn khối học.',
+            'grade_level.enum' => 'Khối học đã chọn không hợp lệ.',
 
-            'parent_phone.string' => 'Số điện thoại phụ huynh không hợp lệ.',
+            // Parent Info
+            'parent_name.required' => 'Tên phụ huynh không được để trống.',
+            'parent_phone.required' => 'Số điện thoại phụ huynh không được để trống.',
+            'parent_phone.max' => 'Số điện thoại không được dài quá 20 ký tự.',
 
-            'address.string' => 'Địa chỉ không hợp lệ.',
+            // Address
+            'address.required' => 'Địa chỉ không được để trống.',
         ];
     }
 }

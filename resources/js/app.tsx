@@ -21,7 +21,7 @@ createInertiaApp({
         root.render(
             <AppProvider>
                 <App {...props} />
-                <Toaster />
+                <Toaster position={"top-center"} />
             </AppProvider>,
         );
     },

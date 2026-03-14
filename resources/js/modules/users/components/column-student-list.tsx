@@ -5,6 +5,11 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { cn, formatDate } from '@/lib/utils';
 import type { StudentList } from '@/modules/users/types';
 import { getGenderClassStyleBadge, getGenderLabel, getGradeLevelLabel } from '@/modules/users/utils';
+import { Link } from '@inertiajs/react';
+import {
+    update,
+    viewUpdate,
+} from '@/actions/App/Http/Controllers/StudentController';
 
 export const columnStudentList: ColumnDef<StudentList>[] = [
     {
@@ -20,7 +25,7 @@ export const columnStudentList: ColumnDef<StudentList>[] = [
                             {name}
                         </span>
                         <span className="text-xs text-muted-foreground">
-                            Id: {row.original.id}
+                            Id: {row.original.user.id}
                         </span>
                         <span className="text-xs text-muted-foreground">
                             Dob: {formatDate(row.original.dob)}
@@ -118,8 +123,10 @@ export const columnStudentList: ColumnDef<StudentList>[] = [
                         </DropdownMenuItem>
 
                         <DropdownMenuItem className="cursor-pointer">
-                            <Pencil className="mr-2 h-4 w-4 text-blue-600" />
-                            <span>Chỉnh sửa thông tin</span>
+                            <Link href={viewUpdate({id: student.user.id})} className={"w-full flex items-center gap-2"}>
+                                <Pencil className="mr-2 h-4 w-4 text-blue-600" />
+                                <span>Chỉnh sửa thông tin</span>
+                            </Link>
                         </DropdownMenuItem>
 
                         <DropdownMenuSeparator />
