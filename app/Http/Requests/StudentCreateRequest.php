@@ -3,7 +3,9 @@
 
 namespace App\Http\Requests;
 
+use App\Constants\GradeLevel;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class StudentCreateRequest extends FormRequest
 {
@@ -18,7 +20,7 @@ class StudentCreateRequest extends FormRequest
             'full_name' => ['required', 'string', 'max:255'],
             'dob' => ['required', 'date'],
             'gender' => ['required', 'integer'],
-            'grade_level' => ['required', 'integer'],
+            'grade_level' => ['required',Rule::enum(GradeLevel::class)],
             'parent_name' => ['required', 'string', 'max:255'],
             'parent_phone' => ['required', 'string', 'max:20'],
             'address' => ['required', 'string'],

@@ -17,16 +17,23 @@ class Logging
      * (Sẽ được lưu vào storage/logs/user_activity-YYYY-MM-DD.log)
      */
     public static function userActivity(
-        int $userId,
         string $action,
-        string $description
+        string $description,
+        ?int $userId = null
     ): void {
+        $userRequestId = request()->user()?->id;
+        if ($userId) {
+            $userRequestId = $userId;
+        }
+        if (! empty($userRequestId)) {
+            $userRequestId = 'guest';
+        }
         $context = [
-            'user_id' => $userId,
+            'user_id' => $userRequestId,
             'action' => $action,
             'description' => $description,
         ];
-        $message = "User {$userId} - Action: {$action} - {$description}";
+        $message = "User {$userRequestId} - Action: {$action} - {$description}";
         Log::channel('user_activity')->info($message, self::buildContext($context));
     }
 
@@ -47,6 +54,7 @@ class Logging
 
         Log::channel('errors')->error($message, self::buildContext($context));
     }
+
     /**
      * Ghi log DEBUG vào kênh 'debug'.
      * (Sẽ được lưu vào storage/logs/debug-YYYY-MM-DD.log)

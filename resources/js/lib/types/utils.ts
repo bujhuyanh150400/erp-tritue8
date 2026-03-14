@@ -58,7 +58,7 @@ export type ResponseSuccessType = {
 };
 
 export type BaseSearchRequest<TFilter> = {
-    filter: TFilter;
+    filters: TFilter;
     sort_by?: string;
     direction?: 'asc' | 'desc';
     page?: number;

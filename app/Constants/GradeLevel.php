@@ -7,7 +7,7 @@ use App\Core\Traits\EnumHelper;
 enum GradeLevel: int
 {
     use EnumHelper;
-
+    case Grade0 = 0;
     case Grade1 = 1;
     case Grade2 = 2;
     case Grade3 = 3;
@@ -21,9 +21,10 @@ enum GradeLevel: int
     case Grade11 = 11;
     case Grade12 = 12;
 
-    public function label()
+    public function label(): string
     {
         return match ($this) {
+            self::Grade0 => 'Tiền tiểu học',
             self::Grade1 => 'Lớp 1',
             self::Grade2 => 'Lớp 2',
             self::Grade3 => 'Lớp 3',

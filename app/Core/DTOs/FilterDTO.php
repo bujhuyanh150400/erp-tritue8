@@ -2,44 +2,67 @@
 
 namespace App\Core\DTOs;
 
-class FilterDTO
+readonly class FilterDTO
 {
     public function __construct(
-        public readonly int $page,
-        public readonly int $perPage,
-        public ?string $sortBy,
-        public string $direction,
-        public array $filters
-    ) {
+        private int $page,
+        private int $perPage,
+        private ?string $sortBy,
+        private string $direction,
+        private array $filters
+    ) {}
+
+    /**
+     * Lấy page hiện tại.
+     */
+    final public function getPage(): int
+    {
+        return $this->page;
     }
 
-    // Bạn có thể thêm setter nếu muốn (hoặc gán trực tiếp $dto->filters = ...)
-    public function setFilters(array $filters): void
+    /**
+     * Lấy số lượng item trên mỗi page.
+     */
+    final public function getPerPage(): int
     {
-        $this->filters = $filters;
+        return $this->perPage;
     }
 
-    // Tìm filter theo key
-    public function findFilter(string $key)
+    /**
+     * Lấy field để sắp xếp.
+     */
+    final public function getSortBy(): ?string
     {
-        return $this->filters[$key] ?? null;
+        return $this->sortBy;
     }
 
-    // Hoặc hàm merge thêm filter mới
-    public function addFilter(string $key, mixed $value): void
+    /**
+     * Lấy hướng sắp xếp (asc hoặc desc).
+     */
+    final public function getDirection(): string
     {
-        $this->filters[$key] = $value;
+        return $this->direction;
     }
 
-    // Setter cho sortBy và direction
-    public function setSortBy(string $sortBy): void
+    /**
+     * Lấy các điều kiện lọc.
+     */
+    final public function getFilters(): array
     {
-        $this->sortBy = $sortBy;
+        return $this->filters;
     }
 
-    // Setter cho direction
-    public function setDirection(string $direction): void
+    /**
+     * Chuyển đổi đối tượng FilterDTO thành mảng.
+     */
+    final public function toArray(): array
     {
-        $this->direction = $direction;
+        return [
+            'filters' => $this->filters,
+            'page' => $this->page,
+            'per_page' => $this->perPage,
+            'sort_by' => $this->sortBy,
+            'direction' => $this->direction,
+        ];
     }
 }

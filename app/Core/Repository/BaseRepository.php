@@ -38,18 +38,6 @@ abstract class BaseRepository
         return $this->model->with($relations)->get($columns);
     }
 
-    public function paginate(int $perPage = 15, array $columns = ['*'], array $relations = [], array $orderBy = []): \Illuminate\Contracts\Pagination\LengthAwarePaginator
-    {
-        $query = $this->model->with($relations);
-
-        if (!empty($orderBy)) {
-            foreach ($orderBy as $column => $direction) {
-                $query->orderBy($column, $direction);
-            }
-        }
-
-        return $query->select($columns)->paginate($perPage);
-    }
 
     public function find(int|string $id): ?Model
     {
