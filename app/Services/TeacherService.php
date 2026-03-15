@@ -2,14 +2,17 @@
 
 namespace App\Services;
 
+use App\Constants\UserRole;
+use App\Core\DTOs\FilterDTO;
+use App\Core\Logs\Logging;
 use App\Core\Services\BaseService;
 use App\Core\Services\ServiceException;
 use App\Core\Services\ServiceReturn;
 use App\Repositories\TeacherRepository;
 use App\Repositories\UserRepository;
-use App\Core\Logs\Logging;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Carbon\Carbon;
-use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Hash;
 
 class TeacherService extends BaseService
 {
@@ -18,19 +21,61 @@ class TeacherService extends BaseService
         protected UserRepository $userRepository
     ) {}
 
+    /**
+     * Lấy danh sách giáo viên
+     */
+    public function getListTeachers(FilterDTO $dto): ServiceReturn
+    {
+        return $this->execute(
+            callback: function () use ($dto) {
+
+                $teachers = $this->teacherRepository->paginate(
+                    filters: $dto->getFilters(),
+                    perPage: $dto->getPerPage(),
+                    page: $dto->getPage(),
+                    orderBy: $dto->getSortBy(),
+                    orderDirection: $dto->getDirection()
+                );
+
+                return ServiceReturn::success($teachers);
+            },
+            catchCallback: function (\Throwable $e) use ($dto) {
+                dd($e);
+            },
+            returnCatchCallback: function () use ($dto) {
+                return ServiceReturn::success(
+                    data: new LengthAwarePaginator(
+                        items: [],
+                        total: 0,
+                        perPage: $dto->getPerPage(),
+                        currentPage: $dto->getPage()
+                    )
+                );
+            }
+        );
+    }
+
+    /**
+     * Tạo giáo viên
+     */
     public function createTeacher(array $data): ServiceReturn
     {
         return $this->execute(
             callback: function () use ($data) {
 
-                $user = $this->userRepository->findById($data['user_id']);
-
-                if (!$user) {
-                    throw new ServiceException('Người dùng không tồn tại.');
+                $user = $this->userRepository->findByUsername($data['user_name']);
+                if ($user) {
+                    throw new ServiceException('Có tài khoản đã dùng với tên đăng nhập này, vui lòng chọn tên đăng nhập khác.');
                 }
-                $now = Carbon::now()->getTimestamp();
-                $teacherData = [
-                    'user_id' => $data['user_id'],
+                $user = $this->userRepository->query()->create([
+                    'username' => $data['user_name'],
+                    'password' => Hash::make($data['password']),
+                    'role' => UserRole::Teacher,
+                    'is_active' => true,
+                ]);
+
+                $teacher = $this->teacherRepository->create([
+                    'user_id' => $user->id,
                     'full_name' => $data['full_name'],
                     'phone' => $data['phone'],
                     'email' => $data['email'] ?? null,
@@ -39,39 +84,54 @@ class TeacherService extends BaseService
                     'bank_account_number' => $data['bank_account_number'] ?? null,
                     'bank_account_holder' => $data['bank_account_holder'] ?? null,
                     'status' => $data['status'],
-                    'joined_at' => Carbon::parse($data['joined_at'])->getTimestamp(),
-                    'created_at' => $now,
-                    'updated_at' => $now,
-                ];
-
-                $teacher = $this->teacherRepository->create($teacherData);
-
-                if (!$teacher) {
-                    throw new ServiceException('Tạo hồ sơ giáo viên thất bại.');
-                }
+                    'joined_at' => Carbon::parse($data['joined_at']),
+                ]);
 
                 Logging::userActivity(
-                    userId: $user->id,
                     action: 'Tạo giáo viên',
-                    description: 'Tạo hồ sơ giáo viên ' . $teacher->full_name
+                    description: 'Tạo hồ sơ giáo viên '.$teacher->full_name
                 );
 
-                return ServiceReturn::success($teacher, 'Tạo hồ sơ giáo viên thành công');
-            }
+                return ServiceReturn::success(
+                    message: 'Tạo hồ sơ giáo viên thành công'
+                );
+            },
+            useTransaction: true
         );
     }
 
-    public function updateTeacher(int $teacherId, array $data): ServiceReturn
+    /**
+     * Lấy giáo viên theo user_id
+     */
+    public function getTeacherById(int $id): ServiceReturn
     {
         return $this->execute(
-            callback: function () use ($teacherId, $data) {
+            callback: function () use ($id) {
 
-                $teacher = $this->teacherRepository->findById($teacherId);
+                $teacher = $this->teacherRepository->findTeacherByUserId($id);
 
                 if (!$teacher) {
                     throw new ServiceException('Giáo viên không tồn tại.');
                 }
-                $now = Carbon::now()->getTimestamp();
+
+                return $teacher;
+            }
+        );
+    }
+
+    /**
+     * Update giáo viên
+     */
+    public function updateTeacher(int $id, array $data): ServiceReturn
+    {
+        return $this->execute(
+            callback: function () use ($id, $data) {
+
+                $teacher = $this->teacherRepository->findTeacherByUserId($id);
+
+                if (!$teacher) {
+                    throw new ServiceException('Giáo viên không tồn tại.');
+                }
                 $teacherData = [
                     'full_name' => $data['full_name'],
                     'phone' => $data['phone'],
@@ -81,63 +141,55 @@ class TeacherService extends BaseService
                     'bank_account_number' => $data['bank_account_number'] ?? null,
                     'bank_account_holder' => $data['bank_account_holder'] ?? null,
                     'status' => $data['status'],
-                    'joined_at' => Carbon::parse($data['joined_at'])->getTimestamp(),
-                    'updated_at' => $now,
+                    'joined_at' => Carbon::parse($data['joined_at']),
+                    'updated_at' => now(),
                 ];
 
-                $updated = $this->teacherRepository->updateById($teacherId, $teacherData);
+                $updated = $this->teacherRepository->updateById($teacher->id, $teacherData);
 
                 if (!$updated) {
                     throw new ServiceException('Cập nhật giáo viên thất bại.');
                 }
 
                 Logging::userActivity(
-                    userId: auth()->id(),
                     action: 'Cập nhật giáo viên',
-                    description: 'Cập nhật hồ sơ giáo viên ' . $teacher->full_name
+                    description: 'Cập nhật hồ sơ giáo viên '.$teacher->full_name
                 );
 
                 return ServiceReturn::success($updated, 'Cập nhật giáo viên thành công');
-            }
+            },
+            useTransaction: true
         );
     }
 
-    public function deleteTeacher(int $teacherId): ServiceReturn
+    /**
+     * Xóa giáo viên
+     */
+    public function deleteTeacher(int $id): ServiceReturn
     {
         return $this->execute(
-            callback: function () use ($teacherId) {
+            callback: function () use ($id) {
 
-                $teacher = $this->teacherRepository->findById($teacherId);
+                $teacher = $this->teacherRepository->findTeacherByUserId($id);
 
                 if (!$teacher) {
                     throw new ServiceException('Giáo viên không tồn tại.');
                 }
 
-                $deleted = $this->teacherRepository->deleteById($teacher);
+                $deleted = $this->teacherRepository->deleteById($teacher->id);
 
                 if (!$deleted) {
                     throw new ServiceException('Xóa giáo viên thất bại.');
                 }
 
                 Logging::userActivity(
-                    userId: auth()->id(),
                     action: 'Xóa giáo viên',
-                    description: 'Xóa hồ sơ giáo viên ' . $teacher->full_name
+                    description: 'Xóa hồ sơ giáo viên '.$teacher->full_name
                 );
 
                 return ServiceReturn::success(null, 'Xóa giáo viên thành công');
-            }
-        );
-    }
-
-    public function getListTeachers(array $filters): ServiceReturn
-    {
-        return $this->execute(
-            callback: function () use ($filters) {
-                $teachers = $this->teacherRepository->getListTeacher(filters: $filters, perPage: $filters['limit'] ?? 10);
-                return ServiceReturn::success($teachers, 'Lấy danh sách giáo viên thành công'
-                );
-            }
+            },
+            useTransaction: true
         );
     }
 }

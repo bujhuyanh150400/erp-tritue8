@@ -3,8 +3,11 @@
 namespace App\Http\Controllers;
 
 use App\Core\Controller\BaseController;
+use App\Http\Requests\ListTeacherRequest;
 use App\Http\Requests\TeacherCreateRequest;
 use App\Http\Requests\TeacherUpdateRequest;
+use App\Http\Resources\TeacherItemResource;
+use App\Http\Resources\TeacherListResource;
 use App\Services\TeacherService;
 use Illuminate\Http\Request;
 
@@ -14,52 +17,87 @@ class TeacherController extends BaseController
         protected TeacherService $teacherService
     ) {}
 
+    public function listTeacher(ListTeacherRequest $request)
+    {
+        $params = $request->getFilterOptions();
+
+        $result = $this->teacherService->getListTeachers($params);
+
+        if ($result->isError()) {
+            return $this->error($result->getMessage());
+        }
+
+        $data = $result->getData() ?? [];
+
+        return $this->rendering('teachers/list', [
+            'teachers' => TeacherListResource::collection($data),
+            'filters' => $params->toArray(),
+        ]);
+    }
+
+    public function viewCreate()
+    {
+        return $this->rendering('teachers/form');
+    }
+
     public function createTeacher(TeacherCreateRequest $request)
     {
-        $result = $this->teacherService->createTeacher($request->validated());
+        $data = $request->validated();
+
+        $result = $this->teacherService->createTeacher($data);
 
         if ($result->isSuccess()) {
             $this->success($result->getMessage());
-            return redirect()->back();
+            return redirect()->route('teacher.list');
         }
 
-        return back()->withErrors(['error' => $result->getMessage()]);
+        $this->error($result->getMessage());
+
+        return back()->withInput();
     }
 
-    public function updateTeacher(TeacherUpdateRequest $request, int $teacherId)
+    public function viewUpdate(int $id, Request $request)
     {
-        $result = $this->teacherService->updateTeacher($teacherId, $request->validated());
+        $result = $this->teacherService->getTeacherById($id);
 
         if ($result->isSuccess()) {
-            $this->success($result->getMessage());
-            return redirect()->back();
-        }
-
-        return back()->withErrors(['error' => $result->getMessage()]);
-    }
-
-    public function deleteTeacher(int $teacherId)
-    {
-        $result = $this->teacherService->deleteTeacher($teacherId);
-
-        if ($result->isSuccess()) {
-            $this->success($result->getMessage());
-            return redirect()->back();
-        }
-
-        return back()->withErrors(['error' => $result->getMessage()]);
-    }
-
-    public function listTeacher(Request $request)
-    {
-        $result = $this->teacherService->getListTeachers($request->all());
-
-        if ($result->isSuccess()) {
-            return view('teachers.index', [
-                'teachers' => $result->getData()
+            return $this->rendering('teachers/form', [
+                'teacher' => TeacherItemResource::make($result->getData())->toArray($request),
             ]);
         }
 
-        return back()->withErrors(['error' => $result->getMessage()]);
+        $this->error($result->getMessage());
+
+        return redirect()->back();
+    }
+
+    public function updateTeacher(TeacherUpdateRequest $request, int $id)
+    {
+        $data = $request->validated();
+
+        $result = $this->teacherService->updateTeacher($id, $data);
+
+        if ($result->isSuccess()) {
+            $this->success($result->getMessage());
+            return redirect()->route('teacher.list');
+        }
+
+        $this->error($result->getMessage());
+
+        return back()->withInput();
+    }
+
+    public function deleteTeacher(int $id)
+    {
+        $result = $this->teacherService->deleteTeacher($id);
+
+        if ($result->isSuccess()) {
+            $this->success($result->getMessage());
+            return redirect()->route('teacher.list');
+        }
+
+        $this->error($result->getMessage());
+
+        return redirect()->back();
     }
 }
