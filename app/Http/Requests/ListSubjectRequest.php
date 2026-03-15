@@ -1,0 +1,15 @@
+<?php
+
+
+namespace App\Http\Requests;
+
+use App\Core\Requests\ListRequest;
+use Illuminate\Foundation\Http\FormRequest;
+
+class ListSubjectRequest extends ListRequest
+{
+    protected array $allowedFilters = [
+        'keyword',
+        'name',
+    ];
+}
