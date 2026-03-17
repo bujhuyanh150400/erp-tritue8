@@ -79,6 +79,9 @@ Route:
 GET - /subject/list
 POST - /subject/ajax/toggle-active
 
+Trả ra danh sách môn học 
+    - view: subjects/list
+
 Tìm kiếm nhanh: (keyword)
   - Tên môn học → WHERE subjects.name ILIKE '%keyword%'
   - Id môn học → WHERE subjects.id = ?
@@ -102,52 +105,91 @@ Bảng hiển thị:
       + Chỉnh sửa
       + Bật / Tắt hoạt động 
         - route: /subject/ajax/toggle-active
-        - validate:
-  
-  
+        - params:
+            + id
+            + is_active
+        - service:
+            - Tìm subject theo id
+            - Kiểm tra môn học có đang được dùng bởi lớp nào không
+                -> nếu có trả ra lỗi "Môn học đang được dùng bởi X lớp đang hoạt động, ko thể tắt hoạt động"
+            - Nếu is_active = true:
+                → UPDATE subjects SET is_active = false
+            - Nếu is_active = false:
+                → UPDATE subjects SET is_active = true
+                
+Type resource:
+- id: string;
+- name: string;
+- description: string | null;
+- classes_count: number;
+- is_active: boolean;
 
 ```
 
 ### Tạo môn học
 
 ```
-1. Admin nhập:
+Route:
+GET - /subject/create 
+POST - /subject/create
+
+Trả ra form tạo môn học
+    - view tạo môn học: subjects/form
+
+Form:
     - name        - Tên môn học (required, unique)
     - description - Mô tả (optional)
     - is_active   - Trạng thái (default: true)
 
-2. Validation:
-    - Không cho trùng tên
+Validation:
+    - name: required | string | max: 255 
+    - description: nullable | string | max: 2000
+    - is_active: required | boolean
+Service:
+    -  Không cho trùng tên
       → SELECT COUNT(*) FROM subjects WHERE name = ? = 0
-
-3. Service:
+      -> nếu trùng -> trả ra lỗi "Tên môn học đã tồn tại"
     - INSERT subjects
-
-4. Ghi user_logs: admin X tạo môn học Y lúc Z
+    - Ghi user_logs: admin X tạo môn học Y lúc Z
 ```
 
 ### Sửa môn học
 
 ```
-1. Admin chọn môn học cần sửa
+Route:
+GET - /subject/{id}/update 
+POST - /subject/{id}/update
 
-2. Admin sửa:
+Trả ra form sửa môn học
+    - view sửa môn học: subjects/form
+    - Admin chọn môn học cần sửa
+    - Trả về resource bao gồm:
+        - id: string;
+        - name: string;
+        - description: string | null;
+        - is_active: boolean;
+
+Form:
     - name        - Tên môn học (required, unique)
     - description - Mô tả (optional)
-    - is_active   - Trạng thái
+    - is_active   - Trạng thái (default: true)
+    
+Validation:
+    - id: required | numeric | exists: subjects,id
+    - name: required | string | max: 255 
+    - description: nullable | string | max: 2000
+    - is_active: required | boolean
 
-3. Validation:
-    - Không cho trùng tên với môn khác
-      → SELECT COUNT(*) FROM subjects WHERE name = ? AND id != current_id = 0
+Service:
+    -  Không cho trùng tên với môn khác ngoài id hiện tại
+      → SELECT COUNT(*) FROM subjects WHERE name = ? AND id != current_id = ?
+      -> nếu trùng -> trả ra lỗi "Tên môn học đã tồn tại"
     - Nếu is_active = false:
       → SELECT COUNT(*) FROM classes
          WHERE subject_id = ? AND status = Active
         Nếu > 0 → "Môn học đang được dùng bởi X lớp đang hoạt động"
-
-4. Service:
     - UPDATE subjects
-
-5. Ghi user_logs: admin X sửa môn học Y lúc Z
+    - Ghi user_logs: admin X sửa môn học Y lúc Z
 ```
 
 ---
