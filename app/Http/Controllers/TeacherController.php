@@ -23,11 +23,7 @@ class TeacherController extends BaseController
 
         $result = $this->teacherService->getListTeachers($params);
 
-        if ($result->isError()) {
-            return $this->error($result->getMessage());
-        }
-
-        $data = $result->getData() ?? [];
+        $data = $result->getData();
 
         return $this->rendering('teachers/list', [
             'teachers' => TeacherListResource::collection($data),

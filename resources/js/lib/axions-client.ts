@@ -40,7 +40,7 @@ client.interceptors.response.use(
                     ),
                 );
             } else if (statusCodeResponse === 401) {
-                window.location.href = '/login';
+                window.location.href = '/admin/login';
             } else if (statusCodeResponse === 419) {
                 console.warn(
                     'CSRF token mismatch. Đang tải lại trang để lấy token mới...',

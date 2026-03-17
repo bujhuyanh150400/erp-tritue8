@@ -92,3 +92,33 @@ export const generateRandomPassword = (): string => {
         .sort(() => 0.5 - Math.random())
         .join('');
 };
+
+/**
+ * Kiểm tra xem URL có khớp với bất kỳ trong danh sách paths không
+ * @param paths
+ * @param url
+ * @param exact
+ */
+export const isActiveUrl = (paths: string | string[], url: string, exact: boolean = false) => {
+    // 1. Loại bỏ Query String (phần sau dấu ?) để so sánh chính xác pathname
+    const currentPath = url.split('?')[0];
+
+    const pathList = Array.isArray(paths) ? paths : [paths];
+
+    return pathList.some((path) => {
+        // Loại bỏ dấu gạch chéo cuối cùng của path để chuẩn hóa
+        const normalizedPath =
+            path.endsWith('/') && path !== '/' ? path.slice(0, -1) : path;
+
+        if (exact) {
+            return currentPath === normalizedPath;
+        }
+
+        // Nếu không yêu cầu exact, dùng startsWith
+        // Bổ sung thêm dấu '/' để tránh trường hợp /admin/student active nhầm cho /admin/students-category
+        return (
+            currentPath === normalizedPath ||
+            currentPath.startsWith(`${normalizedPath}/`)
+        );
+    });
+}

@@ -34,14 +34,20 @@ class StudentRepository extends BaseRepository implements Paginate
 
         if (! empty($filters['keyword']) && ! empty(trim($filters['keyword']))) {
             $keyword = trim($filters['keyword']);
-            $query->where('full_name', 'like', "%{$keyword}%")
-                ->orWhere('parent_phone', 'like', "%{$keyword}%")
-                ->orWhereHas('user', function ($userQuery) use ($keyword) {
-                    if (is_numeric($keyword)) {
-                        $userQuery->where('id', (int) $keyword);
-                    }
-                    $userQuery->orWhere('username', 'like', "%{$keyword}%");
-                });
+            $query->where(function ($q) use ($keyword) {
+                $q->where('full_name', 'like', "%{$keyword}%")
+                    ->orWhere('parent_phone', 'like', "%{$keyword}%")
+                    ->orWhereHas('user', function ($userQuery) use ($keyword) {
+                        // Tiếp tục bọc logic bên trong userQuery để an toàn tuyệt đối
+                        $userQuery->where(function ($uq) use ($keyword) {
+                            if (is_numeric($keyword)) {
+                                $uq->where('id', (int) $keyword);
+                            }
+                            // Sử dụng orWhere bên trong nhóm này
+                            $uq->orWhere('username', 'like', "%{$keyword}%");
+                        });
+                    });
+            });
         }
 
         if (! empty($filters['grade_level'])) {

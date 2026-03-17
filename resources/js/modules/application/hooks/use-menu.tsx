@@ -1,12 +1,13 @@
-import type { InertiaLinkProps } from '@inertiajs/react';
-import { LayoutDashboard, Users } from 'lucide-react';
-import { useCallback, useMemo } from 'react';
+import { Book, CircleUserRound, LayoutDashboard, Users, School } from 'lucide-react';
+import { useMemo } from 'react';
 import { index as dashboardIndex } from '@/actions/App/Http/Controllers/DashboardController';
+import { listRoom } from '@/actions/App/Http/Controllers/RoomController';
 import { listStudent } from '@/actions/App/Http/Controllers/StudentController';
-
+import { listSubject } from '@/actions/App/Http/Controllers/SubjectController';
+import { listTeacher } from '@/actions/App/Http/Controllers/TeacherController';
 import type { IMenu, User } from '@/lib/types';
 import { UserRole } from '@/lib/types';
-import { resolveUrl } from '@/lib/utils';
+import { isActiveUrl } from '@/lib/utils';
 
 /**
  * Lấy menu theo role của user
@@ -14,12 +15,8 @@ import { resolveUrl } from '@/lib/utils';
  * @param url
  */
 export const useMenu: (user: User, url: string) => IMenu[] = (user: User, url: string) => {
-    const isActive = useCallback(
-        (href: NonNullable<InertiaLinkProps['href']>) => {
-            return url.startsWith(resolveUrl(href));
-        },
-        [url],
-    );
+
+
     return useMemo(() => {
         switch (user.role) {
             case UserRole.Admin:
@@ -29,7 +26,25 @@ export const useMenu: (user: User, url: string) => IMenu[] = (user: User, url: s
                        url: dashboardIndex().url,
                        icon: <LayoutDashboard />,
                        is_menu: true,
-                       active: isActive(dashboardIndex()),
+                       active: isActiveUrl('/admin/dashboard',url, true),
+                   },
+                   {
+                       title: 'Học vụ',
+                       is_menu: false,
+                   },
+                   {
+                       title: 'Môn học',
+                       url: listSubject().url,
+                       icon: <Book />,
+                       is_menu: true,
+                       active: isActiveUrl(['/admin/subject'],url),
+                   },
+                   {
+                       title: 'Lớp học',
+                       url: listRoom().url,
+                       icon: <School />,
+                       is_menu: true,
+                       active: isActiveUrl(['/admin/room'],url),
                    },
                    {
                        title: 'Người dùng',
@@ -40,10 +55,18 @@ export const useMenu: (user: User, url: string) => IMenu[] = (user: User, url: s
                        url: listStudent().url,
                        icon: <Users />,
                        is_menu: true,
+                       active: isActiveUrl(['/admin/student'],url),
+                   },
+                   {
+                       title: 'Giáo viên',
+                       url: listTeacher().url,
+                       icon: <CircleUserRound />,
+                       is_menu: true,
+                       active: isActiveUrl(['/admin/teacher'],url),
                    },
                ];
             default:
                 return [];
         }
-    }, [isActive, user.role]);
+    }, [url, user.role]);
 };

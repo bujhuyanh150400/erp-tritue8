@@ -1,7 +1,9 @@
-import type { ReactNode } from 'react';
+import  { ReactNode } from 'react';
 import Layout from '@/components/layouts/admin/layout';
 
 export default function Page() {
+
+
     return <>Bảng điều khiển</>;
 }
 

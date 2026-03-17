@@ -17,7 +17,6 @@ import {
 export const useStudentForm = (student?: StudentItem) => {
 
     const isUpdate = !!student;
-    console.log(student);
     const form = useForm<StudentForm>({
         full_name: student?.full_name || '',
         user_name: student?.user_name || '', // Lấy từ resource

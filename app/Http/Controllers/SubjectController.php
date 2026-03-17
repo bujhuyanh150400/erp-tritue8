@@ -1,6 +1,5 @@
 <?php
 
-
 namespace App\Http\Controllers;
 
 use App\Core\Controller\BaseController;
@@ -11,26 +10,25 @@ use App\Http\Resources\SubjectItemResource;
 use App\Http\Resources\SubjectListResource;
 use App\Services\SubjectService;
 use Illuminate\Http\Request;
+use Inertia\Response;
 
 class SubjectController extends BaseController
 {
     public function __construct(
         protected SubjectService $subjectService
-    )
-    {
-    }
+    ) {}
 
+    /**
+     * Lấy danh sách môn học
+     * @return Response
+     */
     public function listSubject(ListSubjectRequest $request)
     {
         $params = $request->getFilterOptions();
 
         $result = $this->subjectService->getListSubjects($params);
 
-        if ($result->isError()) {
-            return $this->error($result->getMessage());
-        }
-
-        $data = $result->getData() ?? [];
+        $data = $result->getData();
 
         return $this->rendering('subjects/list', [
             'subjects' => SubjectListResource::collection($data),
@@ -38,6 +36,10 @@ class SubjectController extends BaseController
         ]);
     }
 
+    /**
+     * Hiển thị form tạo môn học
+     * @return Response
+     */
     public function viewCreate()
     {
         return $this->rendering('subjects/form');
@@ -49,7 +51,8 @@ class SubjectController extends BaseController
 
         if ($result->isSuccess()) {
             $this->success($result->getMessage());
-            return redirect()->route('subject.list');
+
+            return redirect()->route('subjects.list');
         }
 
         $this->error($result->getMessage());
@@ -63,7 +66,7 @@ class SubjectController extends BaseController
 
         if ($result->isSuccess()) {
             return $this->rendering('subjects/form', [
-                'subject' => SubjectItemResource::make($result->getData())->toArray($request),
+                'subjects' => SubjectItemResource::make($result->getData())->toArray($request),
             ]);
         }
 
@@ -78,7 +81,8 @@ class SubjectController extends BaseController
 
         if ($result->isSuccess()) {
             $this->success($result->getMessage());
-            return redirect()->route('subject.list');
+
+            return redirect()->route('subjects.list');
         }
 
         $this->error($result->getMessage());
@@ -92,7 +96,8 @@ class SubjectController extends BaseController
 
         if ($result->isSuccess()) {
             $this->success($result->getMessage());
-            return redirect()->route('subject.list');
+
+            return redirect()->route('subjects.list');
         }
 
         $this->error($result->getMessage());

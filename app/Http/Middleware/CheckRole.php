@@ -4,14 +4,14 @@ namespace App\Http\Middleware;
 
 use App\Constants\UserRole;
 use App\Core\Traits\HandleApi;
-use App\Core\Traits\ToastInertia;
+use App\Core\Traits\HandleInertia;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
 class CheckRole
 {
-    use HandleApi, ToastInertia;
+    use HandleApi, HandleInertia;
 
     /**
      * Handle an incoming request.

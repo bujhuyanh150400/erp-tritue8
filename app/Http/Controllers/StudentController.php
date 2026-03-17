@@ -50,12 +50,12 @@ class StudentController extends BaseController
         return back()->withInput();
     }
 
-    public function viewUpdate(int $id, Request $request)
+    public function viewUpdate(int $id)
     {
         $result = $this->studentService->getStudentById($id);
         if ($result->isSuccess()) {
             return $this->rendering('students/form', [
-                'student' => StudentItemResource::make($result->getData())->toArray($request),
+                'student' => StudentItemResource::make($result->getData())->toArray(request()),
             ]);
         }
         $this->error($result->getMessage());

@@ -1,28 +1,26 @@
+import { Link } from '@inertiajs/react';
 import type { ColumnDef } from '@tanstack/react-table';
 import { Eye, History, Lock, MoreHorizontal, Pencil } from 'lucide-react';
+import {
+    viewUpdate,
+} from '@/actions/App/Http/Controllers/StudentController';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { cn, formatDate } from '@/lib/utils';
 import type { StudentList } from '@/modules/users/types';
 import { getGenderClassStyleBadge, getGenderLabel, getGradeLevelLabel } from '@/modules/users/utils';
-import { Link } from '@inertiajs/react';
-import {
-    update,
-    viewUpdate,
-} from '@/actions/App/Http/Controllers/StudentController';
 
 export const columnStudentList: ColumnDef<StudentList>[] = [
     {
         accessorKey: 'full_name',
         header: 'Học sinh',
         cell: ({ row }) => {
-            const name = row.original.full_name;
 
             return (
                 <div className="flex items-center gap-3">
                     <div className="flex flex-col">
                         <span className="font-semibold text-foreground">
-                            {name}
+                            {row.original.full_name}
                         </span>
                         <span className="text-xs text-muted-foreground">
                             Id: {row.original.user.id}

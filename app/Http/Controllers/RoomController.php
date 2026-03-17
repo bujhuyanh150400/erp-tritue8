@@ -26,11 +26,7 @@ class RoomController extends BaseController
 
         $result = $this->roomService->getListRooms($params);
 
-        if ($result->isError()) {
-            return $this->error($result->getMessage());
-        }
-
-        $data = $result->getData() ?? [];
+        $data = $result->getData();
 
         return $this->rendering('rooms/list', [
             'rooms' => RoomListResource::collection($data),

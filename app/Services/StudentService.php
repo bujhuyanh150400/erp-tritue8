@@ -17,8 +17,10 @@ class StudentService extends BaseService
 {
     public function __construct(
         protected StudentRepository $studentRepository,
-        protected UserRepository $userRepository
-    ) {}
+        protected UserRepository    $userRepository
+    )
+    {
+    }
 
     /**
      * Lấy danh sách học sinh
@@ -27,19 +29,17 @@ class StudentService extends BaseService
      */
     public function getListStudents(FilterDTO $dto): ServiceReturn
     {
-        return $this->execute(callback: function () use ($dto) {
-            $students = $this->studentRepository->paginate(
-                filters: $dto->getFilters(),
-                perPage: $dto->getPerPage(),
-                page: $dto->getPage(),
-                orderBy: $dto->getSortBy(),
-                orderDirection: $dto->getDirection()
-            );
+        return $this->execute(
+            callback: function () use ($dto) {
+                $students = $this->studentRepository->paginate(
+                    filters: $dto->getFilters(),
+                    perPage: $dto->getPerPage(),
+                    page: $dto->getPage(),
+                    orderBy: $dto->getSortBy(),
+                    orderDirection: $dto->getDirection()
+                );
 
-            return ServiceReturn::success($students);
-        },
-            catchCallback: function (\Throwable $e) use ($dto) {
-                dd($e);
+                return ServiceReturn::success($students);
             },
             returnCatchCallback: function () use ($dto) {
                 return ServiceReturn::success(
@@ -56,7 +56,7 @@ class StudentService extends BaseService
     /**
      * Tạo hồ sơ học sinh mới
      *
-     * @param  array  $data  - Dựa theo StudentCreateRequest
+     * @param array $data - Dựa theo StudentCreateRequest
      *
      * @throws \Throwable
      */
@@ -90,7 +90,7 @@ class StudentService extends BaseService
                 ]);
                 Logging::userActivity(
                     action: 'Tạo học sinh',
-                    description: 'Tạo hồ sơ học sinh '.$student->fullname
+                    description: 'Tạo hồ sơ học sinh ' . $student->fullname
                 );
 
                 return ServiceReturn::success(
@@ -111,7 +111,7 @@ class StudentService extends BaseService
         return $this->execute(
             callback: function () use ($id) {
                 $student = $this->studentRepository->findStudentByUserId($id);
-                if (! $student) {
+                if (!$student) {
                     throw new ServiceException('Học sinh không tồn tại.');
                 }
 
@@ -130,12 +130,12 @@ class StudentService extends BaseService
         return $this->execute(
             callback: function () use ($id, $data) {
                 $student = $this->studentRepository->findStudentByUserId($id);
-                if (! $student) {
+                if (!$student) {
                     throw new ServiceException('Học sinh không tồn tại.');
                 }
 
                 // Cập nhật mật khẩu nếu có
-                if (! empty($data['password'])) {
+                if (!empty($data['password'])) {
                     $user = $student->user;
                     $user->password = Hash::make($data['password']);
                     $user->save();
@@ -152,12 +152,12 @@ class StudentService extends BaseService
                     'updated_at' => now(),
                 ];
                 $updated = $this->studentRepository->updateById($student->id, $studentData);
-                if (! $updated) {
+                if (!$updated) {
                     throw new ServiceException('Cập nhật học sinh thất bại.');
                 }
                 Logging::userActivity(
                     action: 'Cập nhật học sinh',
-                    description: 'Cập nhật hồ sơ học sinh '.$student->full_name
+                    description: 'Cập nhật hồ sơ học sinh ' . $student->full_name
                 );
 
                 return ServiceReturn::success($updated, 'Cập nhật học sinh thành công');

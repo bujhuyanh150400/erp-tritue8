@@ -28,7 +28,6 @@ class TeacherService extends BaseService
     {
         return $this->execute(
             callback: function () use ($dto) {
-
                 $teachers = $this->teacherRepository->paginate(
                     filters: $dto->getFilters(),
                     perPage: $dto->getPerPage(),
@@ -36,11 +35,7 @@ class TeacherService extends BaseService
                     orderBy: $dto->getSortBy(),
                     orderDirection: $dto->getDirection()
                 );
-
                 return ServiceReturn::success($teachers);
-            },
-            catchCallback: function (\Throwable $e) use ($dto) {
-                dd($e);
             },
             returnCatchCallback: function () use ($dto) {
                 return ServiceReturn::success(

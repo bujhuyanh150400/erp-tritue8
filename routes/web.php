@@ -44,7 +44,7 @@ Route::prefix('admin')->group(function () {
             Route::get('/create', [TeacherController::class, 'viewCreate'])->name('teacher.create');
             Route::post('/create', [TeacherController::class, 'createTeacher'])->name('teacher.create');
             Route::post('/{id}/disabled', [TeacherController::class, 'updateTeacher'])->name('teacher.update');
-            Route::get('/{id}/update', [StudentController::class, 'viewUpdate'])->name('teacher.view_update');
+            Route::get('/{id}/update', [TeacherController::class, 'viewUpdate'])->name('teacher.view_update');
         });
 
         Route::prefix('staff')
@@ -58,28 +58,26 @@ Route::prefix('admin')->group(function () {
                 Route::delete('/{id}/delete', [StaffController::class, 'deleteStaff'])->name('staff.delete');
             });
 
-        Route::prefix('subject')->middleware(['check-role:admin'])->group(function () {
-
+        Route::group([
+            'prefix' => 'subject',
+            'middleware' => ['check-role:admin'],
+        ], function () {
             Route::get('/list', [SubjectController::class, 'listSubject'])->name('subject.list');
             Route::get('/create', [SubjectController::class, 'viewCreate'])->name('subject.view_create');
             Route::post('/create', [SubjectController::class, 'create'])->name('subject.create');
             Route::get('/{id}/update', [SubjectController::class, 'viewUpdate'])->name('subject.view_update');
             Route::put('/{id}/update', [SubjectController::class, 'update'])->name('subject.update');
-            Route::post('/{id}/delete', [SubjectController::class, 'delete'])->name('subject.delete');
         });
 
-        Route::prefix('room')->middleware(['check-role:admin'])->group(function () {
-
-            Route::get('/list', [RoomController::class,'listRoom'])->name('room.list');
-
-            Route::get('/create', [RoomController::class,'viewCreate'])->name('room.view_create');
-            Route::post('/create', [RoomController::class,'create'])->name('room.create');
-
-            Route::get('/{id}/update', [RoomController::class,'viewUpdate'])->name('room.view_update');
-            Route::put('/{id}/update', [RoomController::class,'update'])->name('room.update');
-
-            Route::post('/{id}/delete', [RoomController::class,'delete'])->name('room.delete');
+        Route::group([
+            'prefix' => 'room',
+            'middleware' => ['check-role:admin'],
+        ], function () {
+            Route::get('/list', [RoomController::class, 'listRoom'])->name('room.list');
+            Route::get('/create', [RoomController::class, 'viewCreate'])->name('room.view_create');
+            Route::post('/create', [RoomController::class, 'create'])->name('room.create');
+            Route::get('/{id}/update', [RoomController::class, 'viewUpdate'])->name('room.view_update');
+            Route::put('/{id}/update', [RoomController::class, 'update'])->name('room.update');
         });
-
     });
 });
