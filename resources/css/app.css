@@ -1,8 +1,5 @@
 @import 'tailwindcss';
 @import "tw-animate-css";
-@import "shadcn/tailwind.css";
-@import "@fontsource-variable/geist";
-@import "@fontsource-variable/inter";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -167,10 +164,5 @@
 
     html {
         @apply font-sans;
-    }
-
-    button:not(:disabled),
-    [role="button"]:not(:disabled) {
-        cursor: pointer;
     }
 }

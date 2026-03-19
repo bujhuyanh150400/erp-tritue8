@@ -2,36 +2,50 @@
 
 namespace App\Repositories;
 
-use App\Core\Interfaces\Paginate;
+use App\Core\Interfaces\FilterFilament;
 use App\Core\Repository\BaseRepository;
+use App\Models\ClassEnrollment;
+use App\Models\RewardPoint;
 use App\Models\Student;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\DB;
 
-class StudentRepository extends BaseRepository implements Paginate
+class StudentRepository extends BaseRepository implements FilterFilament
 {
     public function getModel(): string
     {
         return Student::class;
     }
 
-    public function paginate(array $filters = [], int $perPage = 10, int $page = 1, string $orderBy = 'id', string $orderDirection = 'desc'): \Illuminate\Pagination\LengthAwarePaginator
+    /**
+     * Tạo query để lấy danh sách học sinh
+     * @param Builder $query
+     * @return Builder
+     */
+    public function getListingQuery(Builder $query): Builder
     {
-        $query = $this->getQuery()
-            ->with(['user' => function ($query) {
-                $query->select('id', 'is_active', 'role');
-            }]);
+        return $this->query()
+            ->with(['user'])
+            ->addSelect([
+                'students.*',
+                // Môn đang học
+                'subject_names' => DB::table('class_enrollments')
+                    ->join('classes', 'class_enrollments.class_id', '=', 'classes.id')
+                    ->join('subjects', 'classes.subject_id', '=', 'subjects.id')
+                    ->whereColumn('class_enrollments.student_id', 'students.id')
+                    ->whereNull('class_enrollments.left_at')
+                    ->select(DB::raw("string_agg(subjects.name, ',')")),
 
-        $query = $this->filters($query, $filters);
+                // Tổng số sao (Reward Points)
+                'total_stars' => DB::table('reward_points')
+                    ->whereColumn('student_id', 'students.id')
+                    ->selectRaw('COALESCE(SUM(amount), 0)'),
 
-        $query = $this->sort($query, $orderBy, $orderDirection);
-
-        return $query->paginate($perPage, ['*'], 'page', $page);
+            ]);
     }
 
-    public function filters($query, array $filters = []): Builder
+    public function setFilters(Builder $query, array $filters = []): Builder
     {
-        $query = $this->model->query();
-
         if (! empty($filters['keyword']) && ! empty(trim($filters['keyword']))) {
             $keyword = trim($filters['keyword']);
             $query->where(function ($q) use ($keyword) {
@@ -54,30 +68,8 @@ class StudentRepository extends BaseRepository implements Paginate
             $query->where('grade_level', $filters['grade_level']);
         }
 
-        if (! empty($filters['gender'])) {
-            $query->where('gender', $filters['gender']);
-        }
-
-        if (! empty($filters['parent_phone'])) {
-            $query->where('parent_phone', 'LIKE', '%'.$filters['parent_phone'].'%');
-        }
 
         return $query;
     }
 
-    public function sort(Builder $query, string $orderBy, string $orderDirection): Builder
-    {
-        return $query->orderBy($orderBy, $orderDirection);
-    }
-
-    /**
-     * Tìm học sinh theo ID người dùng
-     */
-    public function findStudentByUserId(int $userId): ?Student
-    {
-        return $this->model->query()
-            ->with('user')
-            ->where('user_id', $userId)
-            ->first();
-    }
 }

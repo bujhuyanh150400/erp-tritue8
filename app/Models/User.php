@@ -4,10 +4,12 @@ namespace App\Models;
 
 use App\Constants\UserRole;
 use App\Core\Traits\HasBigIntId;
+use Filament\Models\Contracts\FilamentUser;
+use Filament\Panel;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 
-class User extends Authenticatable
+class User extends Authenticatable implements FilamentUser
 {
     use HasBigIntId, HasFactory;
 
@@ -43,6 +45,12 @@ class User extends Authenticatable
         ];
     }
 
+    // ─── FilamentUser ─────────────────────────────────────────────
+    public function canAccessPanel(Panel $panel): bool
+    {
+        return $this->is_active;
+    }
+
     // ─── Relationships ────────────────────────────────────────────
     public function student()
     {
@@ -70,6 +78,11 @@ class User extends Authenticatable
     }
 
     // ─── Helpers ─────────────────────────────────────────────────
+    public function getNameAttribute()
+    {
+        return $this->username;
+    }
+
     public function isAdmin(): bool
     {
         return $this->role === UserRole::Admin;

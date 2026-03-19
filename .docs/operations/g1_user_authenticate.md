@@ -4,7 +4,6 @@
 
 ## Tổng quan
 
-
 `users` là bảng **auth duy nhất** — mọi role đều đăng nhập qua đây.  
 `students`, `teachers`, `staff` là bảng **profile** — lưu thông tin nghiệp vụ, không phải thông tin đăng nhập.
 
@@ -29,8 +28,8 @@ users (1) ──── (0..1) students
 
 ```
 * Thông tin ngân hàng
-- Chỉ Admin được xem và sửa (`bank_account_number`, `bank_account_holder`).
-- API trả về profile cho **chính GV** → mask: `****1234`.
+- Chỉ Admin được xem và sửa (bank_account_number, bank_account_holder).
+- Trả về profile cho chính GV / NV → mask số TK: ****1234.
 
 * Password
 - Lưu dạng bcrypt hash, không bao giờ trả về trong response.
@@ -44,12 +43,12 @@ users (1) ──── (0..1) students
 | Username bị trùng                   | Báo lỗi ngay khi nhập, gợi ý username khác                |
 | Admin tự khóa mình                  | Chặn ở tầng backend, không phụ thuộc UI                   |
 | GV nghỉ việc còn buổi dạy tương lai | Cảnh báo trước khi khóa, admin phải xử lý lịch dạy trước  |
-| Học sinh chuyển khối (lên lớp)      | Cập nhật `students.grade_level`, không tạo user mới       |
+| Học sinh chuyển khối (lên lớp)      | Cập nhật students.grade_level, không tạo user mới         |
 | Đăng nhập sai nhiều lần             | Không yêu cầu trong spec, bỏ qua ở giai đoạn này          |
 
 ---
 
-## Định nghĩa Role
+## Định nghĩa Enum
 
 ```
 UserRole:
@@ -57,12 +56,7 @@ UserRole:
   1 = Teacher
   2 = Staff
   3 = Student - Parent  ← dùng chung cho cả phụ huynh
-```
 
-> **Student/Parent dùng chung 1 tài khoản.**  
-> Phụ huynh có 2 con → 2 tài khoản riêng, mỗi tài khoản gắn với 1 học sinh.
-
-```
 StaffRoleType:
   0 = Receptionist  ← lễ tân
 
@@ -80,6 +74,9 @@ GradeLevel:
   6 | 7 | 8 | 9 | 10 | 11 | 12  — lưu số nguyên trực tiếp
 ```
 
+> **Student/Parent dùng chung 1 tài khoản.**  
+> Phụ huynh có 2 con → 2 tài khoản riêng, mỗi tài khoản gắn với 1 học sinh.
+
 **Ràng buộc transaction:**  
 Nếu bất kỳ bước nào lỗi → rollback toàn bộ.  
 Không được tồn tại `users` mà không có profile tương ứng.
@@ -89,34 +86,34 @@ Không được tồn tại `users` mà không có profile tương ứng.
 ## Luồng Đăng nhập
 
 ```
-Validate: 
-    - username (required)
-    - password (required, min: 8 ký tự, 1 chữ hoa, 1 chữ thường, 1 số, 1 ký tự đặc biệt)
+Validate:
+  - username (required)
+  - password (required, min 8 ký tự, 1 chữ hoa, 1 chữ thường, 1 số, 1 ký tự đặc biệt)
 
 Kiểm tra:
-  1. username tồn tại
-  2. password khớp (bcrypt verify)
+  1. SELECT * FROM users WHERE username = ?
+  2. Hash verify password
   3. users.is_active = true
 
 Nếu pass:
-  - tạo session phía server (guard web)
-  - user_logs: user X đăng nhập lúc Z
-  - Redirect về dashboard
+  - Auth::login($user) — tạo session phía server (guard web)
+  - INSERT user_logs (user_id, action = 'login', created_at = now())
+  - Redirect về dashboard theo role
 
 Nếu fail:
-  - Trả về lỗi qua session flash (vd: "Tên đăng nhập hoặc mật khẩu không đúng")
+  - Trả về lỗi qua session flash: "Tên đăng nhập hoặc mật khẩu không đúng"
   - Không phân biệt sai username hay sai password (bảo mật)
-  - Nếu is_active = false → "Tài khoản đã bị khóa, liên hệ admin"
+  - Nếu users.is_active = false → "Tài khoản đã bị khóa, liên hệ admin"
 ```
 
 ## Luồng Đăng xuất
 
 ```
 POST /logout
-  - Ghi user_logs: user X đăng xuất lúc Z
-  - logout session web
-  - hủy session phía server
-  - regenerate CSRF token
+  - INSERT user_logs (user_id, action = 'logout', created_at = now())
+  - Auth::logout()
+  - $request->session()->invalidate()
+  - $request->session()->regenerateToken()
   - Redirect về trang login
 ```
 
@@ -131,23 +128,25 @@ POST /change-password
   ← old_password + new_password + confirm_password
 
 Kiểm tra:
-  1. old_password khớp với hash hiện tại
+  1. Hash verify old_password với users.password
   2. new_password != old_password
   3. new_password đủ độ phức tạp (min 8 ký tự)
   4. confirm_password == new_password
 
 Nếu pass:
-  - Cập nhật password hash
+  - UPDATE users SET password = bcrypt(new_password) WHERE id = ?
+  - INSERT user_logs (action = 'change_password')
 ```
 
 ### Admin reset mật khẩu
 
 ```
-Trong các màn chỉnh sửa (teacher, staff, student)
-- admin có thể tự nhập mật khẩu mới để đổi mật khẩu
-- chi tiết nghiệp vụ sẽ được ghi lại trong các mô tả dưới
+Trong các màn chỉnh sửa (teacher, staff, student):
+  - Admin nhập password mới cho user đó
+  - Nếu có nhập → UPDATE users SET password = bcrypt(new_password) WHERE id = ?
+  - INSERT user_logs (action = 'reset_password', description = 'admin X reset PW user Y')
 
-→ Admin **không được xem** mật khẩu hiện tại — chỉ sinh mới.
+→ Admin không được xem mật khẩu hiện tại — chỉ ghi đè mới.
 ```
 
 ---
@@ -158,16 +157,16 @@ Trong các màn chỉnh sửa (teacher, staff, student)
 Admin bấm "Khóa tài khoản"
 
 Kiểm tra:
-  → Không được tự khóa tài khoản của chính mình
+  - users.id != Auth::id()  ← không được tự khóa mình
 
 Nếu pass:
-  → users.is_active = false
-  → DELETE sessions WHERE user_id = ?  ← kick user ra ngay lập tức
-  → Ghi user_logs: ai khóa, lúc nào
+  - UPDATE users SET is_active = false WHERE id = ?
+  - DELETE FROM sessions WHERE user_id = ?  ← kick user ra ngay lập tức
+  - INSERT user_logs (action = 'lock_account', description = 'admin X khóa user Y')
 
-Admin bấm "Mở khóa"
-  → users.is_active = true
-  → Ghi user_logs
+Admin bấm "Mở khóa":
+  - UPDATE users SET is_active = true WHERE id = ?
+  - INSERT user_logs (action = 'unlock_account')
 ```
 
 ---
@@ -177,113 +176,182 @@ Admin bấm "Mở khóa"
 ### Danh sách
 
 ```
-Tìm kiếm nhanh (full-text):
-  - Họ tên học sinh
-  - Mã học sinh (user.id)
-  - SĐT phụ huynh
- 
+Tìm kiếm nhanh:
+  - Họ tên    → WHERE students.full_name ILIKE '%keyword%'
+  - Mã HS     → OR users.id::text ILIKE '%keyword%'
+                  JOIN users ON students.user_id = users.id
+  - SĐT PH    → OR students.parent_phone ILIKE '%keyword%'
+
 Bộ lọc:
-  - Tháng              — lọc dữ liệu báo cáo theo tháng
-  - Khối               — grade_level
-  - Lớp                — class_id
-  - Môn học            — subject_id
-  - Giáo viên          — teacher_id
-  - Tình trạng báo cáo: Tất cả | Chưa nộp | Đã nộp chờ duyệt | Đã duyệt
-  - Trạng thái tài khoản: Tất cả | Hoạt động | Đã khóa
- 
-Hiển thị tổng số học sinh tìm thấy
+  - Khối               → WHERE students.grade_level = ?
+  - Lớp                → WHERE EXISTS (
+                            SELECT 1 FROM class_enrollments
+                            WHERE student_id = students.id
+                              AND class_id = ? AND left_at IS NULL
+                          )
+  - Môn học            → WHERE EXISTS (
+                            SELECT 1 FROM class_enrollments ce
+                            JOIN classes ON ce.class_id = classes.id
+                            WHERE ce.student_id = students.id
+                              AND classes.subject_id = ? AND ce.left_at IS NULL
+                          )
+  - Giáo viên          → WHERE EXISTS (
+                            SELECT 1 FROM class_enrollments ce
+                            JOIN classes ON ce.class_id = classes.id
+                            WHERE ce.student_id = students.id
+                              AND classes.teacher_id = ? AND ce.left_at IS NULL
+                          )
+
+  - Trạng thái tài khoản → WHERE users.is_active = true/false
+                              JOIN users ON students.user_id = users.id
+
+Hiển thị tổng → COUNT(students.id)
 Nút: [Xóa bộ lọc]
 
 Bảng hiển thị:
-  - Học sinh: chứa - id, tên, ngày sinh
-  - Giới tính
-  - Khối
-  - Môn đang học (triển khai sau)
-  - Phụ huynh: chứa - tên, SĐT
-  - Tình trạng tài khoản
-  - Số sao
-  - Tình trạng báo cáo
-  - Action
+  - ID + Họ tên + Ngày sinh → users.id, students.full_name, students.dob
+                               JOIN users ON students.user_id = users.id
+  - Giới tính               → students.gender
+  - Khối                    → students.grade_level
+  - Môn đang học            → GROUP_CONCAT(subjects.name)
+                               JOIN class_enrollments ce ON ce.student_id = students.id
+                                 AND ce.left_at IS NULL
+                               JOIN classes ON ce.class_id = classes.id
+                               JOIN subjects ON classes.subject_id = subjects.id
+                               Hiển thị dạng tag: [Toán 8] [Văn 8]
+  - Tên PH + SĐT PH         → students.parent_name, students.parent_phone
+  - Trạng thái tài khoản    → users.is_active
+  - Số sao                  → SUM(reward_points.amount)
+                               JOIN reward_points ON student_id = students.id
+  - Action:
       + Xem chi tiết
       + Chỉnh sửa thông tin
       + Xem lịch sử đổi thưởng (popup)
       + Khóa / Mở khóa tài khoản
-
-Lưu ý:
-  - "Môn đang học" hiển thị dạng tag vì 1 HS học nhiều môn
-    vd: [Toán 8] [Văn 8] [Anh 8]
-  - "Số sao" = tổng reward_points hiện tại
-  - "Tình trạng báo cáo" theo tháng đang lọc
-  - "Tài khoản" hiển thị: Hoạt động / Đã khóa
 ```
 
 ### Tạo Học sinh
 
 ```
-1. Admin nhập: 
-    - full_name        - Họ và tên đầy đủ (required)
-    - user_name        - Tên đăng nhập (required) - tự render vd: hs_nguyenvana
-    - password         - Mật khẩu (required, min: 8 ký tự, 1 chữ hoa, 1 chữ thường,
-                         1 số, 1 ký tự đặc biệt) — có nút random để tạo password tạm thời
-    - dob              - Ngày sinh (required)
-    - gender           - Giới tính Gender (required)
-    - grade_level      - Khối GradeLevel (required)
-    - parent_name      - Tên bố mẹ (required)
-    - parent_phone     - Số điện thoại bố mẹ (required)
-    - address          - Địa chỉ (required)
-    - note             - Ghi chú (optional)
+1. Admin nhập:
+    - full_name    - Họ và tên đầy đủ (required)
+    - user_name    - Tên đăng nhập (required) — tự render vd: hs_nguyenvana
+    - password     - Mật khẩu (required, min 8 ký tự...) — có nút random
+    - dob          - Ngày sinh (required)
+    - gender       - Giới tính Gender (required)
+    - grade_level  - Khối GradeLevel (required)
+    - parent_name  - Tên bố mẹ (required)
+    - parent_phone - Số điện thoại bố mẹ (required)
+    - address      - Địa chỉ (required)
+    - note         - Ghi chú (optional)
 
-2. Service:
-    - Tạo user (role = UserRole.Student, username và password)
-    - Tạo student (user_id = users.id)
+2. Validation:
+    - username unique: SELECT COUNT(*) FROM users WHERE username = ? = 0
 
-3. Ghi user_logs: admin X tạo tài khoản học sinh Y lúc Z
+3. Service (transaction):
+    - INSERT users (username, password = bcrypt(?), role = 3, is_active = true)
+    - INSERT students (user_id = users.id, full_name, dob, gender, ...)
+
+4. INSERT user_logs (action = 'create_student', description = 'admin X tạo HS Y lúc Z')
 ```
 
 ### Sửa Học sinh
 
 ```
 1. Admin chọn học sinh cần sửa
+   → SELECT students.*, users.username, users.is_active
+     FROM students
+     JOIN users ON students.user_id = users.id
+     WHERE students.id = ?
 
-2. Admin sửa lại các thông tin: 
-    - full_name        - Họ và tên đầy đủ (required)
-    - password         - Mật khẩu mới (optional) — có nút random
-                         Nếu nhập → reset password thành password mới
-    - dob              - Ngày sinh (required)
-    - gender           - Giới tính Gender (required)
-    - grade_level      - Khối GradeLevel (required)
-    - parent_name      - Tên bố mẹ (required)
-    - parent_phone     - Số điện thoại bố mẹ (required)
-    - address          - Địa chỉ (required)
-    - note             - Ghi chú (optional)
+2. Admin sửa:
+    - full_name, dob, gender, grade_level,
+      parent_name, parent_phone, address, note
+    - password (optional) — nếu nhập → reset password
 
 3. Service:
-    - Tìm student theo user_id
-    - update password nếu có nhập mới
-    - Update student
+    - SELECT student_id FROM students WHERE id = ? → lấy user_id
+    - UPDATE users SET password = bcrypt(?) WHERE id = user_id  (nếu có password mới)
+    - UPDATE students SET full_name = ?, dob = ?, ... WHERE id = ?
 
-4. Ghi user_logs: admin X sửa tài khoản học sinh Y lúc Z
+4. INSERT user_logs (action = 'update_student', description = 'admin X sửa HS Y lúc Z')
 ```
 
-### Trang chi tiết
+### Trang chi tiết Học sinh
 
 ```
 Tab 1 — Thông tin cá nhân:
-  Họ tên, ngày sinh, giới tính, khối, địa chỉ
-  Tên PH, SĐT PH, Zalo ID, ghi chú
-  Tài khoản: username, trạng thái tài khoản
- 
+  → SELECT students.*, users.username, users.is_active, users.last_login_at
+    FROM students
+    JOIN users ON students.user_id = users.id
+    WHERE students.id = ?
+
+  Hiển thị: họ tên, ngày sinh, giới tính, khối, địa chỉ,
+             tên PH, SĐT PH, zalo_id, ghi chú,
+             username, trạng thái tài khoản
+
 Tab 2 — Báo cáo theo môn:
-  Mỗi môn là 1 block độc lập, gồm:
-    - Ngày đăng ký môn + giáo viên phụ trách
-    - Thống kê tháng: tổng buổi | buổi có mặt | tỷ lệ | điểm TB
-    - Bảng điểm: Ngày | Tên bài | Điểm | Ghi chú
-    - Nhận xét GV tháng + trạng thái báo cáo (Chưa nộp / Chờ duyệt / Đã duyệt)
- 
+  Lấy danh sách môn HS đang học:
+  → SELECT DISTINCT subjects.id, subjects.name,
+           classes.id as class_id, classes.name as class_name,
+           teachers.full_name as teacher_name,
+           ce.enrolled_at
+    FROM class_enrollments ce
+    JOIN classes ON ce.class_id = classes.id
+    JOIN subjects ON classes.subject_id = subjects.id
+    JOIN teachers ON classes.teacher_id = teachers.id
+    WHERE ce.student_id = ? AND ce.left_at IS NULL
+
+  Mỗi môn là 1 block. Trong mỗi block, lấy theo tháng đang xem:
+
+  Thống kê tháng:
+  → SELECT
+      COUNT(*) as tong_buoi,
+      COUNT(*) FILTER (WHERE ar.status IN (present, late)) as co_mat,
+      ROUND(AVG(sc.score), 2) as diem_tb
+    FROM attendance_records ar
+    JOIN attendance_sessions as_sess ON ar.session_id = as_sess.id
+    LEFT JOIN scores sc ON sc.attendance_record_id = ar.id
+    WHERE ar.student_id = ?
+      AND as_sess.class_id = class_id_của_môn
+      AND as_sess.session_date BETWEEN [đầu tháng] AND [cuối tháng]
+
+  Bảng điểm:
+  → SELECT as_sess.session_date, sc.exam_name, sc.score, sc.max_score, sc.note
+    FROM scores sc
+    JOIN attendance_records ar ON sc.attendance_record_id = ar.id
+    JOIN attendance_sessions as_sess ON ar.session_id = as_sess.id
+    WHERE ar.student_id = ?
+      AND as_sess.class_id = class_id_của_môn
+      AND as_sess.session_date BETWEEN [đầu tháng] AND [cuối tháng]
+    ORDER BY as_sess.session_date
+
+  Nhận xét GV + trạng thái báo cáo:
+  → SELECT mr.content, mr.status, mr.submitted_at, mr.reject_reason
+    FROM monthly_reports mr
+    WHERE mr.student_id = ?
+      AND mr.class_id = class_id_của_môn
+      AND mr.month = 'YYYY-MM'
+
 Tab 3 — Sao thưởng:
-  Tổng sao hiện tại
-  Lịch sử: Ngày | Loại (cộng/trừ) | Số sao | Lý do
-  Lịch sử đổi thưởng: Ngày | Phần thưởng | Sao đã dùng
+  Tổng sao hiện tại:
+  → SELECT SUM(amount) FROM reward_points WHERE student_id = ?
+
+  Lịch sử cộng/trừ sao:
+  → SELECT rp.created_at, rp.amount, rp.reason, users.username as nguoi_tao
+    FROM reward_points rp
+    JOIN users ON rp.awarded_by = users.id
+    WHERE rp.student_id = ?
+    ORDER BY rp.created_at DESC
+
+  Lịch sử đổi thưởng:
+  → SELECT rr.redeemed_at, ri.name as ten_thuong,
+           rr.points_spent, users.username as nguoi_xu_ly
+    FROM reward_redemptions rr
+    JOIN reward_items ri ON rr.reward_item_id = ri.id
+    JOIN users ON rr.processed_by = users.id
+    WHERE rr.student_id = ?
+    ORDER BY rr.redeemed_at DESC
 ```
 
 ---
@@ -294,26 +362,39 @@ Tab 3 — Sao thưởng:
 
 ```
 Tìm kiếm nhanh:
-  - Mã giáo viên (user.id)
-  - Họ tên giáo viên
-  - Số điện thoại
- 
+  - Mã GV   → WHERE users.id::text ILIKE '%keyword%'
+               JOIN users ON teachers.user_id = users.id
+  - Họ tên  → OR teachers.full_name ILIKE '%keyword%'
+  - SĐT     → OR teachers.phone ILIKE '%keyword%'
+
 Bộ lọc:
-  - Trạng thái nghiệp vụ: EmployeeStatus
-  - Trạng thái tài khoản: Tất cả | Hoạt động | Đã khóa
-  - Môn dạy — subject_id
- 
-Hiển thị tổng số giáo viên tìm thấy
+  - Trạng thái nghiệp vụ → WHERE teachers.status = ?
+  - Trạng thái tài khoản → WHERE users.is_active = true/false
+                             JOIN users ON teachers.user_id = users.id
+  - Môn dạy              → WHERE EXISTS (
+                               SELECT 1 FROM classes
+                               WHERE classes.teacher_id = teachers.id
+                                 AND classes.subject_id = ?
+                                 AND classes.status = Active
+                             )
+
+Hiển thị tổng → COUNT(teachers.id)
 Nút: [Xóa bộ lọc]
 
 Bảng hiển thị:
-  - Họ tên
-  - SĐT
-  - Môn dạy
-  - Số lớp đang dạy
-  - Trạng thái nghiệp vụ
-  - Trạng thái tài khoản
-  - Action
+  - Họ tên              → teachers.full_name
+  - SĐT                 → teachers.phone
+  - Môn dạy             → GROUP_CONCAT(DISTINCT subjects.name)
+                           JOIN classes ON classes.teacher_id = teachers.id
+                             AND classes.status = Active
+                           JOIN subjects ON classes.subject_id = subjects.id
+  - Số lớp đang dạy     → COUNT(classes.id)
+                           WHERE classes.teacher_id = teachers.id
+                             AND classes.status = Active
+  - Trạng thái nghiệp vụ→ teachers.status
+  - Trạng thái tài khoản→ users.is_active
+                           JOIN users ON teachers.user_id = users.id
+  - Action:
       + Xem chi tiết
       + Xem lịch dạy
       + Xem bảng lương
@@ -324,79 +405,144 @@ Bảng hiển thị:
 ### Tạo Giáo viên
 
 ```
-1. Admin nhập: 
-    - full_name            - Họ và tên đầy đủ (required)
-    - user_name            - Tên đăng nhập (required) - tự render vd: gv_nguyenvana
-    - password             - Mật khẩu (required, min: 8 ký tự, 1 chữ hoa, 1 chữ thường,
-                             1 số, 1 ký tự đặc biệt) — có nút random
-    - phone                - Số điện thoại (required)
-    - email                - Email (required)
-    - address              - Địa chỉ (required)
-    - bank_name            - Tên ngân hàng (required)
-    - bank_account_number  - Số tài khoản ngân hàng (required)
-    - bank_account_holder  - Chủ tài khoản ngân hàng (required)
-    - status               - Trạng thái EmployeeStatus (required)
-    - joined_at            - Ngày vào làm (required)
+1. Admin nhập:
+    - full_name           - Họ và tên (required)
+    - user_name           - Tên đăng nhập (required) — tự render vd: gv_nguyenvana
+    - password            - Mật khẩu (required, min 8 ký tự...) — có nút random
+    - phone               - Số điện thoại (required)
+    - email               - Email (required)
+    - address             - Địa chỉ (required)
+    - bank_name           - Tên ngân hàng (required)
+    - bank_account_number - Số tài khoản (required)
+    - bank_account_holder - Chủ tài khoản (required)
+    - status              - Trạng thái EmployeeStatus (required)
+    - joined_at           - Ngày vào làm (required)
 
-2. Service:
-    - Tạo user (role = UserRole.Teacher, username và password)
-    - Tạo teacher (user_id = users.id)
+2. Validation:
+    - username unique: SELECT COUNT(*) FROM users WHERE username = ? = 0
 
-3. Ghi user_logs: admin X tạo tài khoản giáo viên Y lúc Z
+3. Service (transaction):
+    - INSERT users (username, password = bcrypt(?), role = 1, is_active = true)
+    - INSERT teachers (user_id = users.id, full_name, phone, ...)
+
+4. INSERT user_logs (action = 'create_teacher', description = 'admin X tạo GV Y lúc Z')
 ```
 
 ### Sửa Giáo viên
 
 ```
-1. Admin chọn giáo viên cần sửa
+1. Admin chọn GV cần sửa
+   → SELECT teachers.*, users.username, users.is_active, users.last_login_at
+     FROM teachers
+     JOIN users ON teachers.user_id = users.id
+     WHERE teachers.id = ?
 
-2. Admin sửa lại các thông tin:
-    - full_name            - Họ và tên đầy đủ (required)
-    - password             - Mật khẩu mới (optional) — có nút random
-                             Nếu nhập → reset password thành password mới
-    - phone                - Số điện thoại (required)
-    - email                - Email (required)
-    - address              - Địa chỉ (required)
-    - bank_name            - Tên ngân hàng (required)
-    - bank_account_number  - Số tài khoản ngân hàng (required)
-    - bank_account_holder  - Chủ tài khoản ngân hàng (required)
-    - status               - Trạng thái EmployeeStatus (required)
-    - joined_at            - Ngày vào làm (required)
+2. Admin sửa:
+    - full_name, phone, email, address,
+      bank_name, bank_account_number, bank_account_holder,
+      status, joined_at
+    - password (optional) — nếu nhập → reset password
 
 3. Service:
-    - Tìm teacher theo user_id
-    - update password nếu có nhập mới
-    - Update teacher
+    - UPDATE users SET password = bcrypt(?) WHERE id = user_id  (nếu có password mới)
+    - UPDATE teachers SET full_name = ?, phone = ?, ... WHERE id = ?
 
-4. Ghi user_logs: admin X sửa tài khoản giáo viên Y lúc Z
+4. INSERT user_logs (action = 'update_teacher', description = 'admin X sửa GV Y lúc Z')
 ```
 
-### Trang chi tiết
+### Trang chi tiết Giáo viên
 
 ```
 Tab 1 — Thông tin cá nhân:
-  Họ tên, SĐT, email, địa chỉ, ngày vào làm
+  → SELECT teachers.*, users.username, users.is_active, users.last_login_at
+    FROM teachers
+    JOIN users ON teachers.user_id = users.id
+    WHERE teachers.id = ?
+
   Thông tin ngân hàng:
-    - Admin xem: đầy đủ
-    - Chính GV xem: mask số TK → ****1234
-  Tài khoản: username, trạng thái, last_login_at
- 
+    - Admin xem: bank_name, bank_account_number, bank_account_holder (đầy đủ)
+    - Chính GV xem: bank_account_number mask → ****1234
+
 Tab 2 — Lớp đang dạy:
-  Bảng: Lớp | Môn | Khối | Lịch học | Lương/buổi | Sĩ số
+  Bảng lớp:
+  → SELECT
+      classes.id, classes.name, classes.code,
+      subjects.name as ten_mon,
+      classes.grade_level,
+      classes.teacher_salary_per_session as luong_buoi,
+      COUNT(ce.id) as si_so
+    FROM classes
+    JOIN subjects ON classes.subject_id = subjects.id
+    LEFT JOIN class_enrollments ce ON ce.class_id = classes.id
+      AND ce.left_at IS NULL
+    WHERE classes.teacher_id = ?
+      AND classes.status = Active
+    GROUP BY classes.id, subjects.name
+
   Lịch dạy tổng hợp theo tuần:
-    Thứ 2: 17:00–19:00 | Toán 8A | Phòng 101
-    Thứ 4: 18:00–20:00 | Toán 9B | Phòng 202
- 
-Tab 3 — Hiệu suất (KPI):
-  - Tổng số lớp đang dạy
-  - Tổng buổi dạy tháng hiện tại
-  - Tỷ lệ chuyên cần TB các lớp
-  - Tỷ lệ nộp báo cáo đúng hạn
-  - Tỷ lệ báo cáo được duyệt ngay (không bị yêu cầu chỉnh sửa)
-  - Điểm TB toàn bộ lớp
- 
+  → SELECT
+      cst.day_of_week, cst.start_time, cst.end_time,
+      classes.name as ten_lop,
+      rooms.name as phong
+    FROM class_schedule_templates cst
+    JOIN classes ON cst.class_id = classes.id
+    JOIN rooms ON cst.room_id = rooms.id
+    WHERE cst.teacher_id = ?
+      AND (cst.end_date IS NULL OR cst.end_date >= today)
+      AND classes.status = Active
+    ORDER BY cst.day_of_week, cst.start_time
+
+Tab 3 — Hiệu suất (KPI): (tính theo tháng hiện tại)
+
+  Tổng số lớp đang dạy:
+  → SELECT COUNT(*) FROM classes
+    WHERE teacher_id = ? AND status = Active
+
+  Tổng buổi dạy tháng:
+  → SELECT COUNT(*) FROM attendance_sessions
+    WHERE teacher_id = ?
+      AND session_date BETWEEN [đầu tháng] AND [cuối tháng]
+      AND status = completed
+
+  Tỷ lệ chuyên cần TB các lớp:
+  → SELECT
+      ROUND(
+        COUNT(*) FILTER (WHERE ar.status IN (present, late)) * 100.0
+        / NULLIF(COUNT(*), 0), 1
+      ) as ty_le
+    FROM attendance_records ar
+    JOIN attendance_sessions as_sess ON ar.session_id = as_sess.id
+    WHERE as_sess.teacher_id = ?
+      AND as_sess.session_date BETWEEN [đầu tháng] AND [cuối tháng]
+
+  Tỷ lệ nộp báo cáo đúng hạn:
+  → SELECT
+      COUNT(*) FILTER (WHERE status != Draft) as da_nop,
+      COUNT(*) as tong
+    FROM monthly_reports
+    WHERE teacher_id = ? AND month = 'YYYY-MM'
+    (đúng hạn = submitted trước ngày deadline do trung tâm quy định)
+
+  Tỷ lệ báo cáo được duyệt ngay:
+  → SELECT
+      COUNT(*) FILTER (WHERE status = Approved) as duyet_ngay,
+      COUNT(*) FILTER (WHERE status IN (Approved, Rejected)) as da_review
+    FROM monthly_reports
+    WHERE teacher_id = ? AND month = 'YYYY-MM'
+
+  Điểm TB toàn bộ lớp:
+  → SELECT ROUND(AVG(sc.score), 2)
+    FROM scores sc
+    JOIN attendance_records ar ON sc.attendance_record_id = ar.id
+    JOIN attendance_sessions as_sess ON ar.session_id = as_sess.id
+    WHERE as_sess.teacher_id = ?
+      AND as_sess.session_date BETWEEN [đầu tháng] AND [cuối tháng]
+
   Cảnh báo tự động:
-    - Chưa nộp báo cáo tháng → badge đỏ
+    - Chưa nộp báo cáo tháng:
+        SELECT COUNT(*) FROM monthly_reports
+        WHERE teacher_id = ? AND month = 'YYYY-MM' AND status = Draft = 0
+        → badge đỏ nếu đã qua deadline mà vẫn Draft
     - Tỷ lệ chuyên cần < 70% → cảnh báo vàng
 ```
 
@@ -408,27 +554,32 @@ Tab 3 — Hiệu suất (KPI):
 
 ```
 Tìm kiếm nhanh:
-  - Mã nhân viên (user.id)
-  - Họ tên nhân viên
-  - Số điện thoại
+  - Mã NV   → WHERE users.id::text ILIKE '%keyword%'
+               JOIN users ON staff.user_id = users.id
+  - Họ tên  → OR staff.full_name ILIKE '%keyword%'
+  - SĐT     → OR staff.phone ILIKE '%keyword%'
 
 Bộ lọc:
-  - Chức vụ (role_type): Tất cả | Lễ tân
-  - Trạng thái nghiệp vụ: EmployeeStatus
-  - Trạng thái tài khoản: Tất cả | Hoạt động | Đã khóa
+  - Chức vụ              → WHERE staff.role_type = ?
+  - Trạng thái nghiệp vụ → WHERE staff.status = ?
+  - Trạng thái tài khoản → WHERE users.is_active = true/false
+                             JOIN users ON staff.user_id = users.id
 
-Hiển thị tổng số nhân viên tìm thấy
+Hiển thị tổng → COUNT(staff.id)
 Nút: [Xóa bộ lọc]
 
 Bảng hiển thị:
-  - Họ tên
-  - SĐT
-  - Chức vụ (role_type)
-  - Hình thức lương (salary_type: theo giờ / cố định)
-  - Mức lương (salary_amount hiện hành)
-  - Trạng thái nghiệp vụ
-  - Trạng thái tài khoản
-  - Action
+  - Họ tên               → staff.full_name
+  - SĐT                  → staff.phone
+  - Chức vụ              → staff.role_type
+  - Hình thức lương      → staff_salary_configs.salary_type
+                            JOIN staff_salary_configs ON staff_id = staff.id
+                            WHERE effective_to IS NULL  ← lấy config hiện hành
+  - Mức lương            → staff_salary_configs.salary_amount (config hiện hành)
+  - Trạng thái nghiệp vụ → staff.status
+  - Trạng thái tài khoản → users.is_active
+                            JOIN users ON staff.user_id = users.id
+  - Action:
       + Xem chi tiết
       + Xem ca làm việc
       + Xem bảng lương
@@ -440,64 +591,97 @@ Bảng hiển thị:
 
 ```
 1. Admin nhập:
-    - full_name            - Họ và tên đầy đủ (required)
-    - user_name            - Tên đăng nhập (required) - tự render vd: nv_nguyenvana
-    - password             - Mật khẩu (required, min: 8 ký tự, 1 chữ hoa, 1 chữ thường,
-                             1 số, 1 ký tự đặc biệt) — có nút random
-    - phone                - Số điện thoại (required)
-    - role_type            - Chức vụ StaffRoleType (required)
-    - bank_name            - Tên ngân hàng (required)
-    - bank_account_number  - Số tài khoản ngân hàng (required)
-    - bank_account_holder  - Chủ tài khoản ngân hàng (required)
-    - status               - Trạng thái EmployeeStatus (required)
-    - joined_at            - Ngày vào làm (required)
+    - full_name           - Họ và tên (required)
+    - user_name           - Tên đăng nhập (required) — tự render vd: nv_nguyenvana
+    - password            - Mật khẩu (required, min 8 ký tự...) — có nút random
+    - phone               - Số điện thoại (required)
+    - role_type           - Chức vụ StaffRoleType (required)
+    - bank_name           - Tên ngân hàng (required)
+    - bank_account_number - Số tài khoản (required)
+    - bank_account_holder - Chủ tài khoản (required)
+    - status              - Trạng thái EmployeeStatus (required)
+    - joined_at           - Ngày vào làm (required)
 
-2. Service:
-    - Tạo user (role = UserRole.Staff, username và password)
-    - Tạo staff (user_id = users.id, role_type)
+2. Validation:
+    - username unique: SELECT COUNT(*) FROM users WHERE username = ? = 0
 
-3. Ghi user_logs: admin X tạo tài khoản nhân viên Y lúc Z
+3. Service (transaction):
+    - INSERT users (username, password = bcrypt(?), role = 2, is_active = true)
+    - INSERT staff (user_id = users.id, full_name, phone, role_type, ...)
+
+4. INSERT user_logs (action = 'create_staff', description = 'admin X tạo NV Y lúc Z')
 ```
 
 ### Sửa Nhân viên
 
 ```
-1. Admin chọn nhân viên cần sửa
+1. Admin chọn NV cần sửa
+   → SELECT staff.*, users.username, users.is_active, users.last_login_at
+     FROM staff
+     JOIN users ON staff.user_id = users.id
+     WHERE staff.id = ?
 
-2. Admin sửa lại các thông tin:
-    - full_name            - Họ và tên đầy đủ (required)
-    - password             - Mật khẩu mới (optional) — có nút random
-                             Nếu nhập → reset password thành password mới
-    - phone                - Số điện thoại (required)
-    - role_type            - Chức vụ StaffRoleType (required)
-    - bank_name            - Tên ngân hàng (required)
-    - bank_account_number  - Số tài khoản ngân hàng (required)
-    - bank_account_holder  - Chủ tài khoản ngân hàng (required)
-    - status               - Trạng thái EmployeeStatus (required)
-    - joined_at            - Ngày vào làm (required)
+2. Admin sửa:
+    - full_name, phone, role_type,
+      bank_name, bank_account_number, bank_account_holder,
+      status, joined_at
+    - password (optional) — nếu nhập → reset password
 
 3. Service:
-    - Tìm staff theo user_id
-    - update password nếu có nhập mới
-    - Update staff
+    - UPDATE users SET password = bcrypt(?) WHERE id = user_id  (nếu có password mới)
+    - UPDATE staff SET full_name = ?, phone = ?, ... WHERE id = ?
 
-4. Ghi user_logs: admin X sửa tài khoản nhân viên Y lúc Z
+4. INSERT user_logs (action = 'update_staff', description = 'admin X sửa NV Y lúc Z')
 ```
 
-### Trang chi tiết
+### Trang chi tiết Nhân viên
 
 ```
 Tab 1 — Thông tin cá nhân:
-  Họ tên, SĐT, chức vụ, ngày vào làm
-  Thông tin ngân hàng (chỉ Admin xem đầy đủ)
-  Tài khoản: username, trạng thái, last_login_at
+  → SELECT staff.*, users.username, users.is_active, users.last_login_at
+    FROM staff
+    JOIN users ON staff.user_id = users.id
+    WHERE staff.id = ?
+
+  Thông tin ngân hàng: chỉ Admin xem được (đầy đủ)
 
 Tab 2 — Ca làm việc:
-  Bộ lọc: tháng
-  Bảng: Ngày | Giờ vào | Giờ ra | Tổng giờ | Đơn giá | Thành tiền | Trạng thái
-  Tổng giờ tháng + Tổng lương tạm tính hiển thị cuối bảng
-  Nút [Thêm ca thủ công] — dành cho trường hợp quên chấm công
+  Bộ lọc tháng (default: tháng hiện tại)
+
+  → SELECT
+      ss.shift_date,
+      ss.check_in_time, ss.check_out_time,
+      ss.total_hours,
+      ss.hourly_rate_snapshot,
+      ss.total_salary,
+      ss.status,
+      ss.note
+    FROM staff_shifts ss
+    WHERE ss.staff_id = ?
+      AND ss.shift_date BETWEEN [đầu tháng] AND [cuối tháng]
+    ORDER BY ss.shift_date
+
+  Tổng giờ tháng + Tổng lương tạm tính:
+  → SELECT SUM(total_hours), SUM(total_salary)
+    FROM staff_shifts
+    WHERE staff_id = ?
+      AND shift_date BETWEEN [đầu tháng] AND [cuối tháng]
+      AND status != cancelled
+
+  Nút [Thêm ca thủ công]:
+    Admin nhập: shift_date, check_in_time, check_out_time, note
+    Hệ thống tự tính:
+      total_hours = check_out - check_in
+      hourly_rate_snapshot = (SELECT salary_amount FROM staff_salary_configs
+                              WHERE staff_id = ? AND salary_type = hourly
+                                AND effective_from <= shift_date
+                                AND (effective_to IS NULL OR effective_to >= shift_date)
+                              LIMIT 1)
+      total_salary = total_hours * hourly_rate_snapshot
+    INSERT staff_shifts
+    INSERT user_logs (action = 'add_shift_manual')
 
 Tab 3 — Lương:
   Link sang module Tài chính / Phiếu lương
+  → Xem staff_salary_invoices WHERE staff_id = ?
 ```

@@ -20,10 +20,10 @@ class AuthService extends BaseService
     /**
      * Xử lý đăng nhập người dùng.
      */
-    public function handleLogin(string $username, string $password): ServiceReturn
+    public function handleLogin(string $username, string $password, bool $remember = false): ServiceReturn
     {
         return $this->execute(
-            callback: function () use ($username, $password) {
+            callback: function () use ($username, $password, $remember) {
                 $user = $this->userRepository->findByUsername($username);
                 if (! $user || ! Hash::check($password, $user->password)) {
                     throw new ServiceException('Tên đăng nhập hoặc mật khẩu không đúng.');
@@ -35,7 +35,7 @@ class AuthService extends BaseService
                 }
 
                 // Attempt login session
-                Auth::login($user);
+                Auth::login($user, $remember);
                 // Log user activity
                 Logging::userActivity(
                     userId: $user->id,

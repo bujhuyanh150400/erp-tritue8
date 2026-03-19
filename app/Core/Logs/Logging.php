@@ -32,6 +32,7 @@ class Logging
             'user_id' => $userRequestId,
             'action' => $action,
             'description' => $description,
+            'log_at' => now()->format("Y-m-d H:i:s"),
         ];
         $message = "User {$userRequestId} - Action: {$action} - {$description}";
         Log::channel('user_activity')->info($message, self::buildContext($context));

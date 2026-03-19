@@ -8,6 +8,7 @@ use App\Core\Logs\Logging;
 use App\Core\Services\BaseService;
 use App\Core\Services\ServiceException;
 use App\Core\Services\ServiceReturn;
+use App\Models\Student;
 use App\Repositories\StudentRepository;
 use App\Repositories\UserRepository;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -22,42 +23,10 @@ class StudentService extends BaseService
     {
     }
 
-    /**
-     * Lấy danh sách học sinh
-     *
-     * @throws \Throwable
-     */
-    public function getListStudents(FilterDTO $dto): ServiceReturn
-    {
-        return $this->execute(
-            callback: function () use ($dto) {
-                $students = $this->studentRepository->paginate(
-                    filters: $dto->getFilters(),
-                    perPage: $dto->getPerPage(),
-                    page: $dto->getPage(),
-                    orderBy: $dto->getSortBy(),
-                    orderDirection: $dto->getDirection()
-                );
-
-                return ServiceReturn::success($students);
-            },
-            returnCatchCallback: function () use ($dto) {
-                return ServiceReturn::success(
-                    data: new LengthAwarePaginator(
-                        items: [],
-                        total: 0,
-                        perPage: $dto->getPerPage(),
-                        currentPage: $dto->getPage()
-                    )
-                );
-            });
-    }
 
     /**
      * Tạo hồ sơ học sinh mới
-     *
-     * @param array $data - Dựa theo StudentCreateRequest
-     *
+     * @param array $data
      * @throws \Throwable
      */
     public function createStudent(array $data): ServiceReturn
@@ -94,49 +63,25 @@ class StudentService extends BaseService
                 );
 
                 return ServiceReturn::success(
-                    message: 'Tạo hồ sơ học sinh thành công'
+                   data: $student
                 );
             },
             useTransaction: true
         );
     }
 
-    /**
-     * Lấy học sinh theo ID user
-     *
-     * @throws \Throwable
-     */
-    public function getStudentById(int $id): ServiceReturn
-    {
-        return $this->execute(
-            callback: function () use ($id) {
-                $student = $this->studentRepository->findStudentByUserId($id);
-                if (!$student) {
-                    throw new ServiceException('Học sinh không tồn tại.');
-                }
-
-                return $student;
-            }
-        );
-    }
 
     /**
      * Cập nhật thông tin học sinh
-     *
      * @throws \Throwable
      */
-    public function updateStudent(int $id, array $data): ServiceReturn
+    public function updateStudent(Student $record, array $data): ServiceReturn
     {
         return $this->execute(
-            callback: function () use ($id, $data) {
-                $student = $this->studentRepository->findStudentByUserId($id);
-                if (!$student) {
-                    throw new ServiceException('Học sinh không tồn tại.');
-                }
-
+            callback: function () use ($record, $data) {
                 // Cập nhật mật khẩu nếu có
                 if (!empty($data['password'])) {
-                    $user = $student->user;
+                    $user = $record->user;
                     $user->password = Hash::make($data['password']);
                     $user->save();
                 }
@@ -151,16 +96,18 @@ class StudentService extends BaseService
                     'note' => $data['note'] ?? null,
                     'updated_at' => now(),
                 ];
-                $updated = $this->studentRepository->updateById($student->id, $studentData);
-                if (!$updated) {
+                $student = $this->studentRepository->updateById($record->id, $studentData);
+                if (!$student) {
                     throw new ServiceException('Cập nhật học sinh thất bại.');
                 }
                 Logging::userActivity(
                     action: 'Cập nhật học sinh',
-                    description: 'Cập nhật hồ sơ học sinh ' . $student->full_name
+                    description: 'Cập nhật hồ sơ học sinh ' . $record->full_name
                 );
 
-                return ServiceReturn::success($updated, 'Cập nhật học sinh thành công');
+                return ServiceReturn::success(
+                    data: $student
+                );
             },
             useTransaction: true
         );

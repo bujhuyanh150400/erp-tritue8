@@ -8,11 +8,12 @@ use App\Core\Logs\Logging;
 use App\Core\Services\BaseService;
 use App\Core\Services\ServiceException;
 use App\Core\Services\ServiceReturn;
+use App\Interface\SelectableServiceInterface;
 use App\Repositories\SubjectRepository;
 use Carbon\Carbon;
 use Illuminate\Pagination\LengthAwarePaginator;
 
-class SubjectService extends BaseService
+class SubjectService extends BaseService implements SelectableServiceInterface
 {
     public function __construct(
         protected SubjectRepository $subjectRepository
@@ -20,124 +21,34 @@ class SubjectService extends BaseService
     {
     }
 
-    public function getListSubjects(FilterDTO $dto): ServiceReturn
+    /**
+     * Tìm kiếm môn học theo keyword
+     * @param string $search
+     * @return ServiceReturn
+     * @throws \Throwable
+     */
+    public function getOptions(?string $search = null): ServiceReturn
     {
-        return $this->execute(
-            callback: function () use ($dto) {
+        return $this->execute(function () use ($search) {
+            return $this->subjectRepository->query()
+                ->when($search, fn($q) => $q->where('name', 'ilike', "%{$search}%"))
+                ->orderBy('name')
+                ->limit(10)
+                ->pluck('name', 'id')
+                ->toArray();
+        });
+    }
 
-                $subjects = $this->subjectRepository->paginate(
-                    filters: $dto->getFilters(),
-                    perPage: $dto->getPerPage(),
-                    page: $dto->getPage(),
-                    orderBy: $dto->getSortBy(),
-                    orderDirection: $dto->getDirection()
-                );
-
-                return ServiceReturn::success($subjects);
-            },
-            returnCatchCallback: function () use ($dto) {
-                return ServiceReturn::success(
-                    data: new LengthAwarePaginator(
-                        items: [],
-                        total: 0,
-                        perPage: $dto->getPerPage(),
-                        currentPage: $dto->getPage()
-                    )
-                );
+    public function getLabelOption($id): ServiceReturn
+    {
+        return $this->execute(function () use ($id) {
+            if (empty($id)) {
+                return null;
             }
-        );
+            return $this->subjectRepository->query()
+                ->where('id', $id)
+                ->value('name');
+        });
     }
 
-    public function createSubject(array $data): ServiceReturn
-    {
-        return $this->execute(
-            callback: function () use ($data) {
-
-                $subject = $this->subjectRepository->create([
-                    'name' => $data['name'],
-                    'description' => $data['description'] ?? null,
-                    'is_active' => true,
-                ]);
-
-                Logging::userActivity(
-                    action: 'Tạo môn học',
-                    description: 'Tạo môn học ' . $subject->name
-                );
-
-                return ServiceReturn::success(
-                    message: 'Tạo môn học thành công'
-                );
-            },
-            useTransaction: true
-        );
-    }
-
-    public function getSubjectById(int $id): ServiceReturn
-    {
-        return $this->execute(
-            callback: function () use ($id) {
-
-                $subject = $this->subjectRepository->findById($id);
-
-                if (!$subject) {
-                    throw new ServiceException('Môn học không tồn tại.');
-                }
-
-                return $subject;
-            }
-        );
-    }
-
-    public function updateSubject(int $id, array $data): ServiceReturn
-    {
-        return $this->execute(
-            callback: function () use ($id, $data) {
-
-                $subject = $this->subjectRepository->findById($id);
-
-                if (!$subject) {
-                    throw new ServiceException('Môn học không tồn tại.');
-                }
-
-                $updated = $this->subjectRepository->updateById($id, [
-                    'name' => $data['name'],
-                    'description' => $data['description'] ?? null,
-                    'is_active' => $data['is_active'],
-                    'updated_at' => now(),
-                ]);
-
-                Logging::userActivity(
-                    action: 'Cập nhật môn học',
-                    description: 'Cập nhật môn học ' . $subject->name
-                );
-
-                return ServiceReturn::success($updated, 'Cập nhật môn học thành công');
-            },
-            useTransaction: true
-        );
-    }
-
-    public function deleteSubject(int $id): ServiceReturn
-    {
-        return $this->execute(
-            callback: function () use ($id) {
-
-                $subject = $this->subjectRepository->findById($id);
-
-                if (!$subject) {
-                    throw new ServiceException('Môn học không tồn tại.');
-                }
-
-                $this->subjectRepository->deleteById($id);
-
-                Logging::userActivity(
-                    action: 'Xóa môn học',
-                    description: 'Xóa môn học ' . $subject->name
-                );
-
-                return ServiceReturn::success(null, 'Xóa môn học thành công');
-            },
-            useTransaction: true
-        );
-    }
 }
