@@ -37,8 +37,6 @@ class TeacherRepository extends BaseRepository implements Paginate
 
     public function filters($query, array $filters = []): Builder
     {
-        $query = $this->model->query();
-
         if (!empty($filters['keyword']) && trim($filters['keyword']) !== '') {
 
             $keyword = trim($filters['keyword']);
@@ -58,7 +56,6 @@ class TeacherRepository extends BaseRepository implements Paginate
                     });
 
             });
-
         }
 
         if (!empty($filters['status'])) {
@@ -99,33 +96,54 @@ class TeacherRepository extends BaseRepository implements Paginate
     public function getListingQuery(Builder $query): Builder
     {
         return $query
-            ->with(['user'])
-            ->select('teachers.*');
+            ->leftJoin('users', 'users.id', '=', 'teachers.user_id')
+
+            ->leftJoin('classes', function ($join) {
+                $join->on('classes.teacher_id', '=', 'teachers.id')
+                    ->where('classes.status', 1);
+            })
+
+            ->leftJoin('subjects', 'subjects.id', '=', 'classes.subject_id')
+
+            ->select([
+                'teachers.*',
+                'users.is_active',
+
+                \DB::raw("STRING_AGG(DISTINCT subjects.name, ', ') as subjects"),
+                \DB::raw("COUNT(DISTINCT classes.id) as total_classes"),
+            ])
+
+            ->groupBy('teachers.id', 'users.is_active');
     }
 
-    public function setFilters(Builder $query, array $filters = []): Builder
+    public function setFilters(Builder $query, array $data): Builder
     {
-        if (!empty($filters['keyword']) && !empty(trim($filters['keyword']))) {
-            $keyword = trim($filters['keyword']);
+        if (!empty($data['keyword'])) {
+            $keyword = trim($data['keyword']);
 
             $query->where(function ($q) use ($keyword) {
-                $q->where('full_name', 'like', "%{$keyword}%")
-                    ->orWhere('phone', 'like', "%{$keyword}%")
-                    ->orWhere('email', 'like', "%{$keyword}%")
-                    ->orWhereHas('user', function ($userQuery) use ($keyword) {
-                        $userQuery->where(function ($uq) use ($keyword) {
-                            if (is_numeric($keyword)) {
-                                $uq->where('id', (int)$keyword);
-                            }
-
-                            $uq->orWhere('username', 'like', "%{$keyword}%");
-                        });
-                    });
+                $q->where('teachers.full_name', 'ILIKE', "%{$keyword}%")
+                    ->orWhere('teachers.phone', 'ILIKE', "%{$keyword}%")
+                    ->orWhereRaw('CAST(users.id AS TEXT) ILIKE ?', ["%{$keyword}%"]);
             });
         }
 
-        if (!empty($filters['status'])) {
-            $query->where('status', $filters['status']);
+        if (!empty($data['status'])) {
+            $query->where('teachers.status', $data['status']);
+        }
+
+        if (!empty($data['is_active']) || $data['is_active'] === '0') {
+            $query->where('users.is_active', (int)$data['is_active']);
+        }
+
+        if (!empty($data['subject_id'])) {
+            $query->whereExists(function ($sub) use ($data) {
+                $sub->selectRaw(1)
+                    ->from('classes')
+                    ->whereColumn('classes.teacher_id', 'teachers.id')
+                    ->where('classes.subject_id', $data['subject_id'])
+                    ->where('classes.status', 1);
+            });
         }
 
         return $query;

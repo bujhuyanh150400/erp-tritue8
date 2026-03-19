@@ -100,6 +100,26 @@ class TeacherInfolist
                                     ]),
                             ]),
 
+                        Tabs\Tab::make('Lớp đang dạy')
+                            ->icon('heroicon-m-academic-cap')
+                            ->schema([
+                                Section::make('Danh sách lớp')
+                                    ->schema([
+                                        TextEntry::make('classes')
+                                            ->label('')
+                                            ->state(function ($record) {
+                                                return \DB::table('classes')
+                                                    ->join('subjects', 'classes.subject_id', '=', 'subjects.id')
+                                                    ->where('classes.teacher_id', $record->id)
+                                                    ->where('classes.status', 1)
+                                                    ->selectRaw("classes.name || ' - ' || subjects.name as text")
+                                                    ->pluck('text')
+                                                    ->implode("\n");
+                                            })
+                                            ->columnSpanFull(),
+                                    ]),
+                            ]),
+
                         // ==========================================
                         // TAB 3: TỔNG QUAN
                         // ==========================================

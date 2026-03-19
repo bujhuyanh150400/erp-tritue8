@@ -85,6 +85,21 @@ class TeachersTable
 //                            CustomSelect::make('subject_id')
 //                                ->label('Môn dạy')
 //                                ->getOptionSelectService(SubjectService::class),
+
+                            Select::make('is_active')
+                                ->label('Trạng thái tài khoản')
+                                ->options([
+                                    1 => 'Đang hoạt động',
+                                    0 => 'Đã khóa',
+                                ])
+                                ->placeholder('Tất cả')
+                                ->default(null),
+
+                            // Subject filter
+                            Select::make('subject_id')
+                                ->label('Môn dạy')
+                                ->options(fn() => \App\Models\Subject::pluck('name', 'id')->toArray())
+                                ->searchable(),
                         ])
                         ->query(function (Builder $query, array $data, TeacherRepository $teacherRepo): Builder {
                             return $teacherRepo->setFilters($query, $data);
