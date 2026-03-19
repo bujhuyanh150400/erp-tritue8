@@ -21,6 +21,7 @@ class Teacher extends Model
         'email',
         'address',
         'bank_name',
+        'bank_bin',
         'bank_account_number',
         'bank_account_holder',
         'status',

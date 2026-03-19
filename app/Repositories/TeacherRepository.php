@@ -95,4 +95,39 @@ class TeacherRepository extends BaseRepository implements Paginate
             ->where('user_id', $userId)
             ->first();
     }
+
+    public function getListingQuery(Builder $query): Builder
+    {
+        return $query
+            ->with(['user'])
+            ->select('teachers.*');
+    }
+
+    public function setFilters(Builder $query, array $filters = []): Builder
+    {
+        if (!empty($filters['keyword']) && !empty(trim($filters['keyword']))) {
+            $keyword = trim($filters['keyword']);
+
+            $query->where(function ($q) use ($keyword) {
+                $q->where('full_name', 'like', "%{$keyword}%")
+                    ->orWhere('phone', 'like', "%{$keyword}%")
+                    ->orWhere('email', 'like', "%{$keyword}%")
+                    ->orWhereHas('user', function ($userQuery) use ($keyword) {
+                        $userQuery->where(function ($uq) use ($keyword) {
+                            if (is_numeric($keyword)) {
+                                $uq->where('id', (int)$keyword);
+                            }
+
+                            $uq->orWhere('username', 'like', "%{$keyword}%");
+                        });
+                    });
+            });
+        }
+
+        if (!empty($filters['status'])) {
+            $query->where('status', $filters['status']);
+        }
+
+        return $query;
+    }
 }
