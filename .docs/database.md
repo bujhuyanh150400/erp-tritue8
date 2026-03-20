@@ -77,6 +77,7 @@
     - phone (varchar(20)) - Số điện thoại
     - email (varchar(255)) - Email
     - address (text) - Địa chỉ
+    - bank_bin (varchar(20)) - Mã ngân hàng
     - bank_name (varchar(100)) - Tên ngân hàng 
     - bank_account_number (varchar(30)) - Số tài khoản ngân hàng
     - bank_account_holder (varchar(100)) - Chủ tài khoản ngân hàng
@@ -96,6 +97,7 @@
     - full_name (varchar(255)) - Họ và tên đầy đủ
     - phone (varchar(20)) - Số điện thoại
     - role_type (unsigned tinyint) - Chức vụ, lưu trong StaffRoleType
+    - bank_bin (varchar(20)) - Mã ngân hàng
     - bank_name (varchar(100)) - Tên ngân hàng 
     - bank_account_number (varchar(30)) - Số tài khoản ngân hàng
     - bank_account_holder (varchar(100)) - Chủ tài khoản ngân hàng
