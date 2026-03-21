@@ -8,6 +8,7 @@ use App\Core\Logs\Logging;
 use App\Core\Services\BaseService;
 use App\Core\Services\ServiceException;
 use App\Core\Services\ServiceReturn;
+use App\Models\Teacher;
 use App\Repositories\TeacherRepository;
 use App\Repositories\UserRepository;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -75,19 +76,14 @@ class TeacherService extends BaseService
                     'phone' => $data['phone'],
                     'email' => $data['email'] ?? null,
                     'address' => $data['address'] ?? null,
-                    'bank_name' => $data['bank_name'] ?? null,
+                    'bank_bin' => $data['bank_bin'] ?? null,
                     'bank_account_number' => $data['bank_account_number'] ?? null,
                     'bank_account_holder' => $data['bank_account_holder'] ?? null,
                     'status' => $data['status'],
                     'joined_at' => Carbon::parse($data['joined_at']),
                 ]);
-
-                Logging::userActivity(
-                    action: 'Tạo giáo viên',
-                    description: 'Tạo hồ sơ giáo viên '.$teacher->full_name
-                );
-
                 return ServiceReturn::success(
+                    data: $teacher,
                     message: 'Tạo hồ sơ giáo viên thành công'
                 );
             },
@@ -117,22 +113,21 @@ class TeacherService extends BaseService
     /**
      * Update giáo viên
      */
-    public function updateTeacher(int $id, array $data): ServiceReturn
+    public function updateTeacher(Teacher $teacher, array $data): ServiceReturn
     {
         return $this->execute(
-            callback: function () use ($id, $data) {
-
-                $teacher = $this->teacherRepository->findTeacherByUserId($id);
+            callback: function () use ($teacher, $data) {
 
                 if (!$teacher) {
                     throw new ServiceException('Giáo viên không tồn tại.');
                 }
+
                 $teacherData = [
                     'full_name' => $data['full_name'],
                     'phone' => $data['phone'],
                     'email' => $data['email'] ?? null,
                     'address' => $data['address'] ?? null,
-                    'bank_name' => $data['bank_name'] ?? null,
+                    'bank_bin' => $data['bank_bin'] ?? null,
                     'bank_account_number' => $data['bank_account_number'] ?? null,
                     'bank_account_holder' => $data['bank_account_holder'] ?? null,
                     'status' => $data['status'],
@@ -148,10 +143,10 @@ class TeacherService extends BaseService
 
                 Logging::userActivity(
                     action: 'Cập nhật giáo viên',
-                    description: 'Cập nhật hồ sơ giáo viên '.$teacher->full_name
+                    description: 'Cập nhật hồ sơ giáo viên ' . $teacher->full_name
                 );
 
-                return ServiceReturn::success($updated, 'Cập nhật giáo viên thành công');
+                return ServiceReturn::success($teacher->refresh(), 'Cập nhật giáo viên thành công');
             },
             useTransaction: true
         );

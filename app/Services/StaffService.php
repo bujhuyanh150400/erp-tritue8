@@ -13,6 +13,7 @@ use App\Repositories\UserRepository;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Hash;
+use App\Models\Staff;
 
 class StaffService extends BaseService
 {
@@ -57,6 +58,7 @@ class StaffService extends BaseService
         return $this->execute(
             callback: function () use ($data) {
 
+                // check username
                 $user = $this->userRepository->findByUsername($data['user_name']);
 
                 if ($user) {
@@ -65,6 +67,7 @@ class StaffService extends BaseService
                     );
                 }
 
+                // create user
                 $user = $this->userRepository->query()->create([
                     'username' => $data['user_name'],
                     'password' => Hash::make($data['password']),
@@ -72,12 +75,13 @@ class StaffService extends BaseService
                     'is_active' => true,
                 ]);
 
+                // create staff
                 $staff = $this->staffRepository->create([
                     'user_id' => $user->id,
                     'full_name' => $data['full_name'],
                     'phone' => $data['phone'],
                     'role_type' => $data['role_type'],
-                    'bank_name' => $data['bank_name'] ?? null,
+                    'bank_bin' => $data['bank_bin'] ?? null,
                     'bank_account_number' => $data['bank_account_number'] ?? null,
                     'bank_account_holder' => $data['bank_account_holder'] ?? null,
                     'status' => $data['status'],
@@ -95,6 +99,7 @@ class StaffService extends BaseService
                 );
 
                 return ServiceReturn::success(
+                    data: $staff,
                     message: 'Tạo nhân viên thành công'
                 );
             },
@@ -107,52 +112,48 @@ class StaffService extends BaseService
         return $this->execute(
             callback: function () use ($id) {
 
-                $staff = $this->staffRepository->findStaffByUserId($id);
+                $staff = $this->staffRepository->findById($id);
 
                 if (!$staff) {
                     throw new ServiceException('Nhân viên không tồn tại.');
                 }
 
-                return $staff;
+                return ServiceReturn::success($staff);
             }
         );
     }
 
-    public function updateStaff(int $id, array $data): ServiceReturn
+    public function updateStaff(Staff $staff, array $data): ServiceReturn
     {
         return $this->execute(
-            callback: function () use ($id, $data) {
-
-                $staff = $this->staffRepository->findStaffByUserId($id);
+            callback: function () use ($staff, $data) {
 
                 if (!$staff) {
-                    throw new ServiceException('Nhân viên không tồn tại.');
+                    throw new ServiceException('Giáo viên không tồn tại.');
                 }
 
                 $staffData = [
                     'full_name' => $data['full_name'],
                     'phone' => $data['phone'],
                     'role_type' => $data['role_type'],
-                    'bank_name' => $data['bank_name'] ?? null,
+                    'bank_bin' => $data['bank_bin'] ?? null,
                     'bank_account_number' => $data['bank_account_number'] ?? null,
                     'bank_account_holder' => $data['bank_account_holder'] ?? null,
                     'status' => $data['status'],
                     'joined_at' => Carbon::parse($data['joined_at']),
-                    'updated_at' => now(),
                 ];
 
-                $updated = $this->staffRepository->updateById($staff->id, $staffData);
-
-                if (!$updated) {
-                    throw new ServiceException('Cập nhật nhân viên thất bại.');
-                }
+                $this->staffRepository->updateById($staff->id, $staffData);
 
                 Logging::userActivity(
                     action: 'Cập nhật nhân viên',
                     description: 'Cập nhật hồ sơ nhân viên '.$staff->full_name
                 );
 
-                return ServiceReturn::success($updated, 'Cập nhật nhân viên thành công');
+                return ServiceReturn::success(
+                    data: $staff->refresh(),
+                    message: 'Cập nhật nhân viên thành công'
+                );
             },
             useTransaction: true
         );
@@ -163,24 +164,25 @@ class StaffService extends BaseService
         return $this->execute(
             callback: function () use ($id) {
 
-                $staff = $this->staffRepository->findStaffByUserId($id);
+                $staff = $this->staffRepository->findById($id);
 
                 if (!$staff) {
                     throw new ServiceException('Nhân viên không tồn tại.');
                 }
 
-                $deleted = $this->staffRepository->deleteById($staff->id);
+                // delete staff
+                $this->staffRepository->deleteById($staff->id);
 
-                if (!$deleted) {
-                    throw new ServiceException('Xóa nhân viên thất bại.');
-                }
+                $this->userRepository->deleteById($staff->user_id);
 
                 Logging::userActivity(
                     action: 'Xóa nhân viên',
                     description: 'Xóa hồ sơ nhân viên '.$staff->full_name
                 );
 
-                return ServiceReturn::success(null, 'Xóa nhân viên thành công');
+                return ServiceReturn::success(
+                    message: 'Xóa nhân viên thành công'
+                );
             },
             useTransaction: true
         );

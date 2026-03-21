@@ -33,6 +33,7 @@ class StudentService extends BaseService
     {
         return $this->execute(
             callback: function () use ($data) {
+
                 $user = $this->userRepository->findByUsername($data['user_name']);
 
                 if ($user) {
@@ -57,13 +58,18 @@ class StudentService extends BaseService
                     'address' => $data['address'],
                     'note' => $data['note'] ?? null,
                 ]);
+
+                if (!$student) {
+                    throw new ServiceException('Tạo học sinh thất bại.');
+                }
+
                 Logging::userActivity(
                     action: 'Tạo học sinh',
-                    description: 'Tạo hồ sơ học sinh ' . $student->fullname
+                    description: 'Tạo hồ sơ học sinh ' . $student->full_name
                 );
 
                 return ServiceReturn::success(
-                   data: $student
+                    data: $student
                 );
             },
             useTransaction: true
@@ -79,12 +85,13 @@ class StudentService extends BaseService
     {
         return $this->execute(
             callback: function () use ($record, $data) {
-                // Cập nhật mật khẩu nếu có
+
                 if (!empty($data['password'])) {
-                    $user = $record->user;
-                    $user->password = Hash::make($data['password']);
-                    $user->save();
+                    $record->user->update([
+                        'password' => Hash::make($data['password'])
+                    ]);
                 }
+
                 $studentData = [
                     'full_name' => $data['full_name'],
                     'dob' => $data['dob'],
@@ -94,19 +101,17 @@ class StudentService extends BaseService
                     'parent_phone' => $data['parent_phone'],
                     'address' => $data['address'],
                     'note' => $data['note'] ?? null,
-                    'updated_at' => now(),
                 ];
-                $student = $this->studentRepository->updateById($record->id, $studentData);
-                if (!$student) {
-                    throw new ServiceException('Cập nhật học sinh thất bại.');
-                }
+
+                $this->studentRepository->updateById($record->id, $studentData);
+
                 Logging::userActivity(
                     action: 'Cập nhật học sinh',
-                    description: 'Cập nhật hồ sơ học sinh ' . $record->full_name
+                    description: 'Cập nhật hồ sơ học sinh ' . $studentData['full_name']
                 );
 
                 return ServiceReturn::success(
-                    data: $student
+                    data: $record->refresh()
                 );
             },
             useTransaction: true
