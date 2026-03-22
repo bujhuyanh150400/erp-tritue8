@@ -4,47 +4,55 @@ namespace App\Filament\Resources\Classes\Pages;
 
 use App\Filament\Components\CommonAction;
 use App\Filament\Resources\Classes\ClassResource;
-use Filament\Actions\DeleteAction;
-use Filament\Actions\ViewAction;
+use App\Models\SchoolClass;
+use App\Services\ClassService;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\EditRecord;
+use Filament\Support\Exceptions\Halt;
 use Illuminate\Database\Eloquent\Model;
 
 class EditClass extends EditRecord
 {
-    protected static string $resource = ClassResource::class;
+    protected ClassService $classService;
 
+    protected static string $resource = ClassResource::class;
+    public function boot(ClassService $service): void
+    {
+        $this->classService = $service;
+    }
+
+    public function getTitle(): string
+    {
+        return 'Cập nhật lớp học';
+    }
     protected function getHeaderActions(): array
     {
         return [
-            ViewAction::make(),
-            DeleteAction::make(),
+
         ];
     }
 
     protected function getFormActions(): array
     {
         return [
-            $this->getSaveFormAction(),
             CommonAction::backAction(self::getResource()),
+            $this->getSaveFormAction(),
         ];
     }
 
-    protected function mutateFormDataBeforeSave(array $data): array
+    protected function handleRecordUpdate(Model|SchoolClass $record, array $data): Model|SchoolClass
     {
-        // Validation for max_students
-        if (isset($data['max_students'])) {
-            $activeStudents = $this->record->activeEnrollments()->count();
-            if ($data['max_students'] < $activeStudents) {
-                Notification::make()
-                    ->danger()
-                    ->title('Lỗi cập nhật')
-                    ->body("Sĩ số tối đa không thể nhỏ hơn số học sinh hiện tại ({$activeStudents}).")
-                    ->send();
-                $this->halt();
-            }
+        $result = $this->classService->updateClass($record, $data);
+        if ($result->isError()) {
+            Notification::make()
+                ->danger()
+                ->title('Lỗi cập nhật')
+                ->body($result->getMessage())
+                ->send();
+
+            throw new Halt();
         }
 
-        return $data;
+        return $result->getData();
     }
 }

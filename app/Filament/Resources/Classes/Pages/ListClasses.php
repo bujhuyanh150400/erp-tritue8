@@ -13,7 +13,7 @@ class ListClasses extends ListRecords
     protected function getHeaderActions(): array
     {
         return [
-            CommonAction::createAction(),
+            CommonAction::createAction("Tạo lớp"),
         ];
     }
 }

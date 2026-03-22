@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Constants\FeeType;
 use App\Constants\ScheduleStatus;
 use App\Constants\ScheduleType;
+use App\Core\Traits\HasBigIntId;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -12,7 +13,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class ScheduleInstance extends Model
 {
-    use HasFactory;
+    use HasBigIntId;
 
     protected $table = 'schedule_instances';
     protected $fillable = [

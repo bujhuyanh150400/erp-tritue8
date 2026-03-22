@@ -361,8 +361,9 @@ Bảng hiển thị:
 ### Tạo lớp
 
 ```
-1. Admin nhập:
+Form:
     - code                       - Mã lớp (required, unique)
+        + Mã lớp sẽ tự động tạo theo tên lớp và khối
     - name                       - Tên lớp (required)
     - subject_id                 - Môn học (required)
                                    → SELECT id, name FROM subjects WHERE is_active = true
@@ -375,37 +376,44 @@ Bảng hiển thị:
     - start_at                   - Ngày khai giảng (required)
     - end_at                     - Ngày kết thúc (optional)
 
-2. Validation:
+Validation:
     - code unique: SELECT COUNT(*) FROM classes WHERE code = ? = 0
     - subject active: SELECT is_active FROM subjects WHERE id = ? = true
     - teacher active: SELECT status FROM teachers WHERE id = ? = Active
 
-3. Service:
+Service:
     - INSERT classes (status = Active)
 
-4. Ghi user_logs: admin X tạo lớp Y lúc Z
+Ghi user_logs: admin X tạo lớp Y lúc Z
 ```
 
 ### Sửa lớp
 
 ```
-1. Admin chọn lớp cần sửa
+Form:
+    - code                       - Mã lớp (Không thể sửa)
+    - name                       - Tên lớp (required)
+    - subject_id                 - Môn học (required)
+                                   → SELECT id, name FROM subjects WHERE is_active = true
+    - teacher_id                 - Giáo viên (Không thể sửa)
+    - grade_level                - Khối (required, 6–12)
+    - base_fee_per_session       - Học phí cơ bản/buổi (required)
+    - teacher_salary_per_session - Lương GV cơ bản/buổi (required)
+    - max_students               - Sĩ số tối đa (required, > 0)
+    - start_at                   - Ngày khai giảng (Không thể sửa)
+    - end_at                     - Ngày kết thúc (optional)
 
-2. Admin sửa:
-    - name, grade_level, base_fee_per_session,
-      teacher_salary_per_session, max_students, end_at
-
-3. Validation:
+Validation:
     - Không cho sửa subject_id nếu đã có buổi học:
       → SELECT COUNT(*) FROM schedule_instances WHERE class_id = ? > 0
     - max_students >= số HS active:
       → SELECT COUNT(*) FROM class_enrollments
          WHERE class_id = ? AND left_at IS NULL
 
-4. Service:
+Service:
     - UPDATE classes
 
-5. Ghi user_logs: admin X sửa lớp Y lúc Z
+Ghi user_logs: admin X sửa lớp Y lúc Z
 ```
 
 ### Đổi giáo viên phụ trách

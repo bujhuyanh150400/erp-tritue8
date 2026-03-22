@@ -41,7 +41,7 @@ class CreateRoom extends CreateRecord
             // Hiển thị thông báo Toast đỏ góc màn hình
             Notification::make()
                 ->danger()
-                ->title('Không thể tạo môn học')
+                ->title('Không thể tạo phòng học')
                 ->body($result->getMessage())
                 ->send();
             throw new Halt();

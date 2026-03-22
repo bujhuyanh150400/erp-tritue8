@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use App\Services\AuthService;
+use App\Services\ClassService;
 use App\Services\RoomService;
 use App\Services\StaffService;
 use App\Services\StudentService;
@@ -21,6 +22,7 @@ class ServiceServiceProvider extends ServiceProvider
         $this->app->singleton(StudentService::class, StudentService::class);
         $this->app->singleton(TeacherService::class, TeacherService::class);
         $this->app->singleton(SubjectService::class, SubjectService::class);
+        $this->app->singleton(ClassService::class, ClassService::class);
     }
 
     /**

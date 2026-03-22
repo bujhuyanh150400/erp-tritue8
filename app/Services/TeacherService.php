@@ -2,12 +2,14 @@
 
 namespace App\Services;
 
+use App\Constants\EmployeeStatus;
 use App\Constants\UserRole;
 use App\Core\DTOs\FilterDTO;
 use App\Core\Logs\Logging;
 use App\Core\Services\BaseService;
 use App\Core\Services\ServiceException;
 use App\Core\Services\ServiceReturn;
+use App\Interface\SelectableServiceInterface;
 use App\Models\Teacher;
 use App\Repositories\TeacherRepository;
 use App\Repositories\UserRepository;
@@ -15,41 +17,13 @@ use Illuminate\Pagination\LengthAwarePaginator;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Hash;
 
-class TeacherService extends BaseService
+class TeacherService extends BaseService implements SelectableServiceInterface
 {
     public function __construct(
         protected TeacherRepository $teacherRepository,
         protected UserRepository $userRepository
     ) {}
 
-    /**
-     * Lấy danh sách giáo viên
-     */
-    public function getListTeachers(FilterDTO $dto): ServiceReturn
-    {
-        return $this->execute(
-            callback: function () use ($dto) {
-                $teachers = $this->teacherRepository->paginate(
-                    filters: $dto->getFilters(),
-                    perPage: $dto->getPerPage(),
-                    page: $dto->getPage(),
-                    orderBy: $dto->getSortBy(),
-                    orderDirection: $dto->getDirection()
-                );
-                return ServiceReturn::success($teachers);
-            },
-            returnCatchCallback: function () use ($dto) {
-                return ServiceReturn::success(
-                    data: new LengthAwarePaginator(
-                        items: [],
-                        total: 0,
-                        perPage: $dto->getPerPage(),
-                        currentPage: $dto->getPage()
-                    )
-                );
-            }
-        );
-    }
 
     /**
      * Tạo giáo viên
@@ -88,25 +62,6 @@ class TeacherService extends BaseService
                 );
             },
             useTransaction: true
-        );
-    }
-
-    /**
-     * Lấy giáo viên theo user_id
-     */
-    public function getTeacherById(int $id): ServiceReturn
-    {
-        return $this->execute(
-            callback: function () use ($id) {
-
-                $teacher = $this->teacherRepository->findTeacherByUserId($id);
-
-                if (!$teacher) {
-                    throw new ServiceException('Giáo viên không tồn tại.');
-                }
-
-                return $teacher;
-            }
         );
     }
 
@@ -152,34 +107,41 @@ class TeacherService extends BaseService
         );
     }
 
+
     /**
-     * Xóa giáo viên
+     * Lấy danh sách giáo viên cho dropdown
+     * @param string|null $search
+     * @return ServiceReturn
+     * @throws \Throwable
      */
-    public function deleteTeacher(int $id): ServiceReturn
+    public function getOptions(?string $search = null): ServiceReturn
     {
-        return $this->execute(
-            callback: function () use ($id) {
+        return $this->execute(function () use ($search) {
+            return $this->teacherRepository->query()
+                ->when($search, fn($q) => $q->where('full_name', 'ilike', "%{$search}%"))
+                ->orderBy('full_name')
+                ->where('status', EmployeeStatus::Active)
+                ->limit(10)
+                ->pluck('full_name', 'id')
+                ->toArray();
+        });
+    }
 
-                $teacher = $this->teacherRepository->findTeacherByUserId($id);
-
-                if (!$teacher) {
-                    throw new ServiceException('Giáo viên không tồn tại.');
-                }
-
-                $deleted = $this->teacherRepository->deleteById($teacher->id);
-
-                if (!$deleted) {
-                    throw new ServiceException('Xóa giáo viên thất bại.');
-                }
-
-                Logging::userActivity(
-                    action: 'Xóa giáo viên',
-                    description: 'Xóa hồ sơ giáo viên '.$teacher->full_name
-                );
-
-                return ServiceReturn::success(null, 'Xóa giáo viên thành công');
-            },
-            useTransaction: true
-        );
+    /**
+     * Lấy tên giáo viên theo id
+     * @param mixed $id
+     * @return ServiceReturn
+     * @throws \Throwable
+     */
+    public function getLabelOption(mixed $id): ServiceReturn
+    {
+        return $this->execute(function () use ($id) {
+            if (empty($id)) {
+                return null;
+            }
+            return $this->teacherRepository->query()
+                ->where('id', $id)
+                ->value('full_name');
+        });
     }
 }

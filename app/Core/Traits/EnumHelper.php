@@ -23,4 +23,13 @@ trait EnumHelper
         return array_column(self::cases(), 'value');
     }
 
+    public function getLabel(): string
+    {
+        return $this->label();
+    }
+
+    abstract public function label(): string;
+
+
+
 }

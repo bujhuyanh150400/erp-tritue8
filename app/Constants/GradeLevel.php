@@ -3,8 +3,9 @@
 namespace App\Constants;
 
 use App\Core\Traits\EnumHelper;
+use Filament\Support\Contracts\HasLabel;
 
-enum GradeLevel: int
+enum GradeLevel: int implements HasLabel
 {
     use EnumHelper;
     case Grade0 = 0;

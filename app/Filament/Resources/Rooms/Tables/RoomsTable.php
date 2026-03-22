@@ -121,11 +121,6 @@ class RoomsTable
                                 ->send();
                         }),
                 ])
-            ])
-            ->toolbarActions([
-                BulkActionGroup::make([
-                    DeleteBulkAction::make(),
-                ]),
             ]);
     }
 }

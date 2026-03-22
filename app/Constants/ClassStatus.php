@@ -2,8 +2,13 @@
 
 namespace App\Constants;
 
-enum ClassStatus: int
+use App\Core\Traits\EnumHelper;
+use Filament\Support\Contracts\HasLabel;
+
+enum ClassStatus: int implements HasLabel
 {
+    use EnumHelper;
+
     case Active    = 0;
     case Suspended = 1;
     case Ended     = 2;
@@ -17,10 +22,4 @@ enum ClassStatus: int
         };
     }
 
-    public static function options(): array
-    {
-        return collect(self::cases())->mapWithKeys(fn ($case) => [
-            $case->value => $case->label(),
-        ])->toArray();
-    }
 }
