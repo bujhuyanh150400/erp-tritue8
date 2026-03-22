@@ -26,6 +26,7 @@ class StudentResource extends Resource
 
     protected static string | UnitEnum | null $navigationGroup = NavigationGroup::USER;
 
+    protected static ?int $navigationSort = 1;
     protected static ?string $navigationLabel = 'Học sinh';
 
     protected static ?string $modelLabel = 'Học sinh';

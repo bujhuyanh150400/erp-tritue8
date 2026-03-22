@@ -51,8 +51,8 @@ class CreateStudent extends CreateRecord
     protected function getFormActions(): array
     {
         return [
-            $this->getCreateFormAction(),
             CommonAction::backAction(self::getResource()),
+            $this->getCreateFormAction(),
         ];
     }
 }

@@ -68,4 +68,12 @@ class ClassScheduleTemplate extends Model
     {
         return $this->end_date === null || $this->end_date->isFuture();
     }
+
+    public function scopeCurrentlyActive($query)
+    {
+        return $query->where(function ($q) {
+            $q->whereNull('class_schedule_templates.end_date')
+                ->orWhere('class_schedule_templates.end_date', '>=', now());
+        });
+    }
 }

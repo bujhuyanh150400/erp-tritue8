@@ -1,42 +1,33 @@
 <?php
 
-namespace App\Filament\Resources\Rooms\Pages;
+namespace App\Filament\Resources\Subjects\Pages;
 
-use App\Constants\RoomStatus;
 use App\Filament\Components\CommonAction;
-use App\Filament\Resources\Rooms\RoomResource;
-use App\Services\RoomService;
+use App\Filament\Resources\Subjects\SubjectResource;
+use App\Services\SubjectService;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\CreateRecord;
 use Filament\Support\Exceptions\Halt;
-use Illuminate\Database\Eloquent\Model;
 
-class CreateRoom extends CreateRecord
+class CreateSubject extends CreateRecord
 {
-    protected RoomService $roomService;
+    protected SubjectService $subjectService;
 
-    protected static string $resource = RoomResource::class;
+    protected static string $resource = SubjectResource::class;
 
-    public function boot(RoomService $service): void
+    public function boot(SubjectService $service): void
     {
-        $this->roomService = $service;
+        $this->subjectService = $service;
     }
 
     public function getTitle(): string
     {
-        return 'Tạo phòng học';
-    }
-    protected function getFormActions(): array
-    {
-        return [
-            CommonAction::backAction(self::getResource()),
-            $this->getCreateFormAction(),
-        ];
+        return 'Tạo môn học';
     }
 
     protected function handleRecordCreation(array $data): \Illuminate\Database\Eloquent\Model
     {
-        $result = $this->roomService->createRoom($data);
+        $result = $this->subjectService->createSubject($data);
         if ($result->isError()) {
             // Hiển thị thông báo Toast đỏ góc màn hình
             Notification::make()
@@ -49,4 +40,11 @@ class CreateRoom extends CreateRecord
         return $result->getData();
     }
 
+    protected function getFormActions(): array
+    {
+        return [
+            CommonAction::backAction(self::getResource()),
+            $this->getCreateFormAction(),
+        ];
+    }
 }

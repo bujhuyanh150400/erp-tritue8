@@ -6,6 +6,7 @@ use App\Constants\RoomStatus;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Textarea;
+use Filament\Resources\Pages\EditRecord;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 
@@ -15,11 +16,10 @@ class RoomForm
     {
         return $schema
             ->components([
-
-                Section::make('Thông tin phòng học')
+                Section::make()
+                    ->columnSpanFull()
                     ->compact()
                     ->schema([
-
                         TextInput::make('name')
                             ->label('Tên phòng')
                             ->helperText('Tên phòng phải duy nhất')
@@ -51,14 +51,13 @@ class RoomForm
 
                         Select::make('status')
                             ->label('Trạng thái')
+                            ->native(false)
                             ->options(RoomStatus::options())
                             ->default(RoomStatus::Active)
                             ->required()
+                            ->disabled(fn($livewire) => $livewire instanceof EditRecord)
                             ->validationMessages([
                                 'required' => 'Vui lòng chọn trạng thái',
-                            ])
-                            ->extraAttributes([
-                                'required' => false
                             ]),
 
                         Textarea::make('note')

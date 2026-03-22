@@ -6,6 +6,7 @@ use Filament\Actions\Action;
 use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
+use Filament\Actions\ViewAction;
 use Filament\Support\Icons\Heroicon;
 
 class CommonAction
@@ -24,6 +25,20 @@ class CommonAction
             ->icon(Heroicon::ChevronLeft);
     }
 
+
+    public static function viewAction(string $label = "Xem chi tiết"): Action
+    {
+        return ViewAction::make()
+            ->label($label)
+            ->color('primary')
+            ->icon(Heroicon::Document);
+    }
+
+    /**
+     * Tạo action tạo mới
+     * @param string $label
+     * @return CreateAction
+     */
     public static function createAction(string $label = "Tạo mới"): CreateAction
     {
         return CreateAction::make()
@@ -31,6 +46,12 @@ class CommonAction
             ->icon(Heroicon::Plus)
             ->label($label);
     }
+
+    /**
+     * Tạo action chỉnh sửa
+     * @param string $label
+     * @return Action
+     */
     public static function editAction(string $label = "Chỉnh sửa"): Action
     {
         return EditAction::make()

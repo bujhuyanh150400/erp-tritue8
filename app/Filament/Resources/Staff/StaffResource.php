@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Filament\Resources\Staff;
 
 use App\Models\Staff;
@@ -23,7 +24,8 @@ class StaffResource extends Resource
     protected static ?string $model = Staff::class;
     protected static string|BackedEnum|null $navigationIcon = Heroicon::UserGroup;
 
-    protected static string | UnitEnum | null $navigationGroup = NavigationGroup::USER;
+    protected static string|UnitEnum|null $navigationGroup = NavigationGroup::USER;
+    protected static ?int $navigationSort = 3;
 
     protected static ?string $navigationLabel = 'Nhân viên';
     protected static ?string $pluralModelLabel = 'nhân viên';

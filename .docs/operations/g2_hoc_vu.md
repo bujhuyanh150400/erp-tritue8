@@ -75,12 +75,6 @@ ReportStatus:
 ### Danh sách
 
 ```
-Route:
-GET - /subject/list
-POST - /subject/ajax/toggle-active
-
-Trả ra danh sách môn học 
-    - view: subjects/list
 
 Tìm kiếm nhanh: (keyword)
   - Tên môn học → WHERE subjects.name ILIKE '%keyword%'
@@ -104,18 +98,13 @@ Bảng hiển thị:
   - Action
       + Chỉnh sửa
       + Bật / Tắt hoạt động 
-        - route: /subject/ajax/toggle-active
-        - params:
-            + id
-            + is_active
-        - service:
-            - Tìm subject theo id
-            - Kiểm tra môn học có đang được dùng bởi lớp nào không
-                -> nếu có trả ra lỗi "Môn học đang được dùng bởi X lớp đang hoạt động, ko thể tắt hoạt động"
-            - Nếu is_active = true:
-                → UPDATE subjects SET is_active = false
-            - Nếu is_active = false:
-                → UPDATE subjects SET is_active = true
+        - Tìm subject theo id
+        - Kiểm tra môn học có đang được dùng bởi lớp nào không
+        -> nếu có trả ra lỗi "Môn học đang được dùng bởi X lớp đang hoạt động, ko thể tắt hoạt động"
+        - Nếu is_active = true:
+        → UPDATE subjects SET is_active = false
+        - Nếu is_active = false:
+        → UPDATE subjects SET is_active = true
                 
 Type resource:
 - id: string;
@@ -129,13 +118,6 @@ Type resource:
 ### Tạo môn học
 
 ```
-Route:
-GET - /subject/create 
-POST - /subject/create
-
-Trả ra form tạo môn học
-    - view tạo môn học: subjects/form
-
 Form:
     - name        - Tên môn học (required, unique)
     - description - Mô tả (optional)
@@ -156,12 +138,7 @@ Service:
 ### Sửa môn học
 
 ```
-Route:
-GET - /subject/{id}/update 
-POST - /subject/{id}/update
-
 Trả ra form sửa môn học
-    - view sửa môn học: subjects/form
     - Admin chọn môn học cần sửa
     - Trả về resource bao gồm:
         - id: string;
@@ -191,6 +168,20 @@ Service:
     - UPDATE subjects
     - Ghi user_logs: admin X sửa môn học Y lúc Z
 ```
+
+### Xóa môn học
+```
+Admin chọn môn học cần xóa
+
+Service:
+    - Check không có lớp nào đang dùng môn học này:
+      → SELECT COUNT(*) FROM classes
+         WHERE subject_id = ? AND status = Active
+        Nếu > 0 → "Môn học đang được dùng bởi X lớp đang hoạt động, không thể xóa"
+    - DELETE subjects
+    - Ghi user_logs: admin X xóa môn học Y lúc Z
+```
+
 
 ---
 
@@ -273,11 +264,13 @@ Bảng hiển thị:
         → "Phòng đang có lớp [X] với [Y] học sinh, không thể giảm xuống [Z] chỗ"
 
     - Nếu đổi status → Locked / Maintenance:
-      → SELECT COUNT(*) FROM class_schedule_templates
+      + Kiểm tra không có lớp nào đang diễn ra ở phòng này
+      SELECT COUNT(*) FROM class_schedule_templates
          WHERE room_id = ?
            AND (end_date IS NULL OR end_date >= today)
-        Nếu > 0 → cảnh báo xác nhận
-        Nếu xác nhận: lịch cũ giữ nguyên, chỉ chặn tạo mới
+        Nếu > 0 -> Lock: Không thể khóa phòng khi có lớp đang diễn ra ở phòng này
+                -> Maintenance: lịch cũ giữ nguyên, chỉ chặn tạo mới
+      
 
 4. Service:
     - UPDATE rooms
@@ -314,6 +307,8 @@ Lịch phòng theo tuần (để kiểm tra khung giờ trống):
       AND si.status != cancelled
     ORDER BY si.date, si.start_time
 ```
+
+
 
 ---
 

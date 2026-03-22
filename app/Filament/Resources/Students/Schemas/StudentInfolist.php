@@ -5,7 +5,6 @@ namespace App\Filament\Resources\Students\Schemas;
 use App\Constants\Gender;
 use App\Constants\GradeLevel;
 use App\Filament\Resources\Students\Components\StudentMonthlyReport;
-use App\Filament\Resources\Students\Components\StudentRewardHistory;
 use Filament\Infolists\Components\IconEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Grid;

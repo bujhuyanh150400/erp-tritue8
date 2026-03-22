@@ -4,6 +4,7 @@ namespace App\Filament\Resources\Students\Tables;
 
 use App\Constants\Gender;
 use App\Constants\GradeLevel;
+use App\Filament\Components\CommonAction;
 use App\Filament\Components\CustomSelect;
 use App\Models\Student;
 use App\Repositories\StudentRepository;
@@ -12,8 +13,6 @@ use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
-use Filament\Actions\EditAction;
-use Filament\Actions\ViewAction;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Support\Icons\Heroicon;
@@ -117,11 +116,8 @@ class StudentsTable
             )
             ->recordActions([
                 ActionGroup::make([
-                    ViewAction::make(),
-                    EditAction::make(),
-                    Action::make('reward_history')
-                        ->label('Lịch sử đổi thưởng')
-                        ->icon('heroicon-o-gift'),
+                    CommonAction::viewAction(),
+                    CommonAction::editAction(),
                     Action::make('toggle_active')
                         ->label(fn($record) => $record->user->is_active ? 'Khóa' : 'Mở khóa')
                         ->icon(fn($record) => $record->user->is_active ? Heroicon::LockClosed : Heroicon::LockOpen)

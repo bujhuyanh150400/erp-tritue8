@@ -2,12 +2,11 @@
 
 namespace App\Filament\Resources\Rooms\Pages;
 
-use App\Constants\RoomStatus;
 use App\Filament\Components\CommonAction;
 use App\Filament\Resources\Rooms\RoomResource;
 use App\Models\ClassScheduleTemplate;
-use Filament\Actions\DeleteAction;
-use Filament\Actions\ViewAction;
+use App\Models\Room;
+use App\Services\RoomService;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\EditRecord;
 use Filament\Support\Exceptions\Halt;
@@ -15,51 +14,47 @@ use Illuminate\Database\Eloquent\Model;
 
 class EditRoom extends EditRecord
 {
+    protected RoomService $roomService;
+
     protected static string $resource = RoomResource::class;
 
+    public function boot(RoomService $service): void
+    {
+        $this->roomService = $service;
+    }
+
+    public function getTitle(): string
+    {
+        return 'Cập nhật phòng học';
+    }
     protected function getHeaderActions(): array
     {
         return [
-            ViewAction::make(),
-            DeleteAction::make(),
+
         ];
     }
 
     protected function getFormActions(): array
     {
         return [
-            $this->getSaveFormAction(),
             CommonAction::backAction(self::getResource()),
+            $this->getSaveFormAction(),
         ];
     }
 
-    protected function mutateFormDataBeforeSave(array $data): array
+    protected function handleRecordUpdate(Model|Room $record, array $data): Model|Room
     {
-        // Example check: Capacity reduction
-        if (isset($data['capacity']) && $data['capacity'] < $this->record->capacity) {
-            // Perform check for existing classes and capacity
-            // This is a simplified check, implement full logic as per requirement
-             $existingClassesCount = ClassScheduleTemplate::where('room_id', $this->record->id)
-                 ->where(function ($query) {
-                     $query->whereNull('end_date')->orWhere('end_date', '>=', now());
-                 })
-                 ->withCount(['class.enrollments' => function($q) {
-                     $q->whereNull('left_at');
-                 }])
-                 ->get();
+        $result = $this->roomService->updateRoom($record, $data);
+        if ($result->isError()) {
+            Notification::make()
+                ->danger()
+                ->title('Lỗi cập nhật')
+                ->body($result->getMessage())
+                ->send();
 
-             foreach($existingClassesCount as $template) {
-                 if ($template->class && $template->class->enrollments_count > $data['capacity']) {
-                     Notification::make()
-                        ->danger()
-                        ->title('Không thể giảm sức chứa')
-                        ->body("Phòng đang có lớp {$template->class->name} với {$template->class->enrollments_count} học sinh, không thể giảm xuống {$data['capacity']} chỗ")
-                        ->send();
-                     $this->halt();
-                 }
-             }
+            throw new Halt();
         }
 
-        return $data;
+        return $result->getData();
     }
 }

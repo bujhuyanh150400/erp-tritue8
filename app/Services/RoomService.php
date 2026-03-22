@@ -4,55 +4,116 @@
 namespace App\Services;
 
 use App\Constants\RoomStatus;
-use App\Core\DTOs\FilterDTO;
 use App\Core\Logs\Logging;
 use App\Core\Services\BaseService;
 use App\Core\Services\ServiceException;
 use App\Core\Services\ServiceReturn;
+use App\Models\Room;
+use App\Repositories\ClassRepository;
+use App\Repositories\ClassScheduleTemplateRepository;
 use App\Repositories\RoomRepository;
-use Illuminate\Pagination\LengthAwarePaginator;
 
 class RoomService extends BaseService
 {
     public function __construct(
-        protected RoomRepository $roomRepository
+        protected RoomRepository $roomRepository,
+        protected ClassRepository $classRepository,
+        protected ClassScheduleTemplateRepository $classScheduleTemplateRepository,
     )
     {
     }
 
-    public function getListRooms(FilterDTO $dto): ServiceReturn
+    /**
+     * Thay đổi trạng thái khóa phòng học
+     * @param Room $room
+     * @return ServiceReturn
+     * @throws \Throwable
+     */
+
+    public function toggleLock(Room $room): ServiceReturn
     {
         return $this->execute(
-            callback: function () use ($dto) {
+            callback: function () use ($room) {
 
-                $rooms = $this->roomRepository->paginate(
-                    filters: $dto->getFilters(),
-                    perPage: $dto->getPerPage(),
-                    page: $dto->getPage(),
-                    orderBy: $dto->getSortBy(),
-                    orderDirection: $dto->getDirection()
-                );
+                // So sánh thẳng với Enum
+                if ($room->status === RoomStatus::Active) {
 
-                return ServiceReturn::success($rooms);
-            },
-            returnCatchCallback: function () use ($dto) {
-                return ServiceReturn::success(
-                    data: new LengthAwarePaginator(
-                        items: [],
-                        total: 0,
-                        perPage: $dto->getPerPage(),
-                        currentPage: $dto->getPage()
-                    )
+                    // Kiểm tra xem phòng có đang được sử dụng bởi lớp nào không
+                    $activeClassesCount = $this->classScheduleTemplateRepository->countClassesActive($room->id);
+                    if ($activeClassesCount > 0) {
+                        throw new ServiceException("Phòng đang được sử dụng bởi {$activeClassesCount} lớp học, không thể tạm khóa.");
+                    }
+
+                    // Cập nhật bằng Enum
+                    $room->update(['status' => RoomStatus::Locked]);
+                    $actionName = 'Khóa phòng học';
+                }
+                else {
+                    // Cập nhật bằng Enum
+                    $room->update(['status' => RoomStatus::Active]);
+                    $actionName = 'Mở khóa phòng học';
+                }
+                Logging::userActivity(
+                    action: $actionName,
+                    description: "{$actionName}: {$room->name}"
                 );
+                return ServiceReturn::success();
             }
         );
     }
 
+    /**
+     * Thay đổi trạng thái phòng học
+     * @param Room $room
+     * @param RoomStatus $newStatus
+     * @return ServiceReturn
+     * @throws \Throwable
+     */
+    public function changeStatus(Room $room, RoomStatus $newStatus): ServiceReturn
+    {
+        return $this->execute(
+            callback: function () use ($room, $newStatus) {
+
+                // Nếu là khóa phòng, kiểm tra xem có lớp nào đang diễn ra không
+                if ($newStatus === RoomStatus::Locked) {
+                    $hasSchedules = $this->classScheduleTemplateRepository->hasActiveSchedulesForRoom($room->id);
+
+                    if ($hasSchedules) {
+                        throw new ServiceException('Không thể khóa phòng khi đang có lớp diễn ra ở phòng này.');
+                    }
+                }
+
+                // 2. Cập nhật trạng thái
+                $oldStatusLabel = $room->status->label();
+                $room->update(['status' => $newStatus]);
+
+                Logging::userActivity(
+                    action: 'Đổi trạng thái phòng học',
+                    description: "Đổi trạng thái phòng {$room->name} từ [{$oldStatusLabel}] sang [{$newStatus->label()}]"
+                );
+
+                return ServiceReturn::success();
+            },
+            useTransaction: true
+        );
+    }
+
+    /**
+     * Tạo phòng học mới
+     * @param array $data
+     * @return ServiceReturn
+     * @throws \Throwable
+     */
     public function createRoom(array $data): ServiceReturn
     {
         return $this->execute(
             callback: function () use ($data) {
-
+                $nameExists = $this->roomRepository->query()
+                    ->where('name', $data['name'])
+                    ->exists();
+                if ($nameExists) {
+                    throw new ServiceException('Tên phòng học đã tồn tại trong hệ thống.');
+                }
                 $room = $this->roomRepository->create([
                     'name' => $data['name'],
                     'capacity' => $data['capacity'] ?? 0,
@@ -73,44 +134,58 @@ class RoomService extends BaseService
         );
     }
 
-    public function getRoomById(int $id): ServiceReturn
+    /**
+     * Cập nhật thông tin phòng học
+     * @param Room $record
+     * @param array $data
+     * @return ServiceReturn
+     * @throws \Throwable
+     */
+    public function updateRoom(Room $record, array $data): ServiceReturn
     {
         return $this->execute(
-            callback: function () use ($id) {
-
-                $room = $this->roomRepository->findById($id);
-
-                if (!$room) {
-                    throw new ServiceException('Phòng học không tồn tại.');
+            callback: function () use ($record, $data) {
+                // Kiểm tra trùng tên phòng học
+                $nameExists = $this->roomRepository->query()
+                    ->where('name', $data['name'])
+                    ->where('id', '!=', $record->id)
+                    ->exists();
+                if ($nameExists) {
+                    throw new ServiceException('Tên phòng học đã tồn tại trong hệ thống.');
                 }
 
-                return $room;
-            }
-        );
-    }
+                // NGHIỆP VỤ: Kiểm tra khi GIẢM sức chứa
+                $newCapacity = (int) $data['capacity'];
 
-    public function updateRoom(int $id, array $data): ServiceReturn
-    {
-        return $this->execute(
-            callback: function () use ($id, $data) {
+                if ($newCapacity < $record->capacity) {
+                    // Kiểm tra xem có lớp nào đang dùng phòng và có sĩ số vượt quá sức chứa mới không
+                    $overcrowdedClasses = $this->classRepository->getClassesExceedingCapacity(
+                        roomId:     $record->id,
+                        capacity:   $newCapacity
+                    );
+                    // Nếu có lớp nào vượt quá sức chứa mới, báo lỗi
+                    if ($overcrowdedClasses->isNotEmpty()) {
+                        // Gom danh sách các lớp bị vượt giới hạn để báo lỗi chi tiết
+                        $errorDetails = [];
+                        foreach ($overcrowdedClasses as $cls) {
+                            $errorDetails[] = "- Lớp {$cls->name} đang có {$cls->si_so} học sinh.";
+                        }
 
-                $room = $this->roomRepository->findById($id);
-
-                if (!$room) {
-                    throw new ServiceException('Phòng học không tồn tại.');
+                        $msg = "Không thể giảm sức chứa xuống {$newCapacity} chỗ vì:<br>" . implode('<br>', $errorDetails);
+                        throw new ServiceException($msg);
+                    }
                 }
-
-                $updated = $this->roomRepository->updateById($id, [
-                    'name' => $data['name'],
+                // Thực hiện Cập nhật
+                $updated = $this->roomRepository->updateById($record->id, [
+                    'name'     => $data['name'],
                     'capacity' => $data['capacity'],
-                    'note' => $data['note'] ?? null,
-                    'status' => $data['status'],
-                    'updated_at' => now(),
+                    'note'     => $data['note'] ?? null,
                 ]);
 
+                // Ghi Log
                 Logging::userActivity(
                     action: 'Cập nhật phòng học',
-                    description: 'Cập nhật phòng học ' . $room->name
+                    description: "Cập nhật phòng: {$record->name} (Sức chứa: {$record->capacity}, Trạng thái: {$record->status->label()})"
                 );
 
                 return ServiceReturn::success($updated, 'Cập nhật phòng học thành công');
@@ -119,27 +194,5 @@ class RoomService extends BaseService
         );
     }
 
-    public function deleteRoom(int $id): ServiceReturn
-    {
-        return $this->execute(
-            callback: function () use ($id) {
 
-                $room = $this->roomRepository->findById($id);
-
-                if (!$room) {
-                    throw new ServiceException('Phòng học không tồn tại.');
-                }
-
-                $this->roomRepository->deleteById($id);
-
-                Logging::userActivity(
-                    action: 'Xóa phòng học',
-                    description: 'Xóa phòng học ' . $room->name
-                );
-
-                return ServiceReturn::success(null, 'Xóa phòng học thành công');
-            },
-            useTransaction: true
-        );
-    }
 }

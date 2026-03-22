@@ -64,8 +64,8 @@ class EditStudent extends EditRecord
     protected function getFormActions(): array
     {
         return [
-            $this->getSaveFormAction(),
             CommonAction::backAction(self::getResource()),
+            $this->getSaveFormAction(),
         ];
     }
 }
