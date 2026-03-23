@@ -472,43 +472,102 @@ Ràng buộc không cho xóa:
      OR COUNT(*) FROM tuition_invoices WHERE class_id = ? > 0
   → Không cho xóa, chỉ được đổi trạng thái
 ```
-
-### Nhân bản lớp
+### Thêm học sinh vào lớp
 
 ```
-Hệ thống:
-  - SELECT * FROM classes WHERE id = ?
-  - INSERT classes với toàn bộ thông tin (trừ code, start_at, end_at)
-  - code gợi ý: [code_cũ]_copy, admin có thể sửa
-  - start_at = null, status = Active
+List các học sinh chưa đăng ký trong lớp:
+  → SELECT students.id, students.full_name, students.grade_level
+    FROM students
+    JOIN users ON students.user_id = users.id
+    WHERE users.is_active = true
+      AND students.full_name ILIKE '%keyword%'
+      AND students.id NOT IN (
+        SELECT student_id FROM class_enrollments
+        WHERE class_id = ? AND left_at IS NULL
+      )
 
-Không copy các bảng:
-  - class_enrollments
-  - class_schedule_templates
-  - attendance_sessions, scores
-  - tuition_invoices, teacher_salary_invoices
+Nhập:
+  - students (required) - Danh sách học sinh (array of student_id)
+  - enrolled_at     (required, default: today)
+  - fee_per_session (optional) — NULL = dùng classes.base_fee_per_session
+  - note            (optional)
 
-Ghi user_logs: admin X nhân bản lớp Y thành lớp Z lúc T
+Validation:
+  1. Chưa có enrollment active:
+       SELECT COUNT(*) FROM class_enrollments
+       WHERE class_id = ? AND student_id = ? AND left_at IS NULL = 0
+
+  2. Lớp Active:
+       SELECT status FROM classes WHERE id = ? = Active
+
+  3. Kiểm tra sĩ số lớp:
+  - Lấy sĩ số hiện tại:
+       SELECT COUNT(*) FROM class_enrollments
+       WHERE class_id = ? AND left_at IS NULL
+  - So sánh với students.count + sĩ số lớp hiện tại <= classes.max_students
+  - Báo lỗi nếu vượt quá sĩ số lớp
+
+  4. Kiểm tra trùng lịch:
+       SELECT si.date, si.start_time, si.end_time, c2.name as ten_lop_khac
+       FROM schedule_instances si
+       JOIN class_enrollments ce ON ce.student_id = ?
+         AND ce.class_id = si.class_id
+         AND ce.left_at IS NULL
+       JOIN classes c2 ON c2.id = si.class_id
+       JOIN class_schedule_templates cst_new
+         ON cst_new.class_id = class_id_mới
+         AND cst_new.day_of_week = EXTRACT(DOW FROM si.date)
+         AND cst_new.start_time < si.end_time
+         AND cst_new.end_time > si.start_time
+       WHERE si.date >= enrolled_at AND si.status != cancelled
+
+Service:
+  - INSERT class_enrollments (
+      class_id, student_id, enrolled_at,
+      fee_per_session,
+      fee_effective_from = enrolled_at (nếu có fee_per_session),
+      fee_effective_to = NULL
+    )
+
+Ghi user_logs: admin X thêm HS Y vào lớp Z lúc T
 ```
 
 ### Trang chi tiết lớp
 
+#### Tab 1 — Thông tin lớp:
 ```
-Thông tin lớp:
+    - Tên lớp
+    - Mã lớp
+    - Môn học
+    - Giáo viên
+    - Khối
+    - Học phí cơ bản/buổi
+    - Lương GV cơ bản/buổi
+    - Sĩ số tối đa
+    - Ngày khai giảng
+    - Ngày kết thúc (nếu có)
   → SELECT classes.*, subjects.name as ten_mon, teachers.full_name as ten_gv
     FROM classes
     JOIN subjects ON classes.subject_id = subjects.id
     JOIN teachers ON classes.teacher_id = teachers.id
     WHERE classes.id = ?
+```
 
-Tab 1 — Danh sách học sinh:
+#### Tab 2 — Danh sách học sinh:
+```
+  - Danh sách hiển thị
+    + Họ tên HS
+    + Ngày vào lớp
+    + Học phí/buổi
+    + Tổng buổi có mặt
+    + Tổng buổi nghỉ
   → SELECT
       students.id, students.full_name,
       ce.enrolled_at,
       ce.fee_per_session,
       ce.left_at,
-      COUNT(ar.id) FILTER (WHERE ar.status IN (present, late))  as so_buoi_co_mat,
-      COUNT(ar.id) FILTER (WHERE ar.status IN (excused, absent)) as so_buoi_nghi,
+      COUNT(ar.id) FILTER (WHERE ar.status IN (present, late))  as total_present, // Số buổi có mặt
+      COUNT(ar.id) FILTER (WHERE ar.status IN (excused, absent)) as total_absent, // Số buổi nghỉ
       [tổng tiền tháng: tính riêng theo logic học phí]
     FROM class_enrollments ce
     JOIN students ON ce.student_id = students.id
@@ -520,9 +579,120 @@ Tab 1 — Danh sách học sinh:
     GROUP BY students.id, ce.id
 
   Action mỗi dòng: Thiết lập học phí riêng | Chuyển lớp | Cho nghỉ
-  Nút [Thêm học sinh vào lớp]
+    - Thiết lập học phí riêng:
+    Mở popup cho học sinh đó
+    Hiển thị lịch sử học phí hiện tại:
+      → SELECT ce.fee_per_session, ce.fee_effective_from, ce.fee_effective_to
+        FROM class_enrollments ce
+        WHERE ce.class_id = ? AND ce.student_id = ?
+        ORDER BY ce.fee_effective_from ASC
+      Bảng: Học phí/buổi | Từ ngày | Đến ngày
+    Form nhập giai đoạn mới:
+      - fee_per_session    (required) — học phí mới
+      - fee_effective_from (required, default: today) — áp dụng từ ngày
+    Validation:
+      - fee_effective_from >= enrolled_at của record gốc
+      - fee_effective_from > fee_effective_from của record hiện hành
+    Service:
+      1. UPDATE class_enrollments
+           SET fee_effective_to = fee_effective_from_mới - 1 ngày
+           WHERE class_id = ? AND student_id = ?
+             AND fee_effective_to IS NULL
+             AND fee_per_session IS NOT NULL
+    
+      2. INSERT class_enrollments (
+           class_id, student_id,
+           fee_per_session = mới,
+           fee_effective_from = ngày mới,
+           fee_effective_to = NULL,
+           enrolled_at = (lấy từ record gốc đầu tiên WHERE class_id=? AND student_id=? ORDER BY enrolled_at ASC LIMIT 1),
+           left_at = NULL
+         )
+    
+    Ghi user_logs: admin X đổi học phí HS Y lớp Z từ [giá cũ] sang [giá mới] lúc T
+  
+  - Chuyển lớp:
+    Hiển thị thông tin hiện tại:
+      - Tên HS, lớp hiện tại, ngày vào lớp
+    
+    Form:
+      - class_id_mới (required) — dropdown chọn lớp
+        → SELECT id, name, subjects.name as ten_mon, grade_level
+          FROM classes
+          JOIN subjects ON subject_id = subjects.id
+          WHERE classes.status = Active
+            AND classes.id != class_id_hiện_tại
+      - left_at (required, default: today) — ngày rời lớp cũ
+      - fee_per_session (optional) — học phí tại lớp mới (NULL = dùng base của lớp mới)
+      - note (optional)
+    
+    Validation:
+      - Lớp mới phải Active
+      - left_at >= ce.enrolled_at (không rời trước ngày vào)
+      - Kiểm tra trùng lịch tại lớp mới:
+          SELECT si.date, si.start_time, si.end_time, classes.name as lop_trung
+          FROM schedule_instances si
+          JOIN class_schedule_templates cst_new ON cst_new.class_id = class_id_mới
+            AND cst_new.day_of_week = EXTRACT(DOW FROM si.date)
+            AND cst_new.start_time < si.end_time
+            AND cst_new.end_time > si.start_time
+          JOIN class_enrollments ce_existing
+            ON ce_existing.student_id = student_id
+            AND ce_existing.class_id = si.class_id
+            AND ce_existing.left_at IS NULL
+            AND ce_existing.class_id != class_id_hiện_tại
+          WHERE si.date >= left_at AND si.status != cancelled
+          → Cảnh báo nếu có trùng (không chặn cứng)
+    
+    Service (transaction):
+      1. UPDATE class_enrollments SET left_at = ?
+         WHERE class_id = class_cũ AND student_id = ? AND left_at IS NULL
+    
+      2. INSERT class_enrollments (
+           class_id = class_mới,
+           student_id,
+           enrolled_at = left_at,
+           fee_per_session,
+           fee_effective_from = left_at (nếu có fee_per_session),
+           left_at = NULL
+         )
+    
+    Ghi user_logs: admin X chuyển HS Y từ lớp Z sang lớp T lúc U
+    
+  - Cho nghỉ:
+    Mở popup xác nhận cho học sinh đó
 
-Tab 2 — Lịch sử buổi học:
+    Hiển thị:
+      - Tên HS
+      - Lớp hiện tại
+      - Cảnh báo nếu HS còn hóa đơn chưa thanh toán:
+          SELECT COUNT(*) FROM tuition_invoices
+          WHERE student_id = ? AND class_id = ? AND status != paid
+          → "HS còn X hóa đơn chưa thanh toán"
+    
+    Form:
+      - left_at (required, default: today) — ngày nghỉ
+    
+    Validation:
+      - left_at >= ce.enrolled_at
+    
+    Service:
+      - UPDATE class_enrollments SET left_at = ?
+        WHERE class_id = ? AND student_id = ? AND left_at IS NULL
+    
+    Lưu ý sau khi nghỉ:
+      - Các attendance_records có session_date > left_at:
+          is_fee_counted = false khi tính hóa đơn tháng
+      - HS vẫn được đăng ký lại lớp này sau (INSERT enrollment record mới)
+      - Không xóa lịch sử điểm danh / điểm số đã có
+    
+    Ghi user_logs: admin X cho HS Y nghỉ lớp Z từ ngày T lúc U
+  
+  Nút Header [Thêm học sinh vào lớp]
+```
+
+#### Tab 3 — Lịch sử buổi học:
+```
   → SELECT
       si.date, si.schedule_type, si.status,
       r.name as phong,
@@ -540,7 +710,7 @@ Tab 2 — Lịch sử buổi học:
 
   Action mỗi dòng: Xem điểm danh | Tạo buổi bù | Hủy buổi | Đổi phòng | Đổi GV
 
-Tab 3 — Báo cáo nhanh:
+Tab 4 — Báo cáo nhanh:
   → Tổng doanh thu tháng:
       SELECT SUM(total_study_fee) FROM tuition_invoices
       WHERE class_id = ? AND month = 'YYYY-MM'
@@ -570,103 +740,13 @@ Tab 3 — Báo cáo nhanh:
       HAVING COUNT(*) > 2
 ```
 
+
 ---
 
 ## Đăng ký học sinh vào lớp
 
-### Thêm học sinh vào lớp
 
-```
-Form tìm kiếm học sinh:
-  → SELECT students.id, students.full_name, students.grade_level
-    FROM students
-    JOIN users ON students.user_id = users.id
-    WHERE users.is_active = true
-      AND students.full_name ILIKE '%keyword%'
-      AND students.id NOT IN (
-        SELECT student_id FROM class_enrollments
-        WHERE class_id = ? AND left_at IS NULL
-      )
 
-Nhập:
-  - student_id      (required)
-  - enrolled_at     (required, default: today)
-  - fee_per_session (optional) — NULL = dùng classes.base_fee_per_session
-  - note            (optional)
-
-Validation:
-  1. Chưa có enrollment active:
-       SELECT COUNT(*) FROM class_enrollments
-       WHERE class_id = ? AND student_id = ? AND left_at IS NULL = 0
-
-  2. Lớp Active:
-       SELECT status FROM classes WHERE id = ? = Active
-
-  3. Kiểm tra sĩ số:
-       SELECT COUNT(*) FROM class_enrollments
-       WHERE class_id = ? AND left_at IS NULL
-       So sánh với classes.max_students
-       → Cảnh báo nếu đã đủ, admin confirm mới cho
-
-  4. Kiểm tra trùng lịch (cảnh báo, không chặn cứng):
-       SELECT si.date, si.start_time, si.end_time, c2.name as ten_lop_khac
-       FROM schedule_instances si
-       JOIN class_enrollments ce ON ce.student_id = ?
-         AND ce.class_id = si.class_id
-         AND ce.left_at IS NULL
-       JOIN classes c2 ON c2.id = si.class_id
-       JOIN class_schedule_templates cst_new
-         ON cst_new.class_id = class_id_mới
-         AND cst_new.day_of_week = EXTRACT(DOW FROM si.date)
-         AND cst_new.start_time < si.end_time
-         AND cst_new.end_time > si.start_time
-       WHERE si.date >= enrolled_at AND si.status != cancelled
-
-Service:
-  - INSERT class_enrollments (
-      class_id, student_id, enrolled_at,
-      fee_per_session,
-      fee_effective_from = enrolled_at (nếu có fee_per_session),
-      fee_effective_to = NULL
-    )
-
-Ghi user_logs: admin X thêm HS Y vào lớp Z lúc T
-```
-
-### Thiết lập học phí riêng theo giai đoạn
-
-```
-Nhập:
-  - fee_per_session    (required)
-  - fee_effective_from (required)
-
-Service:
-  1. UPDATE class_enrollments
-       SET fee_effective_to = fee_effective_from_mới - 1 ngày
-       WHERE class_id = ? AND student_id = ?
-         AND fee_effective_to IS NULL
-         AND fee_per_session IS NOT NULL
-
-  2. INSERT class_enrollments (
-       class_id, student_id,
-       fee_per_session = mới,
-       fee_effective_from = ngày mới,
-       fee_effective_to = NULL,
-       enrolled_at = (lấy từ record gốc đầu tiên),
-       left_at = NULL
-     )
-
-Khi tính học phí buổi ngày X:
-  → SELECT COALESCE(ce.fee_per_session, classes.base_fee_per_session)
-    FROM class_enrollments ce
-    JOIN classes ON classes.id = ce.class_id
-    WHERE ce.class_id = ? AND ce.student_id = ?
-      AND ce.fee_effective_from <= X
-      AND (ce.fee_effective_to IS NULL OR ce.fee_effective_to >= X)
-    LIMIT 1
-
-Ghi user_logs: admin X đổi học phí HS Y lớp Z từ [giá cũ] sang [giá mới] lúc T
-```
 
 ### Chuyển học sinh sang lớp khác
 

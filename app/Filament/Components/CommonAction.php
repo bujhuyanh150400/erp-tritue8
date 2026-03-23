@@ -7,6 +7,7 @@ use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
+use Filament\Support\Colors\Color;
 use Filament\Support\Icons\Heroicon;
 
 class CommonAction
@@ -56,7 +57,7 @@ class CommonAction
     {
         return EditAction::make()
             ->label($label)
-            ->color('primary')
+            ->color(Color::Indigo)
             ->icon(Heroicon::Pencil);
     }
 

@@ -6,24 +6,19 @@ use App\Constants\ClassStatus;
 use App\Constants\GradeLevel;
 use App\Filament\Components\CommonAction;
 use App\Filament\Components\CustomSelect;
+use App\Filament\Resources\Classes\Components\AddStudentToClassAction;
 use App\Models\SchoolClass;
-use App\Models\Subject;
-use App\Models\Teacher;
 use App\Repositories\ClassRepository;
 use App\Services\SubjectService;
 use App\Services\TeacherService;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
-use Filament\Actions\BulkActionGroup;
-use Filament\Actions\DeleteBulkAction;
-use Filament\Actions\EditAction;
-use Filament\Actions\ViewAction;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
+use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Enums\FiltersLayout;
 use Filament\Tables\Filters\Filter;
-use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 
@@ -54,6 +49,7 @@ class ClassesTable
 
                 TextColumn::make('active_students_count')
                     ->label('Sĩ số')
+                    ->formatStateUsing(fn(int $state): string => "{$state} học sinh")
                     ->badge()
                     ->color('info'),
 
@@ -139,9 +135,11 @@ class ClassesTable
 
                     CommonAction::editAction(),
 
+                    AddStudentToClassAction::make(),
+
+
                     // 2. Điểm danh & DS Học sinh (Chuyển hướng trang)
 //                    Action::make('attendance')->label('Điểm danh')->icon('heroicon-m-clipboard-document-check')->color('success')->url(fn ($record) => "#"), // Thay route thực tế
-//                    Action::make('students')->label('Danh sách học sinh')->icon('heroicon-m-users')->color('info')->url(fn ($record) => "#"),
 
 //                    // 3. Nghiệp vụ trạng thái (Tạm ngưng / Kết thúc)
 //                    Action::make('pause')

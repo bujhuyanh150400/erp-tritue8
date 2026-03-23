@@ -3,9 +3,11 @@
 namespace App\Providers;
 
 
+use App\Repositories\ClassEnrollmentRepository;
 use App\Repositories\ClassRepository;
 use App\Repositories\ClassScheduleTemplateRepository;
 use App\Repositories\RoomRepository;
+use App\Repositories\ScheduleInstanceRepository;
 use App\Repositories\StaffRepository;
 use App\Repositories\StudentRepository;
 use App\Repositories\SubjectRepository;
@@ -27,6 +29,8 @@ class RepositoryServiceProvider extends ServiceProvider
         $this->app->singleton(RoomRepository::class, RoomRepository::class);
         $this->app->singleton(ClassRepository::class, ClassRepository::class);
         $this->app->singleton(ClassScheduleTemplateRepository::class, ClassScheduleTemplateRepository::class);
+        $this->app->singleton(ClassEnrollmentRepository::class, ClassEnrollmentRepository::class);
+        $this->app->singleton(ScheduleInstanceRepository::class, ScheduleInstanceRepository::class);
     }
 
     /**

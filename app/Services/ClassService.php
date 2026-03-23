@@ -9,22 +9,28 @@ use App\Core\Services\BaseService;
 use App\Core\Services\ServiceException;
 use App\Core\Services\ServiceReturn;
 use App\Models\SchoolClass;
+use App\Repositories\ClassEnrollmentRepository;
 use App\Repositories\ClassRepository;
+use App\Repositories\ScheduleInstanceRepository;
 use App\Repositories\SubjectRepository;
 use App\Repositories\TeacherRepository;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 class ClassService extends BaseService
 {
 
     public function __construct(
-        protected ClassRepository   $classRepository,
-        protected SubjectRepository $subjectRepository,
-        protected TeacherRepository $teacherRepository
+        protected ClassRepository           $classRepository,
+        protected SubjectRepository         $subjectRepository,
+        protected TeacherRepository         $teacherRepository,
+        protected ClassEnrollmentRepository $classEnrollmentRepository,
+        protected ScheduleInstanceRepository $scheduleInstanceRepository,
     )
     {
 
     }
-
 
     /**
      * Tạo lớp học
@@ -111,7 +117,7 @@ class ClassService extends BaseService
                 // Kiểm tra Sĩ số tối đa
                 // Đếm số học sinh đang học (left_at IS NULL)
                 $activeStudentsCount = $schoolClass->enrollments()->whereNull('left_at')->count();
-                $newMaxStudents = (int) $data['max_students'];
+                $newMaxStudents = (int)$data['max_students'];
                 if ($newMaxStudents < $activeStudentsCount) {
                     throw new ServiceException("Sĩ số tối đa ({$newMaxStudents}) không thể nhỏ hơn số học sinh hiện tại đang học trong lớp ({$activeStudentsCount} học sinh).");
                 }
@@ -133,4 +139,96 @@ class ClassService extends BaseService
             useTransaction: true
         );
     }
+
+    /**
+     * Lấy lớp học theo ID
+     * @param int $id
+     * @return ServiceReturn
+     * @throws \Throwable
+     */
+    public function findClassById(int $id): ServiceReturn
+    {
+       return $this->execute(
+            callback: function () use ($id) {
+                $class = $this->classRepository->query()
+                    ->where('id', $id)
+                    ->first();
+                if (!$class) {
+                    throw new ServiceException("Lớp học không tồn tại.");
+                }
+                return $class;
+            }
+        );
+    }
+
+    /**
+     * Thêm nhiều học sinh vào lớp học
+     * @param SchoolClass $schoolClass
+     * @param Collection $students - Danh sách học sinh cần thêm
+     * @param array $data
+     * @return ServiceReturn
+     * @throws \Throwable
+     */
+    public function addStudentsToClassroom(
+        SchoolClass $schoolClass,
+        Collection $students,
+        array $data
+    ): ServiceReturn
+    {
+        return $this->execute(
+            callback: function () use ($schoolClass, $students, $data) {
+                // Lớp phải đang Active
+                if ($schoolClass->status !== ClassStatus::Active) {
+                    throw new ServiceException("Không thể thêm học sinh vào lớp đang tạm ngưng hoặc đã kết thúc.");
+                }
+                // Kiểm tra sĩ số tối đa
+                $currentStudents = $this->classEnrollmentRepository->getClassEnrollment($schoolClass->id);
+                if ($currentStudents + $students->count() >= $schoolClass->max_students) {
+                    throw new ServiceException("Lớp đã đạt sĩ số tối đa ({$currentStudents}/{$schoolClass->max_students} học sinh). Không thể thêm học sinh mới.");
+                }
+                foreach ($students as $student) {
+                    // Kiểm tra xem học sinh này đã đăng ký trong lớp chưa
+                    $isAlreadyEnrolled = $this->classEnrollmentRepository->checkStudentIsEnrolledInClass(
+                        classId: $schoolClass->id,
+                        studentId: $student->id
+                    );
+                    if ($isAlreadyEnrolled) {
+                        throw new ServiceException("Học sinh {$student->full_name} hiện đang học trong lớp rồi.");
+                    }
+                    // Kiểm tra xung đột lịch học
+                    $hasConflict = $this->scheduleInstanceRepository->checkStudentHasConflict(
+                        studentId: $student->id,
+                        newClassId: $schoolClass->id,
+                        enrolledAt: $data['enrolled_at']
+                    );
+                    if ($hasConflict) {
+                        throw new ServiceException("Học sinh {$student->full_name} có xung đột lịch với lớp mới, vui lòng kiểm tra lại.");
+                    }
+
+                    // Xử lý học phí
+                    $feePerSession = $data['fee_per_session'] ?? null;
+                    $feeEffectiveFrom = $feePerSession !== null ? $data['enrolled_at'] : null;
+
+                    // Insert
+                    $this->classEnrollmentRepository->create([
+                        'class_id' => $schoolClass->id,
+                        'student_id' => $student->id,
+                        'enrolled_at' => $data['enrolled_at'],
+                        'fee_per_session' => $feePerSession,
+                        'fee_effective_from' => $feeEffectiveFrom,
+                        'note' => $data['note'] ?? null,
+                    ]);
+
+                    // 5. Ghi log
+                    Logging::userActivity(
+                        action: 'Thêm học sinh vào lớp',
+                        description: "Thêm HS ID:{$student->id} vào lớp {$schoolClass->name} từ ngày {$data['enrolled_at']}"
+                    );
+                }
+                return ServiceReturn::success();
+            },
+            useTransaction: true
+        );
+    }
+
 }

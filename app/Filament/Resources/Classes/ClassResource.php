@@ -4,8 +4,10 @@ namespace App\Filament\Resources\Classes;
 
 use App\Filament\Resources\Classes\Pages\CreateClass;
 use App\Filament\Resources\Classes\Pages\EditClass;
+use App\Filament\Resources\Classes\Pages\EnrollClass;
 use App\Filament\Resources\Classes\Pages\ListClasses;
 use App\Filament\Resources\Classes\Pages\ViewClass;
+use App\Filament\Resources\Classes\RelationManagers\EnrollmentsRelationManager;
 use App\Filament\Resources\Classes\Schemas\ClassForm;
 use App\Filament\Resources\Classes\Schemas\ClassInfolist;
 use App\Filament\Resources\Classes\Tables\ClassesTable;
@@ -46,7 +48,6 @@ class ClassResource extends Resource
     public static function getRelations(): array
     {
         return [
-            //
         ];
     }
 

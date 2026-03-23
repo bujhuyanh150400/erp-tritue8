@@ -11,7 +11,7 @@ interface SelectableServiceInterface
      * @param string|null $search
      * @return ServiceReturn
      */
-    public function getOptions(?string $search = null): ServiceReturn;
+    public function getOptions(?string $search = null, array $filters = []): ServiceReturn;
 
     /**
      * Lấy nhãn của tùy chọn có thể chọn theo id

@@ -28,9 +28,9 @@ class SubjectService extends BaseService implements SelectableServiceInterface
      * @return ServiceReturn
      * @throws \Throwable
      */
-    public function getOptions(?string $search = null): ServiceReturn
+    public function getOptions(?string $search = null, array $filters = []): ServiceReturn
     {
-        return $this->execute(function () use ($search) {
+        return $this->execute(function () use ($search, $filters) {
             return $this->subjectRepository->query()
                 ->when($search, fn($q) => $q->where('name', 'ilike', "%{$search}%"))
                 ->orderBy('name')

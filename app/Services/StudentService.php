@@ -8,6 +8,7 @@ use App\Core\Logs\Logging;
 use App\Core\Services\BaseService;
 use App\Core\Services\ServiceException;
 use App\Core\Services\ServiceReturn;
+use App\Interface\SelectableServiceInterface;
 use App\Models\Student;
 use App\Repositories\StudentRepository;
 use App\Repositories\UserRepository;

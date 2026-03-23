@@ -4,8 +4,6 @@ namespace App\Repositories;
 
 use App\Core\Interfaces\FilterFilament;
 use App\Core\Repository\BaseRepository;
-use App\Models\ClassEnrollment;
-use App\Models\RewardPoint;
 use App\Models\Student;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
@@ -18,7 +16,7 @@ class StudentRepository extends BaseRepository implements FilterFilament
     }
 
     /**
-     * Tạo query để lấy danh sách học sinh
+     * Tạo query để lấy danh sách học sinh (Trang danh sách học sinh)
      * @param Builder $query
      * @return Builder
      */
@@ -44,6 +42,12 @@ class StudentRepository extends BaseRepository implements FilterFilament
             ]);
     }
 
+    /**
+     * Tạo query để lọc danh sách học sinh
+     * @param Builder $query
+     * @param array $filters
+     * @return Builder
+     */
     public function setFilters(Builder $query, array $filters = []): Builder
     {
         if (! empty($filters['keyword']) && ! empty(trim($filters['keyword']))) {
@@ -70,6 +74,26 @@ class StudentRepository extends BaseRepository implements FilterFilament
 
 
         return $query;
+    }
+
+    /**
+     * Tạo query để lấy danh sách học sinh có thể thêm vào lớp học
+     * @param int $classId
+     * @return Builder
+     */
+    public function getAvailableStudentsForClassQuery(int $classId): Builder
+    {
+        return $this->query()
+            ->join('users', 'students.user_id', '=', 'users.id')
+            ->where('users.is_active', true)
+            ->whereNotIn('students.id', function ($query) use ($classId) {
+                $query->select('student_id')
+                    ->from('class_enrollments')
+                    ->where('class_id', $classId)
+                    ->whereNull('left_at');
+            })
+            ->orderBy("created_at", "DESC")
+            ->select('students.*');
     }
 
 }
