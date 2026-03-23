@@ -7,15 +7,15 @@ use App\Constants\GradeLevel;
 use App\Filament\Components\CommonAction;
 use App\Filament\Components\CustomSelect;
 use App\Filament\Resources\Classes\Components\AddStudentToClassAction;
+use App\Filament\Resources\Classes\Components\ChangeClassStatusAction;
+use App\Filament\Resources\Classes\Components\ChangeTeacherAction;
 use App\Models\SchoolClass;
 use App\Repositories\ClassRepository;
 use App\Services\SubjectService;
 use App\Services\TeacherService;
-use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
-use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Enums\FiltersLayout;
 use Filament\Tables\Filters\Filter;
@@ -132,9 +132,7 @@ class ClassesTable
                 ActionGroup::make([
                     // 1. Xem chi tiết & Chỉnh sửa
                     CommonAction::viewAction(),
-
                     CommonAction::editAction(),
-
                     AddStudentToClassAction::make(),
 
 
@@ -171,6 +169,8 @@ class ClassesTable
 //                            $service->cloneClass($record, $data['new_code'], $data['new_name']);
 //                            \Filament\Notifications\Notification::make()->success()->title('Nhân bản thành công')->send();
 //                        }),
+                    ChangeTeacherAction::make(),
+                    ChangeClassStatusAction::make(),
                 ])
             ]);
     }

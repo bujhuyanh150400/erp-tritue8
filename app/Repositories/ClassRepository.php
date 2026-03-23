@@ -3,11 +3,15 @@
 namespace App\Repositories;
 
 use App\Constants\ClassStatus;
+use App\Constants\ScheduleStatus;
 use App\Core\Interfaces\FilterFilament;
 use App\Core\Repository\BaseRepository;
 use App\Models\SchoolClass;
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 
 class ClassRepository extends BaseRepository implements FilterFilament
 {
@@ -102,4 +106,29 @@ class ClassRepository extends BaseRepository implements FilterFilament
             ->having('si_so', '>', $capacity)
             ->get();
     }
+
+    //
+    public function updateStatus(int $classId, ClassStatus $status, ?Carbon $endAt = null): bool
+    {
+        $data = [
+            'status' => $status->value
+        ];
+        if ($endAt) {
+            $data['end_at'] = $endAt;
+        }
+        return $this->query()
+            ->where('id', $classId)
+            ->update($data);
+    }
+
+    public function endActiveEnrollments(int $classId): int
+    {
+        return DB::table('class_enrollments')
+            ->where('class_id', $classId)
+            ->whereNull('left_at')
+            ->update([
+                'left_at' => now()
+            ]);
+    }
+
 }
