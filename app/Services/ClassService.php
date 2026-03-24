@@ -298,7 +298,7 @@ class ClassService extends BaseService
                     $endAt = $class->end_at
                         ? Carbon::parse($class->end_at)
                         : Carbon::now();
-                    $this->classRepository->endActiveEnrollments($class->id);
+                    $this->classEnrollmentRepository->endActiveEnrollments($class->id);
                     $this->classRepository->updateStatus($class->id, $newStatus, $endAt);
                 } else {
                     $this->classRepository->updateStatus($class->id, $newStatus);

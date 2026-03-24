@@ -107,7 +107,6 @@ class ClassRepository extends BaseRepository implements FilterFilament
             ->get();
     }
 
-    //
     public function updateStatus(int $classId, ClassStatus $status, ?Carbon $endAt = null): bool
     {
         $data = [
@@ -119,16 +118,6 @@ class ClassRepository extends BaseRepository implements FilterFilament
         return $this->query()
             ->where('id', $classId)
             ->update($data);
-    }
-
-    public function endActiveEnrollments(int $classId): int
-    {
-        return DB::table('class_enrollments')
-            ->where('class_id', $classId)
-            ->whereNull('left_at')
-            ->update([
-                'left_at' => now()
-            ]);
     }
 
 }
