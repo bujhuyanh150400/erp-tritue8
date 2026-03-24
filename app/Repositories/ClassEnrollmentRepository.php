@@ -82,11 +82,11 @@ class ClassEnrollmentRepository extends BaseRepository
 
     public function endActiveEnrollments(int $classId): int
     {
-        return DB::table('class_enrollments')
+        return $this->model->newQuery()
             ->where('class_id', $classId)
             ->whereNull('left_at')
             ->update([
-                'left_at' => now()
+                'left_at' => now(),
             ]);
     }
 }
