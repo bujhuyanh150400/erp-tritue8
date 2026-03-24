@@ -4,6 +4,7 @@
 namespace App\Filament\Resources\Teachers\Tables;
 
 use App\Constants\EmployeeStatus;
+use App\Core\Helpers\BankInfo;
 use App\Filament\Components\CustomSelect;
 use App\Models\Teacher;
 use App\Repositories\TeacherRepository;
@@ -34,6 +35,7 @@ class TeachersTable
             ->columns([
                 TextColumn::make('id_display')
                     ->label('Giáo viên')
+                    ->icon(Heroicon::AcademicCap)
                     ->description(fn(Teacher $record) => "ID: {$record->user_id}")
                     ->state(fn(Teacher $record) => $record->full_name),
 
@@ -55,9 +57,15 @@ class TeachersTable
                     ->badge(),
 
                 TextColumn::make('bank_info')
-                    ->label('Ngân hàng')
-                    ->state(fn($record) => $record->bank_name)
-                    ->description(fn($record) => $record->bank_account_number),
+                    ->label('Thông tin ngân hàng')
+                    ->icon(Heroicon::CreditCard)
+                    ->state(fn($record) => $record->bank_account_holder)
+                    ->description(function ($record) {
+                        $bank = BankInfo::getBankByBin($record->bank_bin);
+                        $bankName = $bank['short_name'] ?? 'Unknown';
+                        return "{$bankName} - {$record->bank_account_number}";
+                 }),
+
 
                 IconColumn::make('user.is_active')
                     ->label('Trạng thái TK')

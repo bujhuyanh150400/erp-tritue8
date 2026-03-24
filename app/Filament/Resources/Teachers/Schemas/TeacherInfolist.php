@@ -3,6 +3,7 @@
 
 namespace App\Filament\Resources\Teachers\Schemas;
 
+use App\Core\Helpers\BankInfo;
 use Filament\Infolists\Components\IconEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Grid;
@@ -87,18 +88,29 @@ class TeacherInfolist
                                 Section::make('Tài khoản ngân hàng')
                                     ->schema([
                                         Grid::make(2)->schema([
+
                                             TextEntry::make('bank_bin')
-                                                ->label('Mã ngân hàng'),
+                                                ->label('Ngân hàng')
+                                                ->formatStateUsing(function ($state) {
+                                                    $bank = BankInfo::getBankByBin($state);
+
+                                                    if (!$bank) return '-';
+
+                                                    return "{$bank['short_name']} ({$bank['code']})";
+                                                }),
 
                                             TextEntry::make('bank_account_holder')
-                                                ->label('Chủ tài khoản'),
+                                                ->label('Chủ tài khoản')
+                                                ->placeholder('-'),
 
                                             TextEntry::make('bank_account_number')
                                                 ->label('Số tài khoản')
-                                                ->copyable(),
+                                                ->copyable()
+                                                ->placeholder('-'),
+
                                         ]),
-                                    ]),
-                            ]),
+                                ]),
+                        ]),
 
                         Tabs\Tab::make('Lớp đang dạy')
                             ->icon('heroicon-m-academic-cap')
