@@ -2,11 +2,15 @@
 
 namespace App\Repositories;
 
+use App\Constants\ScheduleStatus;
 use App\Core\Interfaces\Paginate;
 use App\Core\Repository\BaseRepository;
 use App\Models\Teacher;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
+
 
 class TeacherRepository extends BaseRepository implements Paginate
 {

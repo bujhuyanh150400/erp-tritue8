@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Constants\ClassStatus;
 use App\Constants\EmployeeStatus;
+use App\Constants\ScheduleStatus;
 use App\Core\Logs\Logging;
 use App\Core\Services\BaseService;
 use App\Core\Services\ServiceException;
@@ -231,4 +232,85 @@ class ClassService extends BaseService
         );
     }
 
+    public function changeTeacher(SchoolClass $class, int $newTeacherId): ServiceReturn
+    {
+        return $this->execute(
+            callback: function () use ($class, $newTeacherId) {
+
+                // check teacher active
+                $newTeacher = $this->teacherRepository->find($newTeacherId);
+                if (!$newTeacher || $newTeacher->status !== EmployeeStatus::Active) {
+                    throw new ServiceException("Giáo viên mới không tồn tại hoặc không hoạt động.");
+                }
+
+                // check trùng giáo viên
+                $currentTeacherId = $class->teacher_id;
+                if ($currentTeacherId == $newTeacherId) {
+                    throw new ServiceException("Giáo viên mới trùng với giáo viên hiện tại.");
+                }
+
+                // check trùng lịch (ĐÚNG REPO)
+                $conflicts = $this->scheduleInstanceRepository->getTeacherScheduleConflicts($newTeacherId, $class->id);
+
+                if ($conflicts->isNotEmpty()) {
+                    $message = "Giáo viên mới bị trùng lịch:\n";
+
+                    foreach ($conflicts as $conflict) {
+                        $date = Carbon::parse($conflict->date)->format('d/m/Y');
+                        $message .= "- {$date} ({$conflict->start_time} - {$conflict->end_time}) lớp {$conflict->class_name}\n";
+                    }
+
+                    throw new ServiceException($message);
+                }
+
+                // Update class
+                $class->update(['teacher_id' => $newTeacherId]);
+                //  Update schedule
+                $this->scheduleInstanceRepository->updateTeacherForFutureSchedules($class->id, $newTeacherId);
+                // Logg
+                $oldTeacher = $this->teacherRepository->find($currentTeacherId);
+                Logging::userActivity(
+                    action: 'Đổi giáo viên',
+                    description: "Đổi GV lớp {$class->name} từ {$oldTeacher?->full_name} sang {$newTeacher->full_name}"
+                );
+
+                return ServiceReturn::success();
+            },
+            useTransaction: true
+        );
+    }
+
+    public function changeStatusClass(SchoolClass $class, ClassStatus $newStatus): ServiceReturn
+    {
+        return $this->execute(
+            callback: function () use ($class, $newStatus) {
+                // Không làm gì nếu trùng trạng thái
+                if ($class->status === $newStatus) {
+                    return ServiceReturn::success();
+                }
+                $oldStatus = $class->status;
+                //  Cancel schedule
+                if (in_array($newStatus, [ClassStatus::Suspended, ClassStatus::Ended])) {
+                    $this->scheduleInstanceRepository->cancelFutureSchedulesByClassId($class->id);
+                }
+                // Xử lý Ended
+                if ($newStatus === ClassStatus::Ended) {
+                    $endAt = $class->end_at
+                        ? Carbon::parse($class->end_at)
+                        : Carbon::now();
+                    $this->classEnrollmentRepository->endActiveEnrollments($class->id);
+                    $this->classRepository->updateStatus($class->id, $newStatus, $endAt);
+                } else {
+                    $this->classRepository->updateStatus($class->id, $newStatus);
+                }
+                // Log
+                Logging::userActivity(
+                    action: 'Đổi trạng thái lớp',
+                    description: "Đổi trạng thái lớp {$class->name} từ {$oldStatus->label()} sang {$newStatus->label()}"
+                );
+                return ServiceReturn::success();
+            },
+            useTransaction: true
+        );
+    }
 }
