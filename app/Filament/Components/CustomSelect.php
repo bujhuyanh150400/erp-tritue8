@@ -32,6 +32,7 @@ class CustomSelect extends Select
         $service = app()->make($serviceClass);
         return $this
             ->searchable()
+            ->noOptionsMessage("Không có tùy chọn nào")
             ->options(function () use ($service) {
                 // Dùng evaluate() để thực thi Closure, lấy ra mảng filters ở thời điểm runtime
                 $filters = $this->evaluate($this->serviceFilters) ?? [];

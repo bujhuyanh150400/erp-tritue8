@@ -579,7 +579,11 @@ Ghi user_logs: admin X thêm HS Y vào lớp Z lúc T
     GROUP BY students.id, ce.id
 
   Action mỗi dòng: Thiết lập học phí riêng | Chuyển lớp | Cho nghỉ
-    - Thiết lập học phí riêng:
+```
+
+##### Action mỗi dòng:
+- Thiết lập học phí riêng:
+```
     Mở popup cho học sinh đó
     Hiển thị lịch sử học phí hiện tại:
       → SELECT ce.fee_per_session, ce.fee_effective_from, ce.fee_effective_to
@@ -610,9 +614,10 @@ Ghi user_logs: admin X thêm HS Y vào lớp Z lúc T
          )
     
     Ghi user_logs: admin X đổi học phí HS Y lớp Z từ [giá cũ] sang [giá mới] lúc T
-  
-  - Chuyển lớp:
-    Hiển thị thông tin hiện tại:
+```
+- Chuyển lớp:
+```
+Hiển thị thông tin hiện tại:
       - Tên HS, lớp hiện tại, ngày vào lớp
     
     Form:
@@ -658,10 +663,10 @@ Ghi user_logs: admin X thêm HS Y vào lớp Z lúc T
          )
     
     Ghi user_logs: admin X chuyển HS Y từ lớp Z sang lớp T lúc U
-    
-  - Cho nghỉ:
+```
+- Cho nghỉ: 
+```
     Mở popup xác nhận cho học sinh đó
-
     Hiển thị:
       - Tên HS
       - Lớp hiện tại
@@ -691,6 +696,7 @@ Ghi user_logs: admin X thêm HS Y vào lớp Z lúc T
   Nút Header [Thêm học sinh vào lớp]
 ```
 
+
 #### Tab 3 — Lịch sử buổi học:
 ```
   → SELECT
@@ -708,9 +714,126 @@ Ghi user_logs: admin X thêm HS Y vào lớp Z lúc T
     GROUP BY si.id, r.id, t.id, as_sess.id
     ORDER BY si.date DESC
 
-  Action mỗi dòng: Xem điểm danh | Tạo buổi bù | Hủy buổi | Đổi phòng | Đổi GV
+  Action mỗi dòng: Xem điểm danh | Tạo buổi bù | Hủy buổi | Đổi phòng học
+```
+##### Action mỗi dòng:
+- Xem điểm danh
+```
+Điều kiện hiển thị:
+  - attendance_sessions tồn tại cho buổi này (as_sess.id IS NOT NULL)
+  - Nếu chưa có → nút "Bắt đầu điểm danh" thay thế (dẫn sang G4)
 
-Tab 4 — Báo cáo nhanh:
+Click → Navigate sang trang điểm danh của buổi đó
+  → /attendance-sessions/{as_sess.id}
+  (Chi tiết xử lý ở G4)
+```
+- Tạo buổi bù
+```
+Điều kiện hiển thị:
+  - si.status = cancelled HOẶC admin muốn thêm buổi bù thủ công
+
+Mở popup
+
+Hiển thị thông tin buổi gốc:
+  - Ngày bị hủy, lớp, giáo viên
+
+Form:
+  - date           (required) — ngày học bù
+  - start_time     (required, default: si.start_time)
+  - end_time       (required, default: si.end_time)
+  - room_id        (required)
+    → SELECT id, name FROM rooms WHERE status = Active
+  - teacher_id     (required, default: si.teacher_id)
+    → SELECT id, full_name FROM teachers WHERE status = Active
+  - fee_type       (required, default: normal)
+      0 = normal | 1 = free | 2 = custom
+  - custom_fee_per_session (hiện ra nếu fee_type = custom)
+  - custom_salary  (optional) — lương GV buổi bù này
+
+Validation:
+  - Kiểm tra trùng phòng:
+      SELECT si2.start_time, si2.end_time, classes.name
+      FROM schedule_instances si2
+      JOIN classes ON si2.class_id = classes.id
+      WHERE si2.room_id = ? AND si2.date = ?
+        AND si2.status != cancelled
+        AND si2.start_time < end_time_mới
+        AND si2.end_time > start_time_mới
+      → Nếu có: "Phòng đã có lớp [X] từ [HH:mm]–[HH:mm]"
+
+  - Kiểm tra trùng GV:
+      SELECT si2.start_time, si2.end_time, classes.name
+      FROM schedule_instances si2
+      JOIN classes ON si2.class_id = classes.id
+      WHERE si2.teacher_id = ? AND si2.date = ?
+        AND si2.status != cancelled
+        AND si2.start_time < end_time_mới
+        AND si2.end_time > start_time_mới
+      → Nếu có: "Giáo viên đang có lớp [X] giờ này"
+
+Service:
+  INSERT schedule_instances (
+    class_id = si.class_id,
+    template_id = NULL,
+    date, start_time, end_time,
+    room_id, teacher_id,
+    original_teacher_id = teacher_id,
+    teacher_salary_snapshot = (
+      SELECT COALESCE(
+        (SELECT salary_per_session FROM teacher_salary_configs
+         WHERE teacher_id = ? AND class_id = ?
+           AND effective_from <= date
+           AND (effective_to IS NULL OR effective_to >= date)
+         LIMIT 1),
+        (SELECT teacher_salary_per_session FROM classes WHERE id = ?)
+      )
+    ),
+    custom_salary,
+    schedule_type = makeup,
+    status = scheduled,
+    linked_makeup_for = si.id,  ← trỏ về buổi gốc bị hủy
+    fee_type, custom_fee_per_session,
+    created_by = Auth::id()
+  )
+
+Ghi user_logs: admin X tạo buổi bù lớp Y ngày Z cho buổi [ngày gốc] lúc T
+```
+- Hủy buổi
+```
+Điều kiện hiển thị:
+  - si.status = scheduled (chưa diễn ra)
+
+Mở popup xác nhận
+
+Hiển thị:
+  - Ngày học, giờ, phòng, giáo viên
+  - Cảnh báo nếu buổi diễn ra trong vòng 6 giờ:
+      → "Buổi học sắp diễn ra, bạn có muốn gửi thông báo khẩn không?"
+      → Checkbox [✓] Gửi thông báo khẩn cho học sinh
+
+Form:
+  - reason (optional) — lý do hủy
+  - is_fee_counted (boolean, default: false)
+      "Có tính tiền buổi này không?"
+
+Service:
+  1. UPDATE schedule_instances SET status = cancelled WHERE id = ?
+
+  2. Nếu is_fee_counted = false:
+     UPDATE attendance_records SET is_fee_counted = false
+     WHERE session_id IN (
+       SELECT id FROM attendance_sessions WHERE schedule_instance_id = ?
+     )
+     ← áp dụng nếu đã có attendance_session (điểm danh rồi mới hủy)
+
+  3. Nếu checkbox gửi thông báo khẩn → trigger notification (G6)
+
+Ghi user_logs: admin X hủy buổi [ngày] lớp Y lúc Z, lý do: [reason]
+```
+- Đổi phòng học
+
+
+#### Tab 4 — Báo cáo nhanh:
   → Tổng doanh thu tháng:
       SELECT SUM(total_study_fee) FROM tuition_invoices
       WHERE class_id = ? AND month = 'YYYY-MM'
@@ -743,31 +866,6 @@ Tab 4 — Báo cáo nhanh:
 
 ---
 
-## Đăng ký học sinh vào lớp
-
-
-
-
-### Chuyển học sinh sang lớp khác
-
-```
-Nhập:
-  - class_id_mới (required)
-    → SELECT id, name FROM classes WHERE status = Active
-  - left_at      (required, default: today)
-
-Validation:
-  - Lớp mới phải Active
-  - Kiểm tra trùng lịch (tương tự thêm mới)
-
-Service:
-  1. UPDATE class_enrollments SET left_at = ?
-     WHERE class_id = class_cũ AND student_id = ? AND left_at IS NULL
-
-  2. INSERT class_enrollments (class_id = class_mới, student_id, enrolled_at = left_at)
-
-Ghi user_logs: admin X chuyển HS Y từ lớp Z sang lớp T lúc U
-```
 
 ### Cho học sinh nghỉ học
 

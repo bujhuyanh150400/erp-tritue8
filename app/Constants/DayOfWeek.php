@@ -3,8 +3,9 @@
 namespace App\Constants;
 
 use App\Core\Traits\EnumHelper;
+use Filament\Support\Contracts\HasLabel;
 
-enum DayOfWeek: int
+enum DayOfWeek: int implements HasLabel
 {
     use EnumHelper;
 

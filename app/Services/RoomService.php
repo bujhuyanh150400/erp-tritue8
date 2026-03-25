@@ -3,17 +3,20 @@
 
 namespace App\Services;
 
+use App\Constants\ClassStatus;
 use App\Constants\RoomStatus;
 use App\Core\Logs\Logging;
 use App\Core\Services\BaseService;
 use App\Core\Services\ServiceException;
 use App\Core\Services\ServiceReturn;
+use App\Interface\SelectableServiceInterface;
 use App\Models\Room;
 use App\Repositories\ClassRepository;
 use App\Repositories\ClassScheduleTemplateRepository;
 use App\Repositories\RoomRepository;
+use Illuminate\Database\Eloquent\Builder;
 
-class RoomService extends BaseService
+class RoomService extends BaseService implements SelectableServiceInterface
 {
     public function __construct(
         protected RoomRepository $roomRepository,
@@ -194,5 +197,46 @@ class RoomService extends BaseService
         );
     }
 
-
+    /**
+     * Lấy danh sách phòng học cho dropdown
+     * @param string|null $search
+     * @param array $filters
+     * @return ServiceReturn
+     */
+    public function getOptions(?string $search = null, array $filters = []) : ServiceReturn{
+        return $this->execute(function () use ($search, $filters) {
+            return $this->roomRepository->query()
+                ->select(['id', 'name', 'capacity']) // Select thêm cột capacity
+                ->where('status', RoomStatus::Active)
+                ->when(!empty($search), function (Builder $query) use ($search) {
+                    $query->where(function ($q) use ($search) {
+                        $q->where('name', 'ilike', "%{$search}%");
+                    });
+                })
+                ->orderBy('id', 'DESC')
+                ->limit(10)
+                ->get()
+                ->mapWithKeys(function ($item) {
+                    return [$item->id => "{$item->name} - (Sức chứa: {$item->capacity})"];
+                })
+                ->toArray();
+        });
+    }
+    /**
+     * Lấy tên phòng học theo ID
+     * @param mixed $id
+     * @return ServiceReturn
+     */
+    public function getLabelOption(mixed $id) : ServiceReturn{
+        return $this->execute(function () use ($id) {
+            if (empty($id)) {
+                return null;
+            }
+            $class = $this->roomRepository->query()
+                ->select(['name', 'capacity'])
+                ->where('id', $id)
+                ->first();
+            return $class ? "{$class->name} - (Sức chứa: {$class->capacity})" : null;
+        });
+    }
 }

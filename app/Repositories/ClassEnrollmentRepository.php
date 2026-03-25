@@ -89,4 +89,28 @@ class ClassEnrollmentRepository extends BaseRepository
                 'left_at' => now(),
             ]);
     }
+
+    /**
+     * Lấy bản ghi enrollment đang active của học sinh trong lớp
+     */
+    public function getActiveEnrollment(int $classId, int $studentId): ?ClassEnrollment
+    {
+        return $this->model->newQuery()
+            ->where('class_id', $classId)
+            ->where('student_id', $studentId)
+            ->whereNull('left_at')
+            ->first();
+    }
+
+    /**
+     * Lấy bản ghi enrollment đầu tiên để lấy ngày enrolled_at gốc
+     */
+    public function getOriginalEnrollment(int $classId, int $studentId): ?ClassEnrollment
+    {
+        return $this->model->newQuery()
+            ->where('class_id', $classId)
+            ->where('student_id', $studentId)
+            ->orderBy('enrolled_at', 'asc')
+            ->first();
+    }
 }

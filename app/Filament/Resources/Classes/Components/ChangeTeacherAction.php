@@ -25,7 +25,7 @@ class ChangeTeacherAction
             ->requiresConfirmation()
             ->modalHeading('Đổi giáo viên phụ trách')
             ->modalDescription('Lưu ý: Hệ thống sẽ kiểm tra lịch dạy của giáo viên mới trước khi thay đổi.')
-            ->form([
+            ->schema([
                 CustomSelect::make('new_teacher_id')
                     ->label('Giáo viên mới')
                     ->required()

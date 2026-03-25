@@ -59,61 +59,17 @@ class ClassStudentListTable extends Component implements HasActions, HasSchemas,
                     ->description(fn ($state) => $state > 2 ? 'Cần chú ý' : null),
             ])
             ->headerActions([
-                // Tích hợp lại Nút Thêm HS hàng loạt đã làm ở bài trước
+                // Thêm học sinh vào lớp
                 AddStudentToClassAction::make()
+                    ->record($this->record),
             ])
             ->recordActions([
-//                // ACTION 1: THIẾT LẬP HỌC PHÍ RIÊNG
-//                Tables\Actions\EditAction::make('edit_fee')
-//                    ->label('Sửa học phí')
-//                    ->icon('heroicon-m-currency-dollar')
-//                    ->color('warning')
-//                    ->form([
-//                        Tables\Forms\Components\TextInput::make('fee_per_session')
-//                            ->label('Học phí mới / buổi')
-//                            ->numeric()
-//                            ->required(),
-//                    ]),
-//
-//                // ACTION 2: CHUYỂN LỚP (Gợi ý sườn logic)
-//                Tables\Actions\Action::make('transfer_class')
-//                    ->label('Chuyển lớp')
-//                    ->icon('heroicon-m-arrows-right-left')
-//                    ->color('info')
-//                    ->form([
-//                        // Tương lai bạn sẽ thêm Select Class mới ở đây
-//                        Tables\Forms\Components\Placeholder::make('info')
-//                            ->content('Tính năng đang được phát triển...'),
-//                    ]),
-//
-//                // ACTION 3: CHO NGHỈ HỌC (Soft Leave)
-//                Tables\Actions\Action::make('leave_class')
-//                    ->label('Cho nghỉ')
-//                    ->icon('heroicon-m-arrow-right-on-rectangle')
-//                    ->color('danger')
-//                    ->requiresConfirmation()
-//                    ->modalHeading('Chốt sổ thôi học')
-//                    ->modalDescription('Học sinh sẽ rời lớp nhưng dữ liệu điểm danh cũ vẫn được giữ nguyên.')
-//                    ->form([
-//                        Tables\Forms\Components\DatePicker::make('left_at')
-//                            ->label('Ngày chính thức nghỉ')
-//                            ->default(now())
-//                            ->required(),
-//                        Tables\Forms\Components\Textarea::make('note')
-//                            ->label('Lý do nghỉ')
-//                            ->required(),
-//                    ])
-//                    ->action(function (ClassEnrollment $record, array $data) {
-//                        $record->update([
-//                            'left_at' => $data['left_at'],
-//                            'note' => ltrim($record->note . "\n[Nghỉ học]: " . $data['note'])
-//                        ]);
-//
-//                        \Filament\Notifications\Notification::make()
-//                            ->success()
-//                            ->title('Đã chốt sổ thôi học!')
-//                            ->send();
-//                    }),
+                // Sửa học phí
+                EditStudentFeeAction::make(),
+                // Chuyển lớp
+                TransferStudentClassAction::make(),
+                // Cho nghỉ
+                LeaveClassAction::make(),
             ]);
     }
 
