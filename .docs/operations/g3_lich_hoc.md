@@ -184,7 +184,7 @@ Admin nhập cho lớp:
   - start_time   (required) — giờ bắt đầu
   - end_time     (required) — giờ kết thúc
   - room_id      (required) — phòng học
-  - teacher_id   (required) — giáo viên
+  - teacher_id   (required) — giáo viên -> (Bỏ trống để dùng GV mặc định của lớp)
   - start_date   (required) — ngày bắt đầu áp dụng
   - end_date     (optional) — ngày kết thúc (NULL = vô thời hạn)
 
@@ -235,6 +235,7 @@ Nếu pass:
            ),
            schedule_type = main,
            status = scheduled,
+           fee_type = FeeType::Normal, // mặc định là học phí bình thường
            created_by = Auth::id()
          )
 

@@ -4,22 +4,22 @@ namespace App\Services;
 
 use App\Constants\ClassStatus;
 use App\Constants\EmployeeStatus;
-use App\Constants\ScheduleStatus;
 use App\Core\Logs\Logging;
 use App\Core\Services\BaseService;
 use App\Core\Services\ServiceException;
 use App\Core\Services\ServiceReturn;
+use App\Interface\SelectableServiceInterface;
 use App\Models\SchoolClass;
 use App\Repositories\ClassEnrollmentRepository;
 use App\Repositories\ClassRepository;
 use App\Repositories\ScheduleInstanceRepository;
 use App\Repositories\SubjectRepository;
 use App\Repositories\TeacherRepository;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\DB;
 
-class ClassService extends BaseService
+class ClassService extends BaseService implements SelectableServiceInterface
 {
 
     public function __construct(
@@ -232,6 +232,13 @@ class ClassService extends BaseService
         );
     }
 
+    /**
+     * Thay đổi giáo viên của lớp học
+     * @param SchoolClass $class - Lớp học cần thay đổi giáo viên
+     * @param int $newTeacherId - ID của giáo viên mới
+     * @return ServiceReturn
+     * @throws \Throwable
+     */
     public function changeTeacher(SchoolClass $class, int $newTeacherId): ServiceReturn
     {
         return $this->execute(
@@ -280,6 +287,13 @@ class ClassService extends BaseService
         );
     }
 
+    /**
+     * Thay đổi trạng thái của lớp học
+     * @param SchoolClass $class
+     * @param ClassStatus $newStatus
+     * @return ServiceReturn
+     * @throws \Throwable
+     */
     public function changeStatusClass(SchoolClass $class, ClassStatus $newStatus): ServiceReturn
     {
         return $this->execute(
@@ -312,5 +326,218 @@ class ClassService extends BaseService
             },
             useTransaction: true
         );
+    }
+
+    /**
+     * Thiết lập học phí riêng cho từng học sinh
+     * @param int $classId - ID của lớp học
+     * @param int $studentId - ID của học sinh
+     * @param array $data - Dữ liệu cập nhật bao gồm 'fee_effective_from' và 'fee'
+     * @return ServiceReturn
+     */
+    public function updateStudentFee(int $classId, int $studentId, array $data): ServiceReturn
+    {
+        return $this->execute(
+            callback: function () use ($classId, $studentId, $data) {
+            // Kiểm tra học sinh có đang học trong lớp hay không
+                $enrollment = $this->classEnrollmentRepository->getActiveEnrollment($classId, $studentId);
+                if (!$enrollment) {
+                    throw new ServiceException("Học sinh không đang học trong lớp này.");
+                }
+
+                // Kiểm tra ngày áp dụng học phí mới không trước ngày vào lớp
+                $originalEnrollment = $this->classEnrollmentRepository->getOriginalEnrollment($classId, $studentId);
+                $enrolledAt = Carbon::parse($originalEnrollment->enrolled_at);
+                $feeEffectiveFrom = Carbon::parse($data['fee_effective_from']);
+
+                if ($feeEffectiveFrom->lt($enrolledAt)) {
+                    throw new ServiceException("Ngày áp dụng không thể trước ngày vào lớp ({$enrolledAt->format('d/m/Y')}).");
+                }
+
+                if ($enrollment->fee_effective_from && $feeEffectiveFrom->lte(Carbon::parse($enrollment->fee_effective_from))) {
+                    throw new ServiceException("Ngày áp dụng học phí mới phải sau ngày áp dụng học phí hiện hành ({$enrollment->fee_effective_from}).");
+                }
+
+                // 1. UPDATE class_enrollments cũ
+                $feeEffectiveTo = clone $feeEffectiveFrom;
+                $feeEffectiveTo->subDay();
+                $enrollment->update([
+                    'fee_effective_to' => $feeEffectiveTo->format('Y-m-d')
+                ]);
+
+                // 2. INSERT class_enrollments mới
+                $this->classEnrollmentRepository->create([
+                    'class_id' => $classId,
+                    'student_id' => $studentId,
+                    'enrolled_at' => $originalEnrollment->enrolled_at,
+                    'fee_per_session' => $data['fee_per_session'],
+                    'fee_effective_from' => $feeEffectiveFrom->format('Y-m-d'),
+                    'fee_effective_to' => null,
+                    'left_at' => null,
+                    'note' => $enrollment->note
+                ]);
+
+                // 3. Ghi log
+                $class = $this->classRepository->find($classId);
+                Logging::userActivity(
+                    action: 'Cập nhật học phí',
+                    description: "Đổi học phí của HS ID:{$studentId} lớp {$class->code} thành " . number_format($data['fee_per_session']) . " từ {$feeEffectiveFrom->format('d/m/Y')}"
+                );
+
+                return ServiceReturn::success();
+            },
+            useTransaction: true
+        );
+    }
+
+    /**
+     * Chuyển lớp cho học sinh
+     * @param int $oldClassId - ID của lớp học hiện tại
+     * @param int $studentId - ID của học sinh
+     * @param array $data - Dữ liệu cập nhật bao gồm 'new_class_id' và 'left_at'
+     */
+    public function transferStudent(int $oldClassId, int $studentId, array $data): ServiceReturn
+    {
+        return $this->execute(
+            callback: function () use ($oldClassId, $studentId, $data) {
+                $oldEnrollment = $this->classEnrollmentRepository->getActiveEnrollment($oldClassId, $studentId);
+                if (!$oldEnrollment) {
+                    throw new ServiceException("Học sinh không đang học trong lớp này.");
+                }
+
+                $newClassId = $data['new_class_id'];
+                $leftAt = Carbon::parse($data['left_at']);
+
+                $oldEnrolledAt = Carbon::parse($oldEnrollment->enrolled_at);
+                if ($leftAt->lt($oldEnrolledAt)) {
+                    throw new ServiceException("Ngày chuyển lớp không thể trước ngày vào lớp ({$oldEnrolledAt->format('d/m/Y')}).");
+                }
+
+                $newClass = $this->classRepository->find($newClassId);
+                if (!$newClass || $newClass->status !== ClassStatus::Active) {
+                    throw new ServiceException("Lớp học mới không tồn tại hoặc không ở trạng thái Đang hoạt động.");
+                }
+
+                // Cập nhật lớp cũ (rời đi)
+                $oldEnrollment->update([
+                    'left_at' => $leftAt->format('Y-m-d'),
+                    'note' => ltrim($oldEnrollment->note . "\n[Chuyển sang lớp: {$newClass->code}]")
+                ]);
+
+                // Đăng ký lớp mới
+                $feePerSession = $data['fee_per_session'] ?? null;
+                $this->classEnrollmentRepository->create([
+                    'class_id' => $newClassId,
+                    'student_id' => $studentId,
+                    'enrolled_at' => $leftAt->format('Y-m-d'),
+                    'fee_per_session' => $feePerSession,
+                    'fee_effective_from' => $feePerSession !== null ? $leftAt->format('Y-m-d') : null,
+                    'left_at' => null,
+                    'note' => $data['note'] ?? null
+                ]);
+
+                // Ghi log
+                $oldClass = $this->classRepository->find($oldClassId);
+                Logging::userActivity(
+                    action: 'Chuyển lớp',
+                    description: "Chuyển HS ID:{$studentId} từ lớp {$oldClass->code} sang lớp {$newClass->code} từ {$leftAt->format('d/m/Y')}"
+                );
+
+                return ServiceReturn::success();
+            },
+            useTransaction: true
+        );
+    }
+
+    /**
+     * Cho học sinh nghỉ học trong lớp
+     * @param int $classId - ID của lớp học
+     * @param int $studentId - ID của học sinh
+     * @param array $data - Dữ liệu cập nhật bao gồm 'left_at' và 'note'
+     */
+    public function removeStudent(int $classId, int $studentId, array $data): ServiceReturn
+    {
+        return $this->execute(
+            callback: function () use ($classId, $studentId, $data) {
+                $enrollment = $this->classEnrollmentRepository->getActiveEnrollment($classId, $studentId);
+                if (!$enrollment) {
+                    throw new ServiceException("Học sinh không đang học trong lớp này.");
+                }
+
+                $leftAt = Carbon::parse($data['left_at']);
+                $enrolledAt = Carbon::parse($enrollment->enrolled_at);
+
+                if ($leftAt->lt($enrolledAt)) {
+                    throw new ServiceException("Ngày nghỉ học không thể trước ngày vào lớp ({$enrolledAt->format('d/m/Y')}).");
+                }
+
+                $enrollment->update([
+                    'left_at' => $leftAt->format('Y-m-d'),
+                    'note' => ltrim($enrollment->note . "\n[Nghỉ học]: " . ($data['note'] ?? ''))
+                ]);
+
+                // Ghi log
+                $class = $this->classRepository->find($classId);
+                Logging::userActivity(
+                    action: 'Cho nghỉ học',
+                    description: "Cho HS ID:{$studentId} nghỉ học lớp {$class->code} từ {$leftAt->format('d/m/Y')}"
+                );
+
+                return ServiceReturn::success();
+            },
+            useTransaction: true
+        );
+    }
+
+    /**
+     * Lấy danh sách lớp học cho dropdown
+     * @param string|null $search
+     * @param array $filters
+     * @return ServiceReturn
+     */
+    public function getOptions(?string $search = null, array $filters = []): ServiceReturn
+    {
+        return $this->execute(function () use ($search, $filters) {
+            return $this->classRepository->query()
+                ->select(['id', 'name', 'code']) // Select thêm cột code
+                ->where('status', ClassStatus::Active)
+                ->when(!empty($search), function (Builder $query) use ($search) {
+                    $query->where(function ($q) use ($search) {
+                        $q->where('name', 'ilike', "%{$search}%")
+                            ->orWhere('code', 'ilike', "%{$search}%");
+                    });
+                })
+                ->when(!empty($filters['exclude_id']), function (Builder $query) use ($filters) {
+                    $query->where('id', '!=', $filters['exclude_id']);
+                })
+                ->orderBy('id', 'DESC')
+                ->limit(10)
+                ->get()
+                ->mapWithKeys(function ($item) {
+                    return [$item->id => "{$item->name} - (Mã: {$item->code})"];
+                })
+                ->toArray();
+        });
+    }
+
+    /**
+     * Lấy tên lớp học theo ID
+     * @param mixed $id
+     * @return ServiceReturn
+     * @throws \Throwable
+     */
+    public function getLabelOption(mixed $id): ServiceReturn
+    {
+        return $this->execute(function () use ($id) {
+            if (empty($id)) {
+                return null;
+            }
+            $class = $this->classRepository->query()
+                ->select(['name', 'code'])
+                ->where('id', $id)
+                ->first();
+
+            return $class ? "{$class->name} - {$class->code}" : null;
+        });
     }
 }

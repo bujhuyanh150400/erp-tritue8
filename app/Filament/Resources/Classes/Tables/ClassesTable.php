@@ -9,6 +9,7 @@ use App\Filament\Components\CustomSelect;
 use App\Filament\Resources\Classes\Components\AddStudentToClassAction;
 use App\Filament\Resources\Classes\Components\ChangeClassStatusAction;
 use App\Filament\Resources\Classes\Components\ChangeTeacherAction;
+use App\Filament\Resources\Classes\Components\CreateScheduleTemplateAction;
 use App\Models\SchoolClass;
 use App\Repositories\ClassRepository;
 use App\Services\SubjectService;
@@ -130,47 +131,16 @@ class ClassesTable
             ], layout: FiltersLayout::AboveContent)
             ->recordActions([
                 ActionGroup::make([
-                    // 1. Xem chi tiết & Chỉnh sửa
+                    // Xem chi tiết & Chỉnh sửa
                     CommonAction::viewAction(),
-                    CommonAction::editAction(),
+                    // Thêm học sinh
                     AddStudentToClassAction::make(),
-
-
-                    // 2. Điểm danh & DS Học sinh (Chuyển hướng trang)
-//                    Action::make('attendance')->label('Điểm danh')->icon('heroicon-m-clipboard-document-check')->color('success')->url(fn ($record) => "#"), // Thay route thực tế
-
-//                    // 3. Nghiệp vụ trạng thái (Tạm ngưng / Kết thúc)
-//                    Action::make('pause')
-//                        ->label('Tạm ngưng')
-//                        ->icon('heroicon-m-pause-circle')
-//                        ->color('warning')
-//                        ->visible(fn ($record) => $record->status === ClassStatus::Active)
-//                        ->requiresConfirmation()
-//                        ->action(fn ($record, SchoolClassService $service) => $service->changeStatus($record, ClassStatus::Paused)),
-//
-//                    Action::make('finish')
-//                        ->label('Kết thúc lớp')
-//                        ->icon('heroicon-m-stop-circle')
-//                        ->color('danger')
-//                        ->visible(fn ($record) => in_array($record->status, [ClassStatus::Active, ClassStatus::Paused]))
-//                        ->requiresConfirmation()
-//                        ->action(fn ($record, SchoolClassService $service) => $service->changeStatus($record, ClassStatus::Finished)),
-//
-//                    // 4. Nhân bản (Clone)
-//                    Action::make('clone')
-//                        ->label('Nhân bản lớp học')
-//                        ->icon('heroicon-m-document-duplicate')
-//                        ->color('gray')
-//                        ->form([
-//                            TextInput::make('new_code')->label('Mã lớp mới')->required()->unique('classes', 'code'),
-//                            TextInput::make('new_name')->label('Tên lớp mới')->required(),
-//                        ])
-//                        ->action(function (SchoolClass $record, array $data, SchoolClassService $service) {
-//                            $service->cloneClass($record, $data['new_code'], $data['new_name']);
-//                            \Filament\Notifications\Notification::make()->success()->title('Nhân bản thành công')->send();
-//                        }),
+                    // Thay đổi GV
                     ChangeTeacherAction::make(),
+                    // Thay đổi trạng thái
                     ChangeClassStatusAction::make(),
+                    // Tạo lịch học cố định
+                    CreateScheduleTemplateAction::make(),
                 ])
             ]);
     }
