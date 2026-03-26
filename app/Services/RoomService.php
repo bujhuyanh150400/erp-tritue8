@@ -130,7 +130,8 @@ class RoomService extends BaseService implements SelectableServiceInterface
                 );
 
                 return ServiceReturn::success(
-                    message: 'Tạo phòng học thành công'
+                    message: 'Tạo phòng học thành công',
+                    data: $room,
                 );
             },
             useTransaction: true

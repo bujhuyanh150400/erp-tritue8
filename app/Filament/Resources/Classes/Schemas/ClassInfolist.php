@@ -4,6 +4,7 @@ namespace App\Filament\Resources\Classes\Schemas;
 
 use App\Constants\ClassStatus;
 use App\Constants\GradeLevel;
+use App\Filament\Resources\Classes\Components\ClassScheduleHistoryTable;
 use App\Filament\Resources\Classes\Components\ClassStudentListTable;
 use App\Filament\Resources\Teachers\TeacherResource;
 use Filament\Infolists\Components\TextEntry;
@@ -124,6 +125,13 @@ class ClassInfolist
                             ->iconPosition(IconPosition::Before)
                             ->schema([
                                 Livewire::make(ClassStudentListTable::class)
+                            ]),
+                        // Tab 3: Lịch sử buổi học
+                        Tab::make('Lịch sử buổi học')
+                            ->icon(Heroicon::Calendar)
+                            ->iconPosition(IconPosition::Before)
+                            ->schema([
+                                Livewire::make(ClassScheduleHistoryTable::class)
                             ]),
                     ])
             ]);
