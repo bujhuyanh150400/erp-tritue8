@@ -34,6 +34,8 @@ class CommonForm
             )
             ->validationMessages([
                 'unique' => 'Tên đăng nhập đã tồn tại, vui lòng thử lại.',
+                'required' => 'Vui lòng nhập tên đăng nhập.',
+                'min' => 'Tên đăng nhập phải có ít nhất :min ký tự.',
             ]);
     }
 

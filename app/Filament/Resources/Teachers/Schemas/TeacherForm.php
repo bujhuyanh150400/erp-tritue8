@@ -127,7 +127,10 @@ class TeacherForm
                                     ->label('Ngân hàng')
                                     ->required()
                                     ->searchable()
-                                    ->options(BankInfo::options()),
+                                    ->options(BankInfo::options())
+                                    ->validationMessages([
+                                        'required' => 'Vui lòng chọn ngân hàng.',
+                                    ]),
 
                                 TextInput::make('bank_account_number')
                                     ->label('Số tài khoản')
