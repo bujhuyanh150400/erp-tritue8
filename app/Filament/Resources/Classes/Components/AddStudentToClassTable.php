@@ -4,6 +4,8 @@ namespace App\Filament\Resources\Classes\Components;
 
 use App\Constants\Gender;
 use App\Constants\GradeLevel;
+use App\Helpers\FormatHelper;
+use App\Models\SchoolClass;
 use App\Models\Student;
 use App\Repositories\StudentRepository;
 use App\Services\ClassService;
@@ -39,18 +41,18 @@ class AddStudentToClassTable extends Component implements HasActions, HasSchemas
     use InteractsWithSchemas;
     use InteractsWithTable;
 
-    public int $classId;
+    public SchoolClass $class;
 
-    public function mount(int $classId): void
+    public function mount(SchoolClass $class): void
     {
-        $this->classId = $classId;
+        $this->class = $class;
     }
 
     public function table(Table $table): Table
     {
         return $table
             ->query(function (StudentRepository $studentRepository) {
-                return $studentRepository->getAvailableStudentsForClassQuery($this->classId);
+                return $studentRepository->getAvailableStudentsForClassQuery($this->class);
             })
             ->columns([
                 TextColumn::make('id_display')
@@ -87,10 +89,6 @@ class AddStudentToClassTable extends Component implements HasActions, HasSchemas
                             TextInput::make('keyword')
                                 ->placeholder('Tìm kiếm theo tên, ID, SĐT Phụ huynh,...')
                                 ->label('Tìm kiếm'),
-                            Select::make('grade_level')
-                                ->label('Khối')
-                                ->searchable()
-                                ->options(GradeLevel::options()),
                         ])
                         ->query(function (Builder $query, array $data, StudentRepository $studentRepo): Builder {
                             return $studentRepo->setFilters($query, $data);
@@ -108,6 +106,7 @@ class AddStudentToClassTable extends Component implements HasActions, HasSchemas
                     ->schema([
                         DatePicker::make('enrolled_at')
                             ->label('Ngày bắt đầu học')
+                            ->helperText("Ngày bắt đầu học không thể trước ngày khai giảng lớp học ({$this->class->start_at->format('d/m/Y')}).")
                             ->required()
                             ->default(now())
                             ->native(false)
@@ -116,7 +115,7 @@ class AddStudentToClassTable extends Component implements HasActions, HasSchemas
                         TextInput::make('fee_per_session')
                             ->label('Học phí tùy chỉnh / buổi')
                             ->numeric()
-                            ->helperText('Bỏ trống để dùng học phí gốc của lớp')
+                            ->helperText("Bỏ trống để dùng học phí gốc của lớp  (".FormatHelper::formatPrice($this->class->base_fee_per_session).") VNĐ)")
                             ->suffix('VNĐ'),
 
                         Textarea::make('note')
@@ -125,19 +124,8 @@ class AddStudentToClassTable extends Component implements HasActions, HasSchemas
                             ->rows(2),
                     ])
                     ->action(function (Collection $records, array $data, ClassService $service) {
-                        // Lấy lớp học theo ID
-                        $classResult = $service->findClassById($this->classId);
-                        if ($classResult->isError()) {
-                            Notification::make()
-                                ->danger()
-                                ->title('Lỗi')
-                                ->body($classResult->getMessage())
-                                ->send();
-                            return;
-                        }
-
                         $result = $service->addStudentsToClassroom(
-                            schoolClass: $classResult->getData(),
+                            schoolClass: $this->class,
                             students: $records,
                             data: $data
                         );

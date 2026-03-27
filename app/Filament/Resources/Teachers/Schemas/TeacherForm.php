@@ -31,19 +31,13 @@ class TeacherForm
     {
         return $schema
             ->components([
-                // THÔNG TIN TÀI KHOẢN
-                Section::make('Thông tin tài khoản')
-                    ->compact()
-                    ->schema([
-                        CommonForm::userNameInput(),
-                        CommonForm::passwordInput(),
-                    ]),
-
+                // Thông tin giáo viên
                 Tabs::make('Thông tin giáo viên')
                     ->tabs([
                         Tab::make('Thông tin cá nhân')
                             ->icon(Heroicon::User)
                             ->iconPosition(IconPosition::After)
+                            ->columns(2)
                             ->schema([
                                 TextInput::make('full_name')
                                     ->label('Họ và tên')
@@ -96,7 +90,6 @@ class TeacherForm
                                 TextInput::make('address')
                                     ->label('Địa chỉ')
                                     ->required()
-                                    ->columnSpanFull()
                                     ->validationMessages([
                                         'required' => 'Vui lòng nhập địa chỉ.',
                                     ]),
@@ -134,14 +127,26 @@ class TeacherForm
 
                                 TextInput::make('bank_account_number')
                                     ->label('Số tài khoản')
-                                    ->regex('/^[0-9]+$/')
+                                    ->required()
                                     ->validationMessages([
-                                        'regex' => 'Số tài khoản chỉ được chứa số.',
+                                        'required' => 'Vui lòng nhập số tài khoản.',
                                     ]),
 
                                 TextInput::make('bank_account_holder')
-                                    ->label('Chủ tài khoản'),
+                                    ->label('Chủ tài khoản')
+                                    ->required()
+                                    ->validationMessages([
+                                        'required' => 'Vui lòng nhập chủ tài khoản.',
+                                    ]),
                             ]),
+                    ]),
+
+                // THÔNG TIN TÀI KHOẢN
+                Section::make('Thông tin tài khoản')
+                    ->compact()
+                    ->schema([
+                        CommonForm::userNameInput(),
+                        CommonForm::passwordInput(),
                     ]),
             ]);
     }

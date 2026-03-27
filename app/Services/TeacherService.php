@@ -118,6 +118,7 @@ class TeacherService extends BaseService implements SelectableServiceInterface
         return $this->execute(function () use ($search, $filters) {
             return $this->teacherRepository->query()
                 ->when($search, fn($q) => $q->where('full_name', 'ilike', "%{$search}%"))
+                ->when(!empty($filters['exclude_id']), fn($q) => $q->where('id', '!=', $filters['exclude_id']))
                 ->orderBy('full_name')
                 ->where('status', EmployeeStatus::Active)
                 ->limit(10)

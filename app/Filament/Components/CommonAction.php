@@ -31,7 +31,7 @@ class CommonAction
     {
         return ViewAction::make()
             ->label($label)
-            ->color('primary')
+            ->color('blue')
             ->icon(Heroicon::Document);
     }
 

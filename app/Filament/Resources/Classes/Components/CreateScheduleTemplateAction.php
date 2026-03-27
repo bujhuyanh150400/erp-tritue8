@@ -13,6 +13,8 @@ use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TimePicker;
 use Filament\Notifications\Notification;
+use Filament\Schemas\Components\Grid;
+use Filament\Support\Enums\Size;
 use Filament\Support\Icons\Heroicon;
 
 class CreateScheduleTemplateAction
@@ -23,45 +25,58 @@ class CreateScheduleTemplateAction
             ->label('Tạo lịch học cố định')
             ->icon(Heroicon::CalendarDays)
             ->color('primary')
-            ->requiresConfirmation()
+            ->size(Size::ExtraLarge)
             ->modalHeading('Tạo mới lịch học cố định cho lớp')
             ->schema([
-                Select::make('day_of_week')
-                    ->label('Thứ trong tuần')
-                    ->options(DayOfWeek::class)
-                    ->required()
-                    ->native(false),
+               Grid::make()->schema([
+                   Select::make('days_of_week')
+                       ->label('Thứ trong tuần')
+                       ->multiple()
+                       ->options(DayOfWeek::class)
+                       ->required()
+                       ->columnSpanFull()
+                       ->native(false),
 
-                TimePicker::make('start_time')
-                    ->label('Giờ bắt đầu')
-                    ->native(false)
-                    ->required(),
+                   TimePicker::make('start_time')
+                       ->label('Giờ bắt đầu')
+                       ->required(),
 
-                TimePicker::make('end_time')
-                    ->label('Giờ kết thúc')
-                    ->native(false)
-                    ->required(),
+                   TimePicker::make('end_time')
+                       ->label('Giờ kết thúc')
+                       ->required(),
 
-                CustomSelect::make('room_id')
-                    ->label('Phòng học')
-                    ->getOptionSelectService(RoomService::class)
-                    ->required(),
+                   CustomSelect::make('room_id')
+                       ->label('Phòng học')
+                       ->getOptionSelectService(RoomService::class)
+                       ->required(),
 
-                CustomSelect::make('teacher_id')
-                    ->label('Giáo viên')
-                    ->getOptionSelectService(TeacherService::class)
-                    ->helperText("(Bỏ trống để dùng GV mặc định của lớp)"),
+                   CustomSelect::make('teacher_id')
+                       ->label('Giáo viên')
+                       ->serviceFilters(function (SchoolClass $record) {
+                           return ['exclude_id' => $record->teacher_id];
+                       })
+                       ->getOptionSelectService(TeacherService::class)
+                       ->helperText("(Bỏ trống để dùng GV mặc định của lớp)"),
 
-                DatePicker::make('start_date')
-                    ->label('Ngày bắt đầu áp dụng')
-                    ->default(now())
-                    ->native(false)
-                    ->required(),
+                   DatePicker::make('start_date')
+                       ->label('Ngày bắt đầu áp dụng')
+                       ->helperText(function (SchoolClass $record) {
+                           return "Ngày bắt đầu học không thể trước ngày khai giảng lớp học ({$record->start_at->format('d/m/Y')}).";
+                       })
+                       ->default(now())
+                       ->native(false)
+                       ->required(),
 
-                DatePicker::make('end_date')
-                    ->label('Ngày kết thúc (Tùy chọn)')
-                    ->native(false)
-                    ->helperText('Để trống để vô thời hạn'),
+                   DatePicker::make('end_date')
+                       ->label('Ngày kết thúc (Tùy chọn)')
+                       ->native(false)
+                       ->helperText(function (SchoolClass $record) {
+                           if (!empty($record->end_at)) {
+                               return "Ngày kết thúc học không thể sau ngày bế giảng lớp học ({$record->end_at->format('d/m/Y')}), Để trống sẽ tự tạo đến hết thời gian bế giảng.";
+                           }
+                           return "Để trống sẽ tự tạo vô thời hạn.";
+                       }),
+               ])
             ])
             ->action(function (SchoolClass $record, array $data, ClassScheduleService $scheduleService) {
                 // Determine teacher
