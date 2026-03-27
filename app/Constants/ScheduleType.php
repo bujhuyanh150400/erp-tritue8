@@ -35,6 +35,16 @@ enum ScheduleType: int implements HasLabel
         };
     }
 
+    public function colorFilament(): string
+    {
+        return match($this) {
+            self::Main    => 'blue',
+            self::Makeup  => 'orange',
+            self::Extra   => 'purple',
+            self::Holiday => 'red',
+            default => 'gray',
+        };
+    }
     /**
      * Lấy tất cả các loại lịch học và màu của chúng
      * @return array

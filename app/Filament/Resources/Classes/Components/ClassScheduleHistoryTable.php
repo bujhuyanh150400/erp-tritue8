@@ -7,17 +7,22 @@ use App\Constants\ScheduleStatus;
 use App\Constants\ScheduleType;
 use App\Models\ScheduleInstance;
 use App\Models\SchoolClass;
+use App\Repositories\ScheduleInstanceRepository;
 use Filament\Actions\Action;
 use Filament\Actions\Concerns\InteractsWithActions;
 use Filament\Actions\Contracts\HasActions;
+use Filament\Forms\Components\DatePicker;
 use Filament\Schemas\Concerns\InteractsWithSchemas;
 use Filament\Schemas\Contracts\HasSchemas;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Concerns\InteractsWithTable;
 use Filament\Tables\Contracts\HasTable;
+use Filament\Tables\Enums\FiltersLayout;
+use Filament\Tables\Filters\Filter;
 use Filament\Tables\Table;
 use Filament\Support\Icons\Heroicon;
 use Illuminate\Contracts\View\View;
+use Illuminate\Database\Eloquent\Builder;
 use Livewire\Component;
 
 class ClassScheduleHistoryTable extends Component implements HasActions, HasSchemas, HasTable
@@ -31,12 +36,25 @@ class ClassScheduleHistoryTable extends Component implements HasActions, HasSche
     public function table(Table $table): Table
     {
         return $table
-            ->query(
-                ScheduleInstance::query()
+            ->query(function (ScheduleInstanceRepository $instanceRepository) {
+                return $instanceRepository->query()
                     ->where('class_id', $this->record->id)
-                    ->with(['room', 'teacher', 'attendanceSession'])
-                    ->orderBy('date', 'desc')
-            )
+                    ->with([
+                        'room',
+                        'teacher',
+                        'attendanceSession' => function ($query) {
+                            $query->withCount([
+                                'attendanceRecords as present_count' => function ($q) {
+                                    $q->whereIn('status', [
+                                        AttendanceStatus::Present->value,
+                                        AttendanceStatus::Late->value,
+                                    ]);
+                                }
+                            ]);
+                        }
+                    ])
+                    ->orderBy('date', 'desc');
+            })
             ->columns([
                 TextColumn::make('date')
                     ->label('Ngày học')
@@ -47,6 +65,7 @@ class ClassScheduleHistoryTable extends Component implements HasActions, HasSche
                 TextColumn::make('schedule_type')
                     ->label('Loại')
                     ->badge()
+                    ->color(fn (ScheduleType $state) => $state->colorFilament())
                     ->formatStateUsing(fn (ScheduleType $state) => $state->label()),
 
                 TextColumn::make('status')
@@ -54,7 +73,7 @@ class ClassScheduleHistoryTable extends Component implements HasActions, HasSche
                     ->badge()
                     ->formatStateUsing(fn (ScheduleStatus $state) => $state->label())
                     ->color(fn (ScheduleStatus $state) => match ($state) {
-                         ScheduleStatus::Upcoming => 'info',
+                        ScheduleStatus::Upcoming => 'info',
                         ScheduleStatus::Cancelled => 'danger',
                         ScheduleStatus::Completed => 'success',
                         default => 'gray',
@@ -68,27 +87,40 @@ class ClassScheduleHistoryTable extends Component implements HasActions, HasSche
                     ->label('Giáo viên')
                     ->placeholder('Chưa chọn GV'),
 
+                TextColumn::make('attendanceSession.present_count')
+                    ->label('Số HS có mặt')
+                    ->badge()
+                    ->color('success')
+                    ->alignCenter()
+                    ->default(0),
+
                 TextColumn::make('attendanceSession.general_note')
                     ->label('Ghi chú')
                     ->placeholder('---')
                     ->wrap(),
 
-                TextColumn::make('attendance_count')
-                    ->label('Số HS có mặt')
-                    ->state(function (ScheduleInstance $record) {
-                        if (!$record->attendanceSession) return 0;
-
-                        return $record->attendanceSession->attendanceRecords()
-                            ->whereIn('status', [
-                                AttendanceStatus::Present->value,
-                                AttendanceStatus::Late->value,
-                            ])
-                            ->count();
-                    })
-                    ->badge()
-                    ->color('success')
-                    ->alignCenter(),
             ])
+            ->filters(
+                filters: [
+                    Filter::make('filters')
+                        ->columns(5)
+                        ->columnSpanFull()
+                        ->schema([
+                            DatePicker::make('start_date')
+                                ->label('Từ ngày')
+                                ->format('d/m/Y'),
+                            DatePicker::make('end_date')
+                                ->label('Đến ngày')
+                                ->format('d/m/Y'),
+                        ])
+                        ->query(function (Builder $query, array $data): Builder {
+                            return $query
+                                ->when($data['start_date'], fn ($query) => $query->where('date', '>=', $data['start_date']))
+                                ->when($data['end_date'], fn ($query) => $query->where('date', '<=', $data['end_date']));
+                        }),
+                ],
+                layout: FiltersLayout::AboveContent
+            )
             ->recordActions([
                 // 1. Xem điểm danh / Bắt đầu điểm danh
                 Action::make('view_attendance')

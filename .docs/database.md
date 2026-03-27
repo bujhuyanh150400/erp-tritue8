@@ -314,13 +314,13 @@
     - class_id (unsigned bigint) - ID lớp học, khóa ngoại tham chiếu đến classes.id
     - teacher_id (unsigned bigint) - ID giáo viên, khóa ngoại tham chiếu đến teachers.id
     - session_date (date) - Ngày học
-    - lesson_content (text) - Nội dung bài học
-    - homework (text) - BTVN
-    - next_session_note (text) - Nhắc buổi sau
-    - general_note (text) - Ghi chú chung
-    - status (unsigned tinyint) - Trạng thái, lưu trong AttendanceSessionStatus
-    - completed_at (datetime) - Thời gian hoàn thành
-    - locked_at (datetime) - Thời gian chốt tháng
+    - lesson_content (text, nullable) - Nội dung bài học
+    - homework (text, nullable) - BTVN (chỉ mang tính chất note)
+    - next_session_note (text, nullable) - Nhắc buổi sau
+    - general_note (text, nullable) - Ghi chú chung
+    - status (unsigned tinyint default 0) - Trạng thái, lưu trong AttendanceSessionStatus
+    - completed_at (datetime, nullable) - Thời gian hoàn thành
+    - locked_at (datetime, nullable) - Thời gian chốt tháng
     - created_at (datetime not null default current_timestamp) - Thời gian tạo
     - updated_at (datetime not null default current_timestamp) - Thời gian cập nhật
 
