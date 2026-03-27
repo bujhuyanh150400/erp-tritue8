@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Students\Components;
 
+use App\Constants\AttendanceStatus;
 use App\Models\Student;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -38,6 +39,9 @@ class StudentMonthlyReport extends Component
 
         foreach ($enrollments as $enr) {
             // 2. Thống kê tháng
+            $present = AttendanceStatus::Present->value;
+            $late = AttendanceStatus::Late->value;
+
             $stats = DB::table('attendance_records as ar')
                 ->join('attendance_sessions as sess', 'ar.session_id', '=', 'sess.id')
                 ->leftJoin('scores as sc', 'sc.attendance_record_id', '=', 'ar.id')
@@ -46,9 +50,10 @@ class StudentMonthlyReport extends Component
                 ->whereBetween('sess.session_date', [$monthStart, $monthEnd])
                 ->select(
                     DB::raw('COUNT(ar.id) as tong_buoi'),
-                    DB::raw("COUNT(ar.id) FILTER (WHERE ar.status IN ('present', 'late')) as co_mat"),
+                    DB::raw("COUNT(ar.id) FILTER (WHERE ar.status IN ($present, $late)) as co_mat"),
                     DB::raw('ROUND(AVG(sc.score), 2) as diem_tb')
-                )->first();
+                )
+                ->first();
 
             // 3. Bảng điểm
             $scores = DB::table('scores as sc')

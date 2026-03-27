@@ -86,4 +86,9 @@ class AttendanceSession extends Model
     {
         return ! $this->isLocked();
     }
+
+    public function attendanceSession()
+    {
+        return $this->hasOne(AttendanceSession::class, 'schedule_instance_id');
+    }
 }

@@ -91,30 +91,48 @@ class StaffForm
                         Select::make('role_type')
                             ->label('Chức vụ')
                             ->options(StaffRoleType::options())
-                            ->required(),
+                            ->required()
+                            ->validationMessages([
+                                'required' => 'Vui lòng chọn chức vụ.'
+                            ]),
+
 
                         Select::make('status')
                             ->label('Trạng thái')
                             ->options(EmployeeStatus::options())
-                            ->required(),
+                            ->required()
+                            ->validationMessages([
+                                'required' => 'Vui lòng chọn trạng thái.'
+                            ]),
+
+
 
                         DatePicker::make('joined_at')
                             ->label('Ngày vào làm')
-                            ->required(),
+                            ->required()
+                            ->validationMessages([
+                                'required' => 'Vui lòng chọn ngày vào làm.'
+                            ]),
 
                         Select::make('bank_bin')
                             ->label('Ngân hàng')
                             ->required()
                             ->searchable()
-                            ->options(BankInfo::options()),
+                            ->options(BankInfo::options())
+                            ->validationMessages([
+                                'required' => 'Vui lòng chọn ngân hàng.'
+                            ]),
 
 
                         TextInput::make('bank_account_number')
                             ->label('Số tài khoản')
-                            ->regex('/^[0-9]+$/'),
+                            ->regex('/^[0-9]+$/', 'Số tài khoản phải là số.'),
+
+
 
                         TextInput::make('bank_account_holder')
                             ->label('Chủ tài khoản'),
+
                     ]),
             ]);
     }

@@ -3,6 +3,7 @@
 
 namespace App\Filament\Resources\Teachers\Schemas;
 
+use App\Constants\ClassStatus;
 use App\Core\Helpers\BankInfo;
 use Filament\Infolists\Components\IconEntry;
 use Filament\Infolists\Components\TextEntry;
@@ -13,6 +14,7 @@ use Filament\Schemas\Schema;
 use Filament\Support\Enums\TextSize;
 use Filament\Support\Icons\Heroicon;
 use App\Constants\EmployeeStatus;
+use Filament\Infolists\Components\RepeatableEntry;
 
 class TeacherInfolist
 {
@@ -87,51 +89,90 @@ class TeacherInfolist
                             ->schema([
                                 Section::make('Tài khoản ngân hàng')
                                     ->schema([
-                                        Grid::make(2)->schema([
+                                        Grid::make([
+                                            'md' => 3,
+                                        ])->schema([
 
                                             TextEntry::make('bank_bin')
                                                 ->label('Ngân hàng')
+                                                ->badge()
+                                                ->color('warning')
+                                                ->icon('heroicon-m-building-library')
                                                 ->formatStateUsing(function ($state) {
                                                     $bank = BankInfo::getBankByBin($state);
-
-                                                    if (!$bank) return '-';
-
-                                                    return "{$bank['short_name']} ({$bank['code']})";
+                                                    return $bank['short_name'] ?? '-';
+                                                })
+                                                ->tooltip(function ($state) {
+                                                    $bank = BankInfo::getBankByBin($state);
+                                                    return $bank['name'] ?? '';
                                                 }),
 
                                             TextEntry::make('bank_account_holder')
                                                 ->label('Chủ tài khoản')
+                                                ->weight('bold')
+                                                ->formatStateUsing(fn ($state) => strtoupper($state))
                                                 ->placeholder('-'),
 
                                             TextEntry::make('bank_account_number')
                                                 ->label('Số tài khoản')
+                                                ->badge()
+                                                ->color('gray')
                                                 ->copyable()
+                                                ->copyMessage('Đã copy')
+                                                ->formatStateUsing(fn ($state) =>
+                                                chunk_split($state, 4, ' ')
+                                                )
                                                 ->placeholder('-'),
 
                                         ]),
-                                ]),
-                        ]),
+                                    ])
+                                    ->columnSpanFull(),
+                            ]),
 
                         Tabs\Tab::make('Lớp đang dạy')
                             ->icon('heroicon-m-academic-cap')
                             ->schema([
                                 Section::make('Danh sách lớp')
                                     ->schema([
-                                        TextEntry::make('classes')
-                                            ->label('')
-                                            ->state(function ($record) {
-                                                return \DB::table('classes')
-                                                    ->join('subjects', 'classes.subject_id', '=', 'subjects.id')
-                                                    ->where('classes.teacher_id', $record->id)
-                                                    ->where('classes.status', 1)
-                                                    ->selectRaw("classes.name || ' - ' || subjects.name as text")
-                                                    ->pluck('text')
-                                                    ->implode("\n");
-                                            })
+
+                                        RepeatableEntry::make('classes')
+                                            ->label('Lớp đang dạy')
+                                            ->state(fn ($record) =>
+                                            $record->classes()
+                                                ->with('subject')
+                                                ->where('status', ClassStatus::Active->value)
+                                                ->get()
+                                            )
+                                            ->schema([
+                                                TextEntry::make('name')
+                                                    ->label('Lớp')
+                                                    ->hiddenLabel()
+                                                    ->badge()
+                                                    ->color('primary')
+                                                    ->weight('bold'),
+
+                                                TextEntry::make('subject.name')
+                                                    ->label('Môn')
+                                                    ->hiddenLabel()
+                                                    ->badge()
+                                                    ->color('black'),
+
+                                                TextEntry::make('status')
+                                                    ->label('Trạng thái')
+                                                    ->hiddenLabel()
+                                                    ->badge()
+                                                    ->color(fn ($state) => match ($state) {
+                                                        ClassStatus::Active => 'success',
+                                                        ClassStatus::Suspended => 'warning',
+                                                        ClassStatus::Ended => 'gray',
+                                                    })
+                                                    ->formatStateUsing(fn ($state) => $state->label())
+                                            ])
+                                            ->columns(3)
                                             ->columnSpanFull(),
+
                                     ]),
                             ]),
-
                         // ==========================================
                         // TAB 3: TỔNG QUAN
                         // ==========================================

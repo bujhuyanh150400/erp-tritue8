@@ -34,18 +34,20 @@ class CreateRoom extends CreateRecord
         ];
     }
 
-    protected function handleRecordCreation(array $data): \Illuminate\Database\Eloquent\Model
+    protected function handleRecordCreation(array $data): Model
     {
         $result = $this->roomService->createRoom($data);
-        if ($result->isError()) {
-            // Hiển thị thông báo Toast đỏ góc màn hình
+
+        if ($result->isError() || !$result->getData()) {
             Notification::make()
                 ->danger()
                 ->title('Không thể tạo phòng học')
-                ->body($result->getMessage())
+                ->body($result->getMessage() ?: 'Lỗi không xác định')
                 ->send();
             throw new Halt();
         }
+
+        // chắc chắn return 1 Eloquent Model
         return $result->getData();
     }
 

@@ -57,23 +57,36 @@ class StudentForm
                                         }
                                         $slug = Str::slug($state, '');
                                         $set('user_name', 'hs_' . $slug);
-                                    }),
+                                    })
+                                    ->validationMessages([
+                                        'required' => 'Vui lòng nhập họ và tên'
+                                    ]),
                                 DatePicker::make('dob')
                                     ->label('Ngày sinh')
                                     ->required()
-                                    ->displayFormat('d/m/Y'),
+                                    ->displayFormat('d/m/Y')
+                                    ->validationMessages([
+                                        'required' => 'Vui lòng nhập ngày sinh'
+                                    ]),
+
 
                                 Select::make('gender')
                                     ->label('Giới tính')
                                     ->required()
                                     ->searchable()
-                                    ->options(Gender::options()), // Hoặc dùng Enum: Gender::class
+                                    ->options(Gender::options())
+                                    ->validationMessages([
+                                        'required' => 'Vui lòng chọn giới tính'
+                                    ]),
 
                                 Select::make('grade_level')
                                     ->label('Khối')
                                     ->required()
                                     ->searchable()
-                                    ->options(GradeLevel::options()),
+                                    ->options(GradeLevel::options())
+                                    ->validationMessages([
+                                        'required' => 'Vui lòng chọn khối'
+                                    ]),
 
                             ]),
                         Tab::make('Thông tin phụ huynh')
@@ -82,7 +95,10 @@ class StudentForm
                             ->schema([
                                 TextInput::make('parent_name')
                                     ->label('Tên phụ huynh')
-                                    ->required(),
+                                    ->required()
+                                    ->validationMessages([
+                                        'required' => 'Vui lòng nhập tên phụ huynh'
+                                    ]),
 
                                 TextInput::make('parent_phone')
                                     ->label('SĐT Phụ huynh')
@@ -91,12 +107,17 @@ class StudentForm
                                     ->regex('/^[0-9]{10,11}$/')
                                     ->validationMessages([
                                         'regex' => 'Số điện thoại phải có 10-11 chữ số.',
+                                        'required' => 'Vui lòng nhập số điện thoại'
                                     ]),
 
                                 TextInput::make('address')
                                     ->label('Địa chỉ')
                                     ->required()
-                                    ->columnSpanFull(),
+                                    ->columnSpanFull()
+                                    ->validationMessages([
+                                        'required' => 'Vui lòng nhập địa chỉ'
+                                    ]),
+
 
                                 Textarea::make('note')
                                     ->label('Ghi chú')
