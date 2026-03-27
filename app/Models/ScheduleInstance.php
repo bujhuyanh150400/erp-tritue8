@@ -56,6 +56,12 @@ class ScheduleInstance extends Model
         return $this->belongsTo(SchoolClass::class, 'class_id');
     }
 
+    /** The enrollments for this class. */
+    public function classEnrollments(): BelongsTo
+    {
+        return $this->belongsTo(ClassEnrollment::class, 'class_id','class_id');
+    }
+
     public function template(): BelongsTo
     {
         return $this->belongsTo(ClassScheduleTemplate::class, 'template_id');

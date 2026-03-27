@@ -3,8 +3,9 @@
 namespace App\Constants;
 
 use App\Core\Traits\EnumHelper;
+use Filament\Support\Contracts\HasLabel;
 
-enum ScheduleStatus: int
+enum ScheduleStatus: int implements HasLabel
 {
     use EnumHelper;
 

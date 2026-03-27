@@ -3,8 +3,10 @@
 namespace App\Constants;
 
 use App\Core\Traits\EnumHelper;
+use Filament\Support\Colors\Color;
+use Filament\Support\Contracts\HasLabel;
 
-enum ScheduleType: int
+enum ScheduleType: int implements HasLabel
 {
     use EnumHelper;
     case Main    = 0; // Lịch chính
@@ -25,10 +27,27 @@ enum ScheduleType: int
     public function color(): string
     {
         return match($this) {
-            self::Main    => 'blue',
-            self::Makeup  => 'orange',
-            self::Extra   => 'purple',
-            self::Holiday => 'red',
+            self::Main    => Color::Blue[200],
+            self::Makeup  => Color::Orange[200],
+            self::Extra   => Color::Purple[200],
+            self::Holiday => Color::Red[200],
+            default => Color::Gray[200],
         };
+    }
+
+    /**
+     * Lấy tất cả các loại lịch học và màu của chúng
+     * @return array
+     */
+    public static function getLabelsAndColors(): array
+    {
+        return array_reduce(self::cases(), function (array $carry, ScheduleType $item) {
+            $carry[$item->value] = [
+                'label' => $item->label(),
+                'color' => $item->color(),
+            ];
+            return $carry;
+        }, []);
+
     }
 }

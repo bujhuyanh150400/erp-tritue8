@@ -2,10 +2,12 @@
 
 namespace App\Repositories;
 
+use App\Constants\ClassStatus;
 use App\Constants\DayOfWeek;
 use App\Constants\ScheduleStatus;
 use App\Core\Repository\BaseRepository;
 use App\Models\ScheduleInstance;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -82,6 +84,12 @@ class ScheduleInstanceRepository extends BaseRepository
             ->exists();
     }
 
+    /**
+     * Kiểm tra xem GV có xung đột thời gian với Lớp mới hay không
+     * @param int $teacherId
+     * @param int $classId
+     * @return Collection
+     */
     public function getTeacherScheduleConflicts(int $teacherId, int $classId): Collection
     {
         return $this->model->newQuery()
@@ -109,6 +117,12 @@ class ScheduleInstanceRepository extends BaseRepository
             ->get();
     }
 
+    /**
+     * Cập nhật GV cho các lịch sắp đến
+     * @param int $classId
+     * @param int $teacherId
+     * @return int
+     */
     public function updateTeacherForFutureSchedules(int $classId, int $teacherId): int
     {
         return $this->query()
@@ -120,6 +134,11 @@ class ScheduleInstanceRepository extends BaseRepository
             ]);
     }
 
+    /**
+     * Hủy các lịch sắp đến của lớp
+     * @param int $classId
+     * @return int
+     */
     public function cancelFutureSchedulesByClassId(int $classId): int
     {
         return $this->query()
@@ -248,5 +267,50 @@ class ScheduleInstanceRepository extends BaseRepository
             })
             ->orderBy('effective_from', 'desc')
             ->value('salary_per_session');
+    }
+
+
+    /**
+     * Lấy lịch học cho calendar
+     * @param Carbon $start
+     * @param Carbon $end
+     * @param array $filters
+     * @return Collection
+     */
+    public function getScheduleInstancesForCalendar(Carbon $start, Carbon $end, array $filters = []): Collection    {
+        $query = $this->model->newQuery()
+            ->with(['class', 'teacher', 'room', 'class.subject'])
+            ->withCount('classEnrollments as si_so')
+            ->where('date', '>=', $start->toDateString())
+            ->where('date', '<=', $end->toDateString());
+
+        if (!empty($filters['teacher_id'])) {
+            $query->where('teacher_id', $filters['teacher_id']);
+        }
+        if (!empty($filters['room_id'])) {
+            $query->where('room_id', $filters['room_id']);
+        }
+        if (!empty($filters['schedule_type'])) {
+            $query->where('schedule_type', $filters['schedule_type']);
+        }
+        if (!empty($filters['status'])) {
+            $query->where('status', $filters['status']);
+        }
+        if (!empty($filters['subject_id'])) {
+            $query->whereHas('class', function ($classQuery) use ($filters) {
+                $classQuery->where('subject_id', $filters['subject_id']);
+            });
+        }
+        if (!empty($filters['grade_level'])) {
+            $query->whereHas('class', function ($classQuery) use ($filters) {
+                $classQuery->where('grade_level', $filters['grade_level']);
+            });
+        }
+        if ($filters['active_classes_only'] ?? false) {
+            $query->whereHas('class', function ($classQuery) use ($filters) {
+                $classQuery->where('status', ClassStatus::Active);
+            });
+        }
+        return $query->get();
     }
 }

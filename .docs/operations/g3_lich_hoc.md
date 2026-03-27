@@ -146,6 +146,22 @@ Hover vào block → popup chi tiết đầy đủ
 ### Popup chi tiết buổi học
 
 ```
+- Tooltip
+    + Lớp
+    + Môn học
+    + Thời gian
+    + GV hiện tại
+    + Phòng học
+    + Sĩ số
+- Hiển thị chi tiết modal:
+    + Lớp
+    + Môn học
+    + Thời gian
+    + GV hiện tại
+    + Phòng học
+    + Sĩ số
+    + Ghi chú
+    + Ngày học bù (nếu có)
 → SELECT
     si.*,
     classes.name, classes.code,
