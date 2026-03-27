@@ -124,14 +124,14 @@ class ClassInfolist
                             ->icon(Heroicon::UserGroup)
                             ->iconPosition(IconPosition::Before)
                             ->schema([
-                                Livewire::make(ClassStudentListTable::class)
+                                Livewire::make(ClassStudentListTable::class)->lazy()
                             ]),
                         // Tab 3: Lịch sử buổi học
                         Tab::make('Lịch sử buổi học')
                             ->icon(Heroicon::Calendar)
                             ->iconPosition(IconPosition::Before)
                             ->schema([
-                                Livewire::make(ClassScheduleHistoryTable::class)
+                                Livewire::make(ClassScheduleHistoryTable::class)->lazy()
                             ]),
                     ])
             ]);

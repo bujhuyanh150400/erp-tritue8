@@ -4,7 +4,6 @@ namespace App\Providers\Filament;
 
 
 use App\Filament\Auth\Login;
-use App\Filament\Widgets\CalendarWidget;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
@@ -37,6 +36,10 @@ class AdminPanelProvider extends PanelProvider
             ->login(Login::class)
             ->colors([
                 'primary' => Color::Amber,
+                'blue'    => Color::Blue,
+                'orange'  => Color::Orange,
+                'purple'  => Color::Purple,
+                'red'     => Color::Red,
             ])
             ->brandLogo(new HtmlString('
                <div style="display: flex; align-items: center; gap: 8px;">
@@ -60,7 +63,6 @@ class AdminPanelProvider extends PanelProvider
             ->discoverWidgets(in: app_path('Filament/Widgets'), for: 'App\Filament\Widgets')
             ->widgets([
                 AccountWidget::class,
-                CalendarWidget::class,
             ])
             ->middleware([
                 EncryptCookies::class,
