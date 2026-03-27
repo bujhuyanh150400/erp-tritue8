@@ -10,24 +10,33 @@ class CreateAttendanceSession extends CreateRecord
 {
     protected static string $resource = AttendanceSessionResource::class;
 
-    // MUST be public
+    /**
+     * Public title required by Filament
+     */
     public function getTitle(): string
     {
         return 'Bắt đầu điểm danh';
     }
 
+    /**
+     * Giữ schedule_instance_id để sử dụng trước khi insert
+     */
+    public ?string $scheduleInstanceId = null;
+
+    /**
+     * Mount: điền sẵn các trường form từ ScheduleInstance nếu có query param
+     */
     public function mount(): void
     {
         parent::mount();
 
-        $scheduleInstanceId = request()->query('schedule_instance_id');
-        if ($scheduleInstanceId) {
-            $scheduleInstance = ScheduleInstance::find($scheduleInstanceId);
+        $this->scheduleInstanceId = request()->query('schedule_instance_id');
+
+        if ($this->scheduleInstanceId) {
+            $scheduleInstance = ScheduleInstance::find($this->scheduleInstanceId);
 
             if ($scheduleInstance) {
-                // Điền sẵn các trường cần thiết vào form
                 $this->form->fill([
-                    'schedule_instance_id' => $scheduleInstance->id,
                     'class_id' => $scheduleInstance->class_id,
                     'teacher_id' => $scheduleInstance->teacher_id,
                     'room_id' => $scheduleInstance->room_id,
@@ -37,5 +46,17 @@ class CreateAttendanceSession extends CreateRecord
                 ]);
             }
         }
+    }
+
+    /**
+     * Trước khi tạo record, đảm bảo schedule_instance_id được điền
+     */
+    protected function mutateFormDataBeforeCreate(array $data): array
+    {
+        if ($this->scheduleInstanceId) {
+            $data['schedule_instance_id'] = $this->scheduleInstanceId;
+        }
+
+        return $data;
     }
 }

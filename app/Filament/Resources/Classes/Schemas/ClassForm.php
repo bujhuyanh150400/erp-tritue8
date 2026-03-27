@@ -73,7 +73,7 @@ class ClassForm
                                     return false;
                                 })
                                 ->helperText(fn (Select $component) => $component->isDisabled()
-                                    ? '🔒 Không thể đổi môn học vì lớp đã có buổi học được tạo.'
+                                    ?  'Không thể đổi môn học vì lớp đã có buổi học được tạo.'
                                     : ''
                                 ),
 
