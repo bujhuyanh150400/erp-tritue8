@@ -5,9 +5,12 @@ namespace App\Filament\Resources\Teachers\Schemas;
 
 use App\Constants\ClassStatus;
 use App\Core\Helpers\BankInfo;
+use App\Filament\Resources\Teachers\Components\TeacherKpiOverview;
+use Filament\Forms\Components\Placeholder;
 use Filament\Infolists\Components\IconEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Grid;
+use Filament\Schemas\Components\Livewire;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Tabs;
 use Filament\Schemas\Schema;
@@ -77,22 +80,15 @@ class TeacherInfolist
                                                 ->label('Địa chỉ')
                                                 ->icon(Heroicon::MapPin)
                                                 ->columnSpanFull(),
-                                        ]),
-                                ])
-                            ]),
-
-                        // ==========================================
-                        // TAB 2: THÔNG TIN NGÂN HÀNG
-                        // ==========================================
-                        Tabs\Tab::make('Thông tin ngân hàng')
-                            ->icon('heroicon-m-credit-card')
-                            ->schema([
-                                Section::make('Tài khoản ngân hàng')
-                                    ->schema([
-                                        Grid::make([
-                                            'md' => 3,
-                                        ])->schema([
-
+                                            Grid::make()
+                                                ->schema([
+                                                    // fields bank
+                                                ])
+                                                ->extraAttributes([
+                                                    'class' => 'border-t pt-4 mt-2',
+                                                ]),
+                                            // BANK GỘP TRONG HỒ SƠ (gọn UI hơn)
+                                            
                                             TextEntry::make('bank_bin')
                                                 ->label('Ngân hàng')
                                                 ->badge()
@@ -119,15 +115,15 @@ class TeacherInfolist
                                                 ->color('gray')
                                                 ->copyable()
                                                 ->copyMessage('Đã copy')
-                                                ->formatStateUsing(fn ($state) =>
-                                                chunk_split($state, 4, ' ')
-                                                )
+                                                ->formatStateUsing(fn ($state) => chunk_split($state, 4, ' '))
                                                 ->placeholder('-'),
-
                                         ]),
-                                    ])
-                                    ->columnSpanFull(),
+                                ]),
                             ]),
+
+                        // ==========================================
+                        // TAB 2: THÔNG TIN NGÂN HÀNG
+                        // ==========================================
 
                         Tabs\Tab::make('Lớp đang dạy')
                             ->icon('heroicon-m-academic-cap')
@@ -173,8 +169,18 @@ class TeacherInfolist
 
                                     ]),
                             ]),
+
                         // ==========================================
-                        // TAB 3: TỔNG QUAN
+                        // TAB 4: HIỆU SUẤT (KPI)
+                        // ==========================================
+                        Tabs\Tab::make('Hiệu suất (KPI)')
+                            ->icon('heroicon-m-presentation-chart-line')
+                            ->schema([
+                                Livewire::make(TeacherKpiOverview::class)
+                            ]),
+
+                        // ==========================================
+                        // TAB 5: TỔNG QUAN
                         // ==========================================
                         Tabs\Tab::make('Tổng quan')
                             ->icon('heroicon-m-chart-bar')
