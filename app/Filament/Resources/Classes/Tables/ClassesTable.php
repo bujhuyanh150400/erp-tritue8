@@ -22,6 +22,7 @@ use Filament\Tables\Enums\FiltersLayout;
 use Filament\Tables\Filters\Filter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Carbon;
 
 class ClassesTable
 {
@@ -54,38 +55,14 @@ class ClassesTable
                     ->badge()
                     ->color('info'),
 
-                TextColumn::make('base_fee_per_session')
-                    ->label('Học phí')
-                    ->money('VND')
-                    ->sortable(),
-
-                TextColumn::make('teacher_salary_per_session')
-                    ->label('Lương GV')
-                    ->money('VND')
-                    ->sortable(),
-
-                TextColumn::make('schedule')
-                    ->label('Lịch học')
-                    ->getStateUsing(function (SchoolClass $record) {
-                        $templates = $record->scheduleTemplates;
-                        if ($templates->isEmpty()) return 'Chưa có lịch';
-
-                        // Gom nhóm theo Giờ học (ví dụ: '17:00-19:00' => ['T2', 'T4'])
-                        $grouped = [];
-                        foreach ($templates as $t) {
-                            $timeKey = \Carbon\Carbon::parse($t->start_time)->format('H:i') . ' - ' . \Carbon\Carbon::parse($t->end_time)->format('H:i');
-                            $grouped[$timeKey][] = $t->day_of_week->label();
-                        }
-
-                        // Format thành chuỗi "T2, T4 | 17:00 - 19:00"
-                        $output = [];
-                        foreach ($grouped as $time => $days) {
-                            $output[] = implode(', ', $days) . ' | ' . $time;
-                        }
-                        return implode('<br>', $output);
-                    })
-                    ->html()
-                    ->wrap(),
+                TextColumn::make('start_at')
+                    ->label('Thời gian')
+                    ->alignCenter()
+                    ->formatStateUsing(function (SchoolClass $record) {
+                        $startDate = $record->start_at ? Carbon::parse($record->start_at)->format('d/m/Y') : 'Chưa bắt đầu';
+                        $endDate = $record->end_at ? Carbon::parse($record->end_at)->format('d/m/Y') : 'Chưa kết thúc';
+                        return "{$startDate} - {$endDate}";
+                    }),
 
                 TextColumn::make('status')
                     ->label('Trạng thái')
@@ -131,16 +108,19 @@ class ClassesTable
             ], layout: FiltersLayout::AboveContent)
             ->recordActions([
                 ActionGroup::make([
-                    // Xem chi tiết & Chỉnh sửa
+                    // Xem chi tiết
                     CommonAction::viewAction(),
+                    // Edit action
+                    CommonAction::editAction(),
+                    // Tạo lịch học cố định
+                    CreateScheduleTemplateAction::make(),
                     // Thêm học sinh
                     AddStudentToClassAction::make(),
                     // Thay đổi GV
                     ChangeTeacherAction::make(),
                     // Thay đổi trạng thái
                     ChangeClassStatusAction::make(),
-                    // Tạo lịch học cố định
-                    CreateScheduleTemplateAction::make(),
+
                 ])
             ]);
     }

@@ -28,7 +28,7 @@ class ViewClass extends ViewRecord
                 ChangeTeacherAction::make(),
                 // Đổi trạng thái lớp
                 ChangeClassStatusAction::make(),
-                // Thêm lịch cố định
+                // Tạo lịch cố định
                 CreateScheduleTemplateAction::make(),
             ]),
 

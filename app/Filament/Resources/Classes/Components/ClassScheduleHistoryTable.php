@@ -23,6 +23,7 @@ use Filament\Tables\Table;
 use Filament\Support\Icons\Heroicon;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Carbon;
 use Livewire\Component;
 
 class ClassScheduleHistoryTable extends Component implements HasActions, HasSchemas, HasTable
@@ -55,24 +56,32 @@ class ClassScheduleHistoryTable extends Component implements HasActions, HasSche
                     ])
                     ->orderBy('date', 'desc');
             })
+            ->recordClasses(fn(ScheduleInstance $record) => Carbon::parse($record->date)->isToday()
+                ? 'bg-primary-500/10 dark:bg-primary-500/20 border-l-4 border-primary-500'
+                : null
+            )
             ->columns([
                 TextColumn::make('date')
                     ->label('Ngày học')
                     ->date('d/m/Y')
-                    ->description(fn (ScheduleInstance $record) => $record->start_time . ' - ' . $record->end_time)
-                    ->sortable(),
+                    ->description(fn(ScheduleInstance $record) => $record->start_time . ' - ' . $record->end_time)
+                    ->sortable()
+                    ->formatStateUsing(function(ScheduleInstance $record){
+                        return $record->date;
+                    })
+                    ->color(fn(ScheduleInstance $record) => Carbon::parse($record->date)->isPast() && !Carbon::parse($record->date)->isToday() && $record->status === ScheduleStatus::Upcoming ? 'danger' : null),
 
                 TextColumn::make('schedule_type')
                     ->label('Loại')
                     ->badge()
-                    ->color(fn (ScheduleType $state) => $state->colorFilament())
-                    ->formatStateUsing(fn (ScheduleType $state) => $state->label()),
+                    ->color(fn(ScheduleType $state) => $state->colorFilament())
+                    ->formatStateUsing(fn(ScheduleType $state) => $state->label()),
 
                 TextColumn::make('status')
                     ->label('Trạng thái')
                     ->badge()
-                    ->formatStateUsing(fn (ScheduleStatus $state) => $state->label())
-                    ->color(fn (ScheduleStatus $state) => match ($state) {
+                    ->formatStateUsing(fn(ScheduleStatus $state) => $state->label())
+                    ->color(fn(ScheduleStatus $state) => match ($state) {
                         ScheduleStatus::Upcoming => 'info',
                         ScheduleStatus::Cancelled => 'danger',
                         ScheduleStatus::Completed => 'success',
@@ -115,24 +124,24 @@ class ClassScheduleHistoryTable extends Component implements HasActions, HasSche
                         ])
                         ->query(function (Builder $query, array $data): Builder {
                             return $query
-                                ->when($data['start_date'], fn ($query) => $query->where('date', '>=', $data['start_date']))
-                                ->when($data['end_date'], fn ($query) => $query->where('date', '<=', $data['end_date']));
+                                ->when($data['start_date'], fn($query) => $query->where('date', '>=', $data['start_date']))
+                                ->when($data['end_date'], fn($query) => $query->where('date', '<=', $data['end_date']));
                         }),
                 ],
                 layout: FiltersLayout::AboveContent
             )
             ->recordActions([
                 // 1. Xem điểm danh / Bắt đầu điểm danh
-                Action::make('view_attendance')
-                    ->label(fn (ScheduleInstance $record) => $record->attendanceSession ? 'Xem điểm danh' : 'Bắt đầu điểm danh')
-                    ->icon(Heroicon::ClipboardDocumentCheck)
-                    ->color('success')
-                    ->action(function (ScheduleInstance $record) {
-                        if ($record->attendanceSession) {
-                            return redirect("/admin/attendance-sessions/{$record->attendanceSession->id}");
-                        }
-                        return redirect("/admin/attendance-sessions/create?schedule_instance_id={$record->id}");
-                    }),
+//                Action::make('view_attendance')
+//                    ->label(fn (ScheduleInstance $record) => $record->attendanceSession ? 'Xem điểm danh' : 'Bắt đầu điểm danh')
+//                    ->icon(Heroicon::ClipboardDocumentCheck)
+//                    ->color('success')
+//                    ->action(function (ScheduleInstance $record) {
+//                        if ($record->attendanceSession) {
+//                            return redirect("/admin/attendance-sessions/{$record->attendanceSession->id}");
+//                        }
+//                        return redirect("/admin/attendance-sessions/create?schedule_instance_id={$record->id}");
+//                    }),
 
                 // 2. Tạo buổi bù
                 CreateMakeupSessionAction::make(),

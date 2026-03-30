@@ -82,39 +82,25 @@ Kiểm tra buổi đã có attendance_session chưa:
   - Nếu đã có → Navigate thẳng vào session đó
   - Nếu chưa có → Tạo mới:
   
-  - Validation:
+  Validation:
+  - Trạng thái buổi học: 
+    + Chỉ cho phép mở điểm danh nếu schedule_instances.status không phải là Cancelled (Đã hủy) hoặc Rescheduled (Đã dời)
   - Kiểm tra quyền:
       admin - full access
       teacher - schedule_instances.teacher_id = Auth::user()->teacher->id
       -> Nếu không khớp: "Bạn không phải giáo viên phụ trách buổi này"
-  - Ngày buổi học session_date
-    + session_date
-    
+  - Loại lịch học (ScheduleType): 
+    + Nếu là Holiday (3): Chặn điểm danh (vì ngày nghỉ không tính học phí/lương).
+    + Nếu là Main (0), Makeup (1), hoặc Extra (2): Cho phép điểm danh bình thường.
     
     INSERT attendance_sessions (
       schedule_instance_id,
       class_id   = si.class_id,
       teacher_id = si.teacher_id,
-      session_date = si.date,   ← mặc định, GV có thể sửa nếu cần
+      session_date = si.date,   ← mặc định
       status     = draft,
       created_at = now()
     )
-
-    Tự động tạo attendance_records cho toàn bộ HS trong lớp:
-      → SELECT students.id, students.full_name
-        FROM class_enrollments ce
-        JOIN students ON ce.student_id = students.id
-        WHERE ce.class_id = ?
-          AND ce.enrolled_at <= si.date   ← chỉ lấy HS đã vào lớp trước buổi này
-          AND (ce.left_at IS NULL OR ce.left_at >= si.date)  ← chưa nghỉ
-        ORDER BY students.full_name
-
-      INSERT attendance_records (
-        session_id, student_id,
-        status     = present,   ← mặc định có mặt
-        is_fee_counted = true,
-        created_at = now()
-      ) for each student
 ```
 
 ### Trang điểm danh (màn hình chính của GV)

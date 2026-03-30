@@ -27,9 +27,6 @@ class ClassRepository extends BaseRepository implements FilterFilament
             ->with([
                 'subject:id,name',
                 'teacher:id,full_name',
-                'scheduleTemplates' => function ($q) {
-                    $q->currentlyActive();
-                }
             ])
             // Đếm số lượng học sinh đang học
             ->withCount(['enrollments as active_students_count' => function ($q) {

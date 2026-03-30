@@ -4,6 +4,7 @@ namespace App\Repositories;
 
 use App\Core\Interfaces\FilterFilament;
 use App\Core\Repository\BaseRepository;
+use App\Models\SchoolClass;
 use App\Models\Student;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
@@ -81,15 +82,16 @@ class StudentRepository extends BaseRepository implements FilterFilament
      * @param int $classId
      * @return Builder
      */
-    public function getAvailableStudentsForClassQuery(int $classId): Builder
+    public function getAvailableStudentsForClassQuery(SchoolClass $class): Builder
     {
         return $this->query()
             ->join('users', 'students.user_id', '=', 'users.id')
             ->where('users.is_active', true)
-            ->whereNotIn('students.id', function ($query) use ($classId) {
+            ->where('students.grade_level', $class->grade_level)
+            ->whereNotIn('students.id', function ($query) use ($class) {
                 $query->select('student_id')
                     ->from('class_enrollments')
-                    ->where('class_id', $classId)
+                    ->where('class_id', $class->id)
                     ->whereNull('left_at');
             })
             ->orderBy("created_at", "DESC")

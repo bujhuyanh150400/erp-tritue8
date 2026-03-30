@@ -27,8 +27,8 @@ class AddStudentToClassAction
             ->modalFooterActions(fn () => [])
             ->modalContent(fn (SchoolClass $record) => new HtmlString(
                 Blade::render(
-                    '@livewire("' . AddStudentToClassTable::class . '", ["classId" => $classId])',
-                    ['classId' => $record->id]
+                    '@livewire("' . AddStudentToClassTable::class . '", ["class" => $class])',
+                    ['class' => $record]
                 )
             ));
     }

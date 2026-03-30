@@ -472,6 +472,7 @@ Ràng buộc không cho xóa:
      OR COUNT(*) FROM tuition_invoices WHERE class_id = ? > 0
   → Không cho xóa, chỉ được đổi trạng thái
 ```
+
 ### Thêm học sinh vào lớp
 
 ```
@@ -713,8 +714,18 @@ Hiển thị thông tin hiện tại:
     WHERE si.class_id = ?
     GROUP BY si.id, r.id, t.id, as_sess.id
     ORDER BY si.date DESC
+    
+  - Các cột hiển thị
+      + Ngày buổi học
+      + Loại buổi học
+      + Trạng thái
+      + Phòng học
+      + Phòng
+      + Giáo viên
+      + Số HS có mặt
+      + Ghi chú
 
-  Action mỗi dòng: Xem điểm danh | Tạo buổi bù | Hủy buổi | Đổi phòng học
+  Action mỗi dòng: Xem điểm danh (tạo điểm danh nếu chưa có) | Tạo buổi bù | Hủy buổi | Đổi phòng học
 ```
 ##### Action mỗi dòng:
 - Xem điểm danh

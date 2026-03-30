@@ -30,14 +30,7 @@ class StudentForm
     {
         return $schema
             ->components([
-                // THÔNG TIN TÀI KHOẢN
-                Section::make('Thông tin tài khoản')
-                    ->compact()
-                    ->schema([
-                        CommonForm::userNameInput(),
-                        CommonForm::passwordInput(),
-                    ]),
-
+                // Thông tin học sinh
                 Tabs::make('Thông tin học sinh')
                     ->tabs([
                         Tab::make('Thông tin cá nhân')
@@ -124,6 +117,16 @@ class StudentForm
                                     ->columnSpanFull(),
                             ]),
                     ]),
+
+                // THÔNG TIN TÀI KHOẢN
+                Section::make('Thông tin tài khoản')
+                    ->compact()
+                    ->description("Tài khoản để đăng nhập vào hệ thống, sau khi tạo xong hãy gửi thông tin cho học sinh/phụ huynh")
+                    ->schema([
+                        CommonForm::userNameInput(),
+                        CommonForm::passwordInput(),
+                    ]),
+
             ]);
     }
 }

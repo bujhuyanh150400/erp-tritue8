@@ -178,16 +178,26 @@ class ClassService extends BaseService implements SelectableServiceInterface
     {
         return $this->execute(
             callback: function () use ($schoolClass, $students, $data) {
+                // Chuyển đổi sang đối tượng Carbon
+                $enrolledAt = Carbon::parse($data['enrolled_at']);
+                $classStartAt = Carbon::parse($schoolClass->start_at);
+
+                // Kiểm tra: Nếu ngày nhập học TRƯỚC ngày khai giảng
+                if ($enrolledAt->lessThan($classStartAt)) {
+                    throw new ServiceException("Ngày bắt đầu học không thể trước ngày khai giảng lớp học ({$classStartAt->format('d/m/Y')}).");
+                }
                 // Lớp phải đang Active
                 if ($schoolClass->status !== ClassStatus::Active) {
                     throw new ServiceException("Không thể thêm học sinh vào lớp đang tạm ngưng hoặc đã kết thúc.");
                 }
+
                 // Kiểm tra sĩ số tối đa
                 $currentStudents = $this->classEnrollmentRepository->getClassEnrollment($schoolClass->id);
                 if ($currentStudents + $students->count() >= $schoolClass->max_students) {
                     throw new ServiceException("Lớp đã đạt sĩ số tối đa ({$currentStudents}/{$schoolClass->max_students} học sinh). Không thể thêm học sinh mới.");
                 }
                 foreach ($students as $student) {
+
                     // Kiểm tra xem học sinh này đã đăng ký trong lớp chưa
                     $isAlreadyEnrolled = $this->classEnrollmentRepository->checkStudentIsEnrolledInClass(
                         classId: $schoolClass->id,
@@ -205,6 +215,7 @@ class ClassService extends BaseService implements SelectableServiceInterface
                     if ($hasConflict) {
                         throw new ServiceException("Học sinh {$student->full_name} có xung đột lịch với lớp mới, vui lòng kiểm tra lại.");
                     }
+
 
                     // Xử lý học phí
                     $feePerSession = $data['fee_per_session'] ?? null;
