@@ -11,7 +11,10 @@ use Livewire\Component;
 class TeacherKpiOverview extends Component
 {
     public Teacher $record;
+
     public string $selectedMonth;
+
+
 
     public function mount(Teacher $record)
     {

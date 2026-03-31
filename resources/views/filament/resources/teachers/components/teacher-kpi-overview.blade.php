@@ -26,14 +26,12 @@
     @livewire(\App\Filament\Resources\Teachers\Widgets\TeacherKpiStatsOverview::class, [
         'record' => $record,
         'selectedMonth' => $selectedMonth,
-    ], key('stats-' . $selectedMonth))
+    ], 'stats-' . $selectedMonth)
 
     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
         @livewire(\App\Filament\Resources\Teachers\Widgets\TeacherAttendanceChart::class, [
             'record' => $record,
             'selectedMonth' => $selectedMonth,
-        ], key('chart-' . $selectedMonth))
-
-        {{-- Có thể thêm biểu đồ khác ở đây (ví dụ: điểm TB qua các tháng) --}}
+        ], 'chart-' . $selectedMonth)
     </div>
 </div>

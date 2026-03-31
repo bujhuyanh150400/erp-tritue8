@@ -38,9 +38,6 @@ class StudentInfolist
                                             IconEntry::make('user.is_active')
                                                 ->label('Trạng thái')
                                                 ->boolean(),
-                                            TextEntry::make('user.last_login_at')
-                                                ->label('Đăng nhập lần cuối')
-                                                ->dateTime('d/m/Y H:i'),
                                         ]),
 
                                     Section::make('Hồ sơ học sinh')
