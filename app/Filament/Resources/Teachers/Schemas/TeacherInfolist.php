@@ -14,6 +14,7 @@ use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Tabs;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
+use App\Constants\EmployeeStatus;
 
 class TeacherInfolist
 {
@@ -58,24 +59,31 @@ class TeacherInfolist
                                             TextEntry::make('full_name')
                                                 ->label('Họ và tên')
                                                 ->weight('bold')
+                                                ->icon(Heroicon::User)
                                                 ->color('primary'),
 
                                             TextEntry::make('phone')
                                                 ->label('Số điện thoại')
-                                                ->icon('heroicon-m-phone'),
+                                                ->icon(Heroicon::Phone),
 
                                             TextEntry::make('email')
                                                 ->label('Email')
-                                                ->icon('heroicon-m-envelope'),
+                                                ->icon(Heroicon::Envelope),
 
                                             TextEntry::make('joined_at')
                                                 ->label('Ngày vào làm')
-                                                ->icon('heroicon-m-calendar')
+                                                ->icon(Heroicon::Calendar)
                                                 ->date('d/m/Y'),
 
                                             TextEntry::make('status')
                                                 ->label('Trạng thái')
                                                 ->badge()
+                                                ->color(fn ($state) => match ($state) {
+                                                    EmployeeStatus::Active => 'success',   // xanh
+                                                    EmployeeStatus::Inactive => 'danger',     // đỏ
+                                                    default => 'success',
+                                                })
+                                                ->icon(Heroicon::CheckCircle)
                                                 ->formatStateUsing(fn ($state) => $state->label()),
 
                                             TextEntry::make('address')
@@ -111,6 +119,7 @@ class TeacherInfolist
                                                     TextEntry::make('bank_account_holder')
                                                         ->label('Chủ tài khoản')
                                                         ->weight('bold')
+                                                        ->icon(Heroicon::User)
                                                         ->formatStateUsing(fn ($state) => strtoupper($state)),
 
                                                     TextEntry::make('bank_account_number')
@@ -118,6 +127,8 @@ class TeacherInfolist
                                                         ->copyable()
                                                         ->fontFamily('mono')
                                                         ->columnSpanFull()
+                                                        ->icon(Heroicon::CreditCard)
+                                                        ->badge()
                                                         ->formatStateUsing(fn ($state) => chunk_split($state, 4, ' ')),
                                                 ]),
                                         ]),
