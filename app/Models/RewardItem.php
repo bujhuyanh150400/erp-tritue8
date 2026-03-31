@@ -16,7 +16,7 @@ class RewardItem extends Model
         'name',
         'points_required',
         'reward_type',
-        'discount_amount',
+        'note',
         'is_active',
     ];
 
@@ -24,7 +24,6 @@ class RewardItem extends Model
     {
         return [
             'reward_type' => RewardType::class,
-            'discount_amount' => 'decimal:0',
             'is_active' => 'boolean',
         ];
     }

@@ -9,4 +9,7 @@
         + làm ra 1 components chung, làm ra 1 Modal (done)
         
     - Tab 3 — Lịch sử buổi học: 
+    
+- G4:
+    Quản lý danh mục phần thưởng (Admin)
 ```

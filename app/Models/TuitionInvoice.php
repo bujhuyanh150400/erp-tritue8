@@ -61,10 +61,6 @@ class TuitionInvoice extends Model
         return $this->hasMany(TuitionInvoiceLog::class, 'invoice_id');
     }
 
-    public function rewardRedemptions(): HasMany
-    {
-        return $this->hasMany(RewardRedemption::class, 'invoice_id');
-    }
 
     // ─── Helpers ─────────────────────────────────────────────────
 

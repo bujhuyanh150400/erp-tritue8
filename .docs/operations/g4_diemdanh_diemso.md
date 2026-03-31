@@ -263,7 +263,7 @@ Service (transaction):
        END
        WHERE session_id = ?
 
-  4. Gửi tin nhắn cá nhân đến từng phụ huynh (G6):
+  4. Gửi tin nhắn cá nhân đến từng phụ huynh (G6): -> để sau
      Mỗi phụ huynh nhận tin gồm:
        - Ngày, môn, tình trạng đi học
        - Nội dung bài học, BTVN
@@ -271,30 +271,13 @@ Service (transaction):
        - Điểm thưởng hôm nay + tổng hiện tại
        - Nhắc riêng (private_note)
 
-  5. Gửi tin nhắn chung lớp (G6):
+  5. Gửi tin nhắn chung lớp (G6): -> để sau
        - Nội dung bài, BTVN, nhắc buổi sau
        - Không gửi thông tin cá nhân
 
 Ghi user_logs: GV X hoàn thành điểm danh lớp Y buổi Z lúc T
 ```
 
-### Mở lại buổi đã Hoàn thành
-
-```
-Điều kiện: status = completed AND locked_at IS NULL
-
-GV (hoặc Admin) bấm "Mở lại để sửa"
-
-Service:
-  UPDATE attendance_sessions
-    SET status = draft,
-        completed_at = NULL
-    WHERE id = ? AND locked_at IS NULL
-
-Ghi user_logs: X mở lại buổi điểm danh Y lúc Z
-```
-
----
 
 ## Đổi thưởng
 
@@ -322,7 +305,6 @@ Danh sách:
     - Tên phần thưởng  → reward_items.name
     - Điểm cần đổi     → reward_items.points_required
     - Loại             → reward_items.reward_type
-    - Giá trị giảm     → reward_items.discount_amount (nếu type = discount)
     - Trạng thái       → reward_items.is_active
     - Action: Chỉnh sửa | Bật/Tắt
 
@@ -331,14 +313,13 @@ Tạo phần thưởng:
     - name             (required)
     - points_required  (required, > 0)
     - reward_type      (required)
-    - discount_amount  (required nếu reward_type = discount)
+    - note             (optional)
     - is_active        (default: true)
   Service: INSERT reward_items
 
 Sửa phần thưởng:
   Service: UPDATE reward_items
   Không cho sửa nếu đã có reward_redemptions dùng item này
-    → SELECT COUNT(*) FROM reward_redemptions WHERE reward_item_id = ? > 0
     → Chỉ cho đổi is_active, không cho đổi points_required
 ```
 
@@ -377,9 +358,6 @@ Service (transaction):
        awarded_by  = Auth::id()
      )
 
-  3. Nếu reward_type = discount:
-       Ghi nhận discount_amount để áp vào tuition_invoices tháng này
-       Khi tạo hóa đơn → UPDATE reward_redemptions SET invoice_id = ?
 
 Ghi user_logs: GV X đổi thưởng [tên thưởng] cho HS Y lúc Z
 ```

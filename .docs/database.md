@@ -410,7 +410,7 @@
     - name (varchar(100) not null) - Tên phần thưởng
     - points_required (int unsigned not null) - Số điểm cần để đổi
     - reward_type (unsigned tinyint) - Loại phần thưởng, lưu trong RewardType
-    - discount_amount (decimal(10,0) nullable) - Số tiền giảm nếu type=discount
+    - note (text nullable) - Ghi chú
     - is_active (boolean not null default true) - Có hoạt động không
     - created_at (datetime not null default current_timestamp) - Thời gian tạo
     - updated_at (datetime not null default current_timestamp on update current_timestamp) - Thời gian cập nhật
@@ -431,7 +431,6 @@
     - points_spent (int unsigned not null) - Số điểm đã đổi
     - redeemed_at (datetime not null default current_timestamp) - Thời gian đổi
     - processed_by (unsigned bigint not null) - ID người xử lý, khóa ngoại tham chiếu đến users.id
-    - invoice_id (unsigned bigint nullable) - ID hóa đơn nếu type=discount, khóa ngoại tham chiếu đến tuition_invoices.id
     - created_at (datetime not null default current_timestamp) - Thời gian tạo
     - updated_at (datetime not null default current_timestamp on update current_timestamp) - Thời gian cập nhật
 
@@ -439,7 +438,8 @@
     - foreign(student_id) references students(id)
     - foreign(reward_item_id) references reward_items(id)
     - foreign(processed_by) references users(id)
-    - foreign(invoice_id) references tuition_invoices(id)
+
+
 
 # --- G5: Nhân sự - tài chính
 
