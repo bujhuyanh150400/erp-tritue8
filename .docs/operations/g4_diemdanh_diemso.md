@@ -69,133 +69,129 @@ RewardType:
 ## Điểm danh buổi học
 
 ### Bắt đầu / Mở buổi điểm danh
-
 ```
-GV vào lớp → chọn buổi học
-- Nếu đã có attendance_session → bấm "Xem điểm danh"
-- Nếu chưa có → bấm "Bắt đầu điểm danh"
+**Ngữ cảnh:** Giáo viên vào lớp và chọn một buổi học cụ thể trên lịch để bắt đầu điểm danh.
 
-Kiểm tra buổi đã có attendance_session chưa:
-  → SELECT id FROM attendance_sessions
-    WHERE schedule_instance_id = ?
+**Luồng xử lý (Flow):**
+1. Hệ thống kiểm tra buổi học đã có `attendance_session` (Phiên điểm danh) hay chưa.
+2. Nếu ĐÃ CÓ → Chuyển hướng thẳng vào Màn hình Chi tiết Điểm danh.
+3. Nếu CHƯA CÓ → Tiến hành kiểm tra các điều kiện (Validation) và tạo mới.
+
+**Ràng buộc (Validation):**
+- **Trạng thái lịch học:** Chỉ cho phép mở điểm danh nếu trạng thái của buổi học (`schedule_instances.status`) 
+là `Upcoming` hoặc `Completed`. Chặn nếu đã bị `Cancelled` hoặc `Rescheduled`.
+
+- **Thời gian:** Chỉ cho phép mở phiên nếu ngày học nhỏ hơn hoặc bằng ngày hiện tại (`date <= today`). 
+**Tuyệt đối không** cho phép mở điểm danh cho các buổi học trong tương lai để bảo toàn tính chính xác của sĩ số lớp.
+
+- **Phân quyền:** - Admin: Toàn quyền truy cập.
+  - Giáo viên: Chỉ được mở điểm danh nếu là giáo viên phụ trách của buổi học đó.
   
-  - Nếu đã có → Navigate thẳng vào session đó
-  - Nếu chưa có → Tạo mới:
-  
-  Validation:
-  - Trạng thái buổi học: 
-    + Chỉ cho phép mở điểm danh nếu schedule_instances.status không phải là Cancelled (Đã hủy) hoặc Rescheduled (Đã dời)
-  - Kiểm tra quyền:
-      admin - full access
-      teacher - schedule_instances.teacher_id = Auth::user()->teacher->id
-      -> Nếu không khớp: "Bạn không phải giáo viên phụ trách buổi này"
-  - Loại lịch học (ScheduleType): 
-    + Nếu là Holiday (3): Chặn điểm danh (vì ngày nghỉ không tính học phí/lương).
-    + Nếu là Main (0), Makeup (1), hoặc Extra (2): Cho phép điểm danh bình thường.
-    
-    INSERT attendance_sessions (
-      schedule_instance_id,
-      class_id   = si.class_id,
-      teacher_id = si.teacher_id,
-      session_date = si.date,   ← mặc định
-      status     = draft,
-      created_at = now()
-    )
+- **Loại lịch học:** Cho phép điểm danh với lịch Học chính, Học bù, Tăng cường. Chặn điểm danh nếu là lịch Nghỉ lễ (`Holiday`).
+
+**Thực thi tạo mới (Action):**
+- Sử dụng cơ chế Atomic (`firstOrCreate` hoặc Transaction) để tạo duy nhất 1 bản ghi `attendance_sessions`.
+- **Lưu ý kiến trúc:** Chỉ tạo "Vỏ" Session. KHÔNG tự động sinh (bulk insert) danh sách học sinh vào bảng `attendance_records` lúc này để tránh rác dữ liệu và xử lý được bài toán học sinh mới nhập học phút chót.
 ```
 
 ### Trang điểm danh (màn hình chính của GV)
 
+#### 1. Thông tin buổi học & Nội dung chung
 ```
-Header buổi học:
-  → SELECT
-      as_sess.session_date, as_sess.status,
-      classes.name as ten_lop, subjects.name as ten_mon,
-      teachers.full_name as ten_gv,
-      rooms.name as phong,
-      si.schedule_type, si.start_time, si.end_time
-    FROM attendance_sessions as_sess
-    JOIN schedule_instances si ON as_sess.schedule_instance_id = si.id
-    JOIN classes ON as_sess.class_id = classes.id
-    JOIN subjects ON classes.subject_id = subjects.id
-    JOIN teachers ON as_sess.teacher_id = teachers.id
-    JOIN rooms ON si.room_id = rooms.id
-    WHERE as_sess.id = ?
+*Hiển thị các thông tin chung của buổi học và cho phép giáo viên chỉnh sửa ghi chú.*
 
-Khung nội dung chung (áp dụng toàn lớp):
-  - lesson_content   → as_sess.lesson_content (text)
-  - homework         → as_sess.homework (text)
-  - next_session_note→ as_sess.next_session_note (text)
-  - general_note     → as_sess.general_note (text)
+**Dữ liệu hiển thị:**
+- **Thông tin lớp & Nhân sự:** 
+    + Tên Lớp
+    + Tên Môn học
+    + Giáo viên phụ trách
+    + Tên Phòng học.
+- **Thời gian & Trạng thái:** 
+    + Ngày học
+    + Khung giờ học
+    + Loại lịch
+    + Trạng thái phiên (Đang mở / Đã chốt).
+- **Nội dung:** 
+    + Nội dung bài giảng
+    + Bài tập về nhà
+    + Dặn dò buổi sau
+    + Ghi chú nội bộ.
 
-Bài kiểm tra trong buổi (tối đa 2):
-  Thông tin chung cho cả lớp (không lưu riêng cho từng HS ở đây):
-  - exam_slot_1_name → ghi nhớ tạm trên UI, lưu vào scores.exam_name khi nhập điểm
-  - exam_slot_2_name → tương tự
-  - max_score_1, max_score_2 (default: 10)
-
-Bảng học sinh:
-  → SELECT
-      ar.id as record_id,
-      students.id as student_id,
-      students.full_name,
-      ar.status as attendance_status,
-      ar.check_in_time,
-      ar.is_fee_counted,
-      ar.teacher_comment,
-      ar.private_note,
-      sc1.score as diem_1, sc1.exam_name as ten_bai_1,
-      sc2.score as diem_2, sc2.exam_name as ten_bai_2,
-      SUM(rp.amount) as tong_sao_hien_tai
-    FROM attendance_records ar
-    JOIN students ON ar.student_id = students.id
-    LEFT JOIN scores sc1 ON sc1.attendance_record_id = ar.id AND sc1.exam_slot = 1
-    LEFT JOIN scores sc2 ON sc2.attendance_record_id = ar.id AND sc2.exam_slot = 2
-    LEFT JOIN reward_points rp ON rp.student_id = students.id
-    WHERE ar.session_id = ?
-    GROUP BY ar.id, students.id, sc1.id, sc2.id
-    ORDER BY students.full_name
+**Thao tác:** - Nút "Sửa thông tin": Mở popup để giáo viên nhập nhanh nội dung bài giảng, Bài tập về nhà, dặn dò, ghi chú nội bộ.
 ```
+
+
+#### 2. Bảng học sinh
+```
+*Hiển thị danh sách lớp thực tế tại thời điểm diễn ra buổi học và bộ công cụ nhập liệu.*
+
+Logic lấy danh sách (Data Fetching):
+- Chỉ lấy các học sinh có trạng thái **đang theo học** tại lớp đó vào đúng ngày diễn ra buổi học (`enrolled_at <= session_date` và `left_at >= session_date` hoặc `null`).
+- Tự động map với dữ liệu điểm danh cũ (nếu giáo viên đã từng lưu trước đó).
+- Lấy tổng số Sao hiện tại của học sinh để hiển thị.
+
+Giao diện nhập liệu (Table & Search):
+- Thanh tìm kiếm: Lọc nhanh học sinh theo tên.
+-  bao gồm:
+  - Tên học sinh (In đậm) & Tổng số sao tích lũy.
+  - Trạng thái điểm danh : Có mặt | Đi muộn | Vắng có phép | Vắng không phép.
+
+- Action:
+  - Nút "Điểm danh"
+
+```
+
 
 ### Điểm danh từng học sinh
 
 ```
-GV chọn trạng thái cho từng HS (radio button):
-  0 = Có mặt | 1 = Đi muộn | 2 = Vắng có phép | 3 = Vắng không phép
+## 1. Có mặt (Present)
+- **Action:** Click trực tiếp (Cá nhân hoặc Hàng loạt).
+- **Validate:** Không có.
+- **Service:** Lưu `is_fee_counted = true`, `check_in_time` = giờ bắt đầu lớp.
 
-Nếu Có mặt hoặc Đi muộn:
-  - check_in_time = now() (tự ghi, GV có thể sửa)
-  - is_fee_counted = true
+## 2. Đi muộn (Late)
+- **Action:** Mở Form nhập giờ đến.
+- **Validate:** Giờ nhập vào phải >= `start_time` và <= `end_time` của lớp học.
+- **Service:** Lưu `is_fee_counted = false`, `check_in_time` = giờ GV nhập từ form.
 
-Nếu Vắng (excused / absent):
-  - is_fee_counted = false
-  - Khóa ô nhập điểm của HS đó
+## 3. Vắng có phép (Absent Excused)
+- **Action:** Mở Form nhập lý do xin nghỉ.
+- **Validate:** Bắt buộc nhập `reason_absent`.
+- **Service:** Lưu `is_fee_counted = false`, `check_in_time = null`, lưu `reason_absent`. Đồng thời **xóa bản ghi điểm** của HS này trong bảng `scores` (nếu có).
 
-Service:
-  UPDATE attendance_records
-    SET status = ?,
-        check_in_time = ?,
-        is_fee_counted = ?
-    WHERE id = ? AND session_id = ?
-    ← Chỉ cho sửa khi attendance_sessions.status = draft
+## 4. Vắng không phép (Absent)
+- **Action:** Click trực tiếp.
+- **Validate:** Không có.
+- **Service:** Lưu `is_fee_counted = false`, `check_in_time = null`, `reason_absent = null`. Đồng thời **xóa bản ghi điểm** của HS này trong bảng `scores` (nếu có).
 ```
 
 ### Nhập điểm kiểm tra
 
 ```
-Chỉ nhập được khi attendance_records.status IN (present, late)
-Nếu vắng → ô điểm bị disabled
+## 1. Thao tác (Action)
+- **Hình thức:** Mở Modal chuyên sâu thông qua Action đơn lẻ trên từng dòng học sinh.
+- **Trạng thái hiển thị:** - **Ẩn/Hiện:** Nút "Chấm điểm" chỉ khả dụng khi học sinh có trạng thái **Có mặt (Present)** hoặc **Đi muộn (Late)**.
+    - **Khóa (Disabled):** Tự động vô hiệu hóa nếu học sinh **Vắng mặt** (Có phép hoặc Không phép).
+- **Giao diện Form:**  nhập nhiều đầu điểm cùng lúc (BTVN, Kiểm tra miệng, Test 15p...).
 
-Mỗi HS có 2 slot điểm:
+## 2. Ràng buộc & Kiểm soát (Validate)
+- **Tên bài (exam_name):** Bắt buộc nhập (Required), mặc định gợi ý "BTVN".
+- **Điểm số (score):** Bắt buộc nhập, định dạng số (Numeric), giới hạn từ `0` đến `max_score`.
+- **Thang điểm (max_score):** Mặc định là `10`.
+- **Ràng buộc logic:** - Phải tồn tại bản ghi điểm danh (`attendance_records`) trước khi lưu điểm.
+    - Một học sinh không được có hai đầu điểm trùng `exam_slot` trong cùng một buổi học.
 
-Slot 1:
-  - Nếu chưa có scores record với exam_slot = 1:
-      INSERT scores (attendance_record_id, exam_slot = 1, exam_name, score, max_score, note)
-  - Nếu đã có:
-      UPDATE scores SET score = ?, note = ? WHERE attendance_record_id = ? AND exam_slot = 1
+## 3. Xử lý hệ thống (Service Logic)
+- **Cơ chế Đồng bộ (Sync):** - Dựa trên vị trí hàng trong Repeater để định danh `exam_slot` (1, 2, 3...).
+    - **Update/Create:** Cập nhật nếu đã có điểm tại slot đó, hoặc tạo mới nếu chưa có.
+    - **Delete (Dọn rác):** Nếu giáo viên xóa một hàng trong Repeater, hệ thống phải thực hiện `delete` bản ghi tương ứng trong database để tránh dữ liệu thừa.
+- **Tính toàn vẹn:** Tất cả thao tác lưu danh sách điểm phải nằm trong **Database Transaction**.
 
-Slot 2: tương tự với exam_slot = 2
-
-Nếu không có kiểm tra → để trống (scores record không tạo)
+## 4. Hiển thị & Phản hồi (UI/UX)
+- **Thu gọn (Overview):** Trên bảng chính chỉ hiển thị tối đa 2 đầu điểm quan trọng nhất (Badge). Các điểm còn lại được thu gọn dưới dạng nút `+N`.
+- **Chi tiết (Deep Dive):** Khi click vào Badge hoặc nút `+N`, sử dụng **Alpine.js Modal** để hiển thị toàn bộ danh sách điểm kèm theo **Ghi chú (Note)** chi tiết mà không tải lại trang.
+- **Real-time:** Cập nhật mảng RAM (`attendance_scores`) ngay sau khi lưu và trigger sự kiện `refresh-table-ui` để đồng bộ giao diện lập tức.
 ```
 
 ### Điểm thưởng (Sao)

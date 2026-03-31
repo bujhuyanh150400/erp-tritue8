@@ -3,7 +3,7 @@
 namespace App\Filament\Widgets;
 
 use App\Models\ScheduleInstance;
-use App\Services\ScheduleService;
+use App\Services\ClassScheduleService;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
 use Illuminate\Database\Eloquent\Model;
@@ -16,9 +16,9 @@ class AdminCalendarWidget extends FullCalendarWidget
     // Mặc định bật filter chỉ hiển thị lớp Active
     public array $filters = ['active_classes_only' => true];
 
-    protected ScheduleService $scheduleService;
+    protected ClassScheduleService $scheduleService;
 
-    public function boot(ScheduleService $scheduleService): void
+    public function boot(ClassScheduleService $scheduleService): void
     {
         $this->scheduleService = $scheduleService;
     }
@@ -39,8 +39,8 @@ class AdminCalendarWidget extends FullCalendarWidget
             'slotMaxTime' => '22:00:00',
             'allDaySlot' => false,
             'locale' => 'vi',
-            'editable' => false,
-            'selectable' => false,
+            'editable' => true,
+            'selectable' => true,
         ];
     }
 

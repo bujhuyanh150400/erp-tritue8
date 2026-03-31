@@ -15,6 +15,7 @@ use Filament\Forms\Components\TimePicker;
 use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Grid;
 use Filament\Support\Enums\Size;
+use Filament\Support\Exceptions\Halt;
 use Filament\Support\Icons\Heroicon;
 
 class CreateScheduleTemplateAction
@@ -27,6 +28,7 @@ class CreateScheduleTemplateAction
             ->color('primary')
             ->size(Size::ExtraLarge)
             ->modalHeading('Tạo mới lịch học cố định cho lớp')
+            ->modalDescription('Hệ thống sẽ tự động kiểm tra xung đột phòng học và giáo viên. Sau khi tạo, lịch học trong 4 tuần tới sẽ được sinh ra tự động. Các tuần tiếp theo sẽ được hệ thống tự động cập nhật vào mỗi Chủ Nhật hàng tuần')
             ->schema([
                Grid::make()->schema([
                    Select::make('days_of_week')
@@ -90,7 +92,7 @@ class CreateScheduleTemplateAction
                         ->title('Lỗi hệ thống')
                         ->body($result->getMessage())
                         ->send();
-                    return;
+                    throw new Halt();
                 }
 
                 Notification::make()

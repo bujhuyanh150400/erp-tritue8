@@ -75,13 +75,16 @@ class AdminPanelProvider extends PanelProvider
                 DispatchServingFilamentEvent::class,
             ])
             ->navigationItems([
-                NavigationItem::make("Log hệ thống")
-                    ->url(url('log-viewer'), shouldOpenInNewTab: true)
-                    ->icon(Heroicon::DocumentMagnifyingGlass),
+//                NavigationItem::make("Log hệ thống")
+//                    ->url(url('log-viewer'), shouldOpenInNewTab: true)
+//                    ->icon(Heroicon::DocumentMagnifyingGlass),
             ])
             ->authMiddleware([
                 Authenticate::class,
             ])
+            ->spa()
+            ->unsavedChangesAlerts()
+            ->topNavigation()
             ->plugins([
                 FilamentFullCalendarPlugin::make()
                     ->selectable()

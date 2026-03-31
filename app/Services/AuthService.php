@@ -38,15 +38,13 @@ class AuthService extends BaseService
                 Auth::login($user, $remember);
                 // Log user activity
                 Logging::userActivity(
-                    userId: $user->id,
                     action: 'Đăng nhập',
-                    description: 'Người dùng đăng nhập vào hệ thống thành công'
+                    description: 'Người dùng đăng nhập vào hệ thống thành công',
                 );
 
                 return ServiceReturn::success($user, 'Đăng nhập thành công');
             },
         );
-
     }
 
     /**
@@ -57,7 +55,6 @@ class AuthService extends BaseService
         return $this->execute(function () {
             if (Auth::check()) {
                 Logging::userActivity(
-                    userId: Auth::id(),
                     action: 'Đăng xuất',
                     description: 'Người dùng đăng xuất khỏi hệ thống'
                 );

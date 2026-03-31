@@ -6,6 +6,7 @@ use App\Filament\Navigation\NavigationGroup;
 use App\Filament\Resources\AttendanceSessions\Pages\CreateAttendanceSession;
 use App\Filament\Resources\AttendanceSessions\Pages\EditAttendanceSession;
 use App\Filament\Resources\AttendanceSessions\Pages\ListAttendanceSessions;
+use App\Filament\Resources\AttendanceSessions\Pages\ManageAttendance;
 use App\Filament\Resources\AttendanceSessions\Pages\ViewAttendanceSession;
 use App\Filament\Resources\AttendanceSessions\Schemas\AttendanceSessionForm;
 use App\Filament\Resources\AttendanceSessions\Schemas\AttendanceSessionInfolist;
@@ -58,8 +59,6 @@ class AttendanceSessionResource extends Resource
     {
         return [
             'index' => ListAttendanceSessions::route('/'),
-            'create' => CreateAttendanceSession::route('/create'),
-            'edit' => EditAttendanceSession::route('/{record}/edit'),
             'view' => ViewAttendanceSession::route('/{record}'),
         ];
     }

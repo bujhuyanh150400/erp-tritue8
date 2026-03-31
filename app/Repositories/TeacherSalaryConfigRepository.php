@@ -12,7 +12,7 @@ class TeacherSalaryConfigRepository extends BaseRepository
         return TeacherSalaryConfig::class;
     }
 
-    
+
     public function getEffectiveSalary(int $teacherId, int $classId, string $date, ?float $fallbackSalary): float
     {
         $config = $this->query()
@@ -27,5 +27,29 @@ class TeacherSalaryConfigRepository extends BaseRepository
             ->first();
 
         return $config ? (float)$config->salary_per_session : (float)$fallbackSalary;
+    }
+
+    /**
+     * Lấy danh sách cấu hình lương của giáo viên trong khoảng thời gian
+     * @param int $teacherId
+     * @param int $classId
+     * @param string $startDate
+     * @param string $endDate
+     * @return \Illuminate\Database\Eloquent\Collection
+     */
+    public function getConfigsForPeriod(int $teacherId, int $classId, string $startDate, string $endDate)
+    {
+        return $this->query()
+            ->where('teacher_id', $teacherId)
+            ->where('class_id', $classId)
+            // Điều kiện để cấu hình có hiệu lực giao thoa với khoảng thời gian sinh lịch
+            ->where('effective_from', '<=', $endDate)
+            ->where(function ($q) use ($startDate) {
+                $q->whereNull('effective_to')
+                    ->orWhere('effective_to', '>=', $startDate);
+            })
+            // Sắp xếp giảm dần theo ngày bắt đầu để ưu tiên cấu hình mới nhất
+            ->orderBy('effective_from', 'desc')
+            ->get(); // Lấy ra một Collection thay vì first()
     }
 }

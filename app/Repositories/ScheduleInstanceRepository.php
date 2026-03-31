@@ -85,39 +85,6 @@ class ScheduleInstanceRepository extends BaseRepository
     }
 
     /**
-     * Kiểm tra xem GV có xung đột thời gian với Lớp mới hay không
-     * @param int $teacherId
-     * @param int $classId
-     * @return Collection
-     */
-    public function getTeacherScheduleConflicts(int $teacherId, int $classId): Collection
-    {
-        return $this->model->newQuery()
-            ->from('schedule_instances as si')
-            ->join('classes as c', 'c.id', '=', 'si.class_id')
-            ->where('si.teacher_id', $teacherId)
-            ->where('si.class_id', '!=', $classId)
-            ->where('si.date', '>=', now()->toDateString())
-            ->where('si.status', '!=', ScheduleStatus::Cancelled->value)
-            ->whereExists(function ($query) use ($classId) {
-                $query->select(DB::raw(1))
-                    ->from('schedule_instances as si2')
-                    ->where('si2.class_id', $classId)
-                    ->where('si2.status', '!=', ScheduleStatus::Cancelled->value)
-                    ->whereColumn('si2.date', 'si.date')
-                    ->whereColumn('si2.start_time', '<', 'si.end_time')
-                    ->whereColumn('si2.end_time', '>', 'si.start_time');
-            })
-            ->select([
-                'si.date',
-                'si.start_time',
-                'si.end_time',
-                'c.name as class_name'
-            ])
-            ->get();
-    }
-
-    /**
      * Cập nhật GV cho các lịch sắp đến
      * @param int $classId
      * @param int $teacherId
@@ -151,124 +118,56 @@ class ScheduleInstanceRepository extends BaseRepository
     }
 
     /**
-     * Kiểm tra xung đột phòng khi tạo/cập nhật Template
-     * @param int $roomId ID của phòng
-     * @param DayOfWeek $dayOfWeek Thứ trong tuần (0: Chủ nhật, 1: Thứ 2, ..., 6: Thứ 7)
-     * @param string $startTime Giờ bắt đầu (HH:mm)
-     * @param string $endTime Giờ kết thúc (HH:mm)
-     * @param string $startDate Ngày bắt đầu (YYYY-MM-DD)
-     * @param int|null $excludeTemplateId ID của Template cần loại trừ (nếu có)
-     * @return Collection
+     * Kiểm tra trùng GIÁO VIÊN trên các buổi học thực tế (Instances)
+     * @param int $teacherId  ID GV
+     * @param array $daysOfWeek  Thứ học (mảng số nguyên theo DayOfWeek::class)
+     * @param string $startTime  Giờ bắt đầu
+     * @param string $endTime  Giờ kết thúc
+     * @param string $startDate  Ngày bắt đầu kiểm tra
+     * @param string|null $endDate  Ngày kết thúc kiểm tra
      */
-    public function checkRoomConflictForTemplate(int $roomId, DayOfWeek $dayOfWeek, string $startTime, string $endTime, string $startDate, ?int $excludeTemplateId = null): Collection
+    public function findTeacherConflicts(int $teacherId, array $daysOfWeek, string $startTime, string $endTime, string $startDate, ?string $endDate)
     {
-        $query = $this->model->newQuery()
-            ->from('schedule_instances as si')
-            ->join('classes as c', 'c.id', '=', 'si.class_id')
-            ->where('si.room_id', $roomId)
-            ->whereRaw('EXTRACT(ISODOW FROM si.date) = ?', [$dayOfWeek->value])
-            ->where('si.date', '>=', $startDate)
-            ->where('si.status', '!=', ScheduleStatus::Cancelled->value)
-            ->where('si.start_time', '<', $endTime)
-            ->where('si.end_time', '>', $startTime);
-
-        if ($excludeTemplateId) {
-            $query->where(function($q) use ($excludeTemplateId) {
-                $q->whereNull('si.template_id')
-                  ->orWhere('si.template_id', '!=', $excludeTemplateId);
-            });
-        }
-
-        return $query->select([
-                'si.date',
-                'si.start_time',
-                'si.end_time',
-                'c.name as class_name'
-            ])
-            ->get();
+        $placeholders = implode(',', array_fill(0, count($daysOfWeek), '?'));
+        return $this->model->newQuery()
+            ->where('teacher_id', $teacherId)
+            ->whereRaw("EXTRACT(ISODOW FROM date) IN ($placeholders)", $daysOfWeek)
+            ->where('date', '>=', $startDate)
+            ->when($endDate, fn ($query) => $query->where('date', '<=', $endDate))
+            ->where('start_time', '<', $endTime)
+            ->where('end_time', '>', $startTime)
+            ->whereIn('status', [ScheduleStatus::Upcoming->value, ScheduleStatus::Completed->value])
+            ->with('class')
+            ->first();
     }
 
     /**
-     * Kiểm tra xung đột giáo viên khi tạo/cập nhật Template
-     * @param int $teacherId ID của giáo viên
-     * @param DayOfWeek $dayOfWeek Thứ trong tuần (0: Chủ nhật, 1: Thứ 2, ..., 6: Thứ 7)
-     * @param string $startTime Giờ bắt đầu (HH:mm)
-     * @param string $endTime Giờ kết thúc (HH:mm)
-     * @param string $startDate Ngày bắt đầu (YYYY-MM-DD)
-     * @param int|null $excludeTemplateId ID của Template cần loại trừ (nếu có)
-     * @return Collection
+     * Kiểm tra trùng PHÒNG trên các buổi học thực tế (Instances)
+     * @param int $roomId  ID phòng học
+     * @param array $daysOfWeek  Thứ học (mảng số nguyên theo DayOfWeek::class)
+     * @param string $startTime  Giờ bắt đầu
+     * @param string $endTime  Giờ kết thúc
+     * @param string $startDate  Ngày bắt đầu kiểm tra
+     * @param string|null $endDate  Ngày kết thúc kiểm tra
      */
-    public function checkTeacherConflictForTemplate(int $teacherId, DayOfWeek $dayOfWeek, string $startTime, string $endTime, string $startDate, ?int $excludeTemplateId = null): Collection
+    public function findRoomConflicts(int $roomId, array $daysOfWeek, string $startTime, string $endTime, string $startDate, ?string $endDate)
     {
-        $query = $this->model->newQuery()
-            ->from('schedule_instances as si')
-            ->join('classes as c', 'c.id', '=', 'si.class_id')
-            ->where('si.teacher_id', $teacherId)
-            ->whereRaw('EXTRACT(ISODOW FROM si.date) = ?', [$dayOfWeek->value])
-            ->where('si.date', '>=', $startDate)
-            ->where('si.status', '!=', ScheduleStatus::Cancelled->value)
-            ->where('si.start_time', '<', $endTime)
-            ->where('si.end_time', '>', $startTime);
-
-        if ($excludeTemplateId) {
-            $query->where(function($q) use ($excludeTemplateId) {
-                $q->whereNull('si.template_id')
-                  ->orWhere('si.template_id', '!=', $excludeTemplateId);
-            });
-        }
-
-        return $query->select([
-                'si.date',
-                'si.start_time',
-                'si.end_time',
-                'c.name as class_name'
-            ])
-            ->get();
-    }
-
-
-    public function findRoomConflict($roomId, $date, $startTime, $endTime, $ignoreId = null)
-    {
-        return DB::table('schedule_instances as si2')
-            ->join('classes', 'si2.class_id', '=', 'classes.id')
-            ->where('si2.room_id', $roomId)
-            ->where('si2.date', $date)
-            ->where('si2.status', '!=', ScheduleStatus::Cancelled->value)
-            ->when($ignoreId, fn ($q) => $q->where('si2.id', '!=', $ignoreId))
-            ->where('si2.start_time', '<', $endTime)
-            ->where('si2.end_time', '>', $startTime)
-            ->select('classes.name', 'si2.start_time', 'si2.end_time')
+        $placeholders = implode(',', array_fill(0, count($daysOfWeek), '?'));
+        return $this->query()
+            ->where('room_id', $roomId)
+            // Lọc ra các buổi có thứ trùng khớp (Postgres: 1=Mon, 7=Sun)
+            ->whereRaw("EXTRACT(ISODOW FROM date) IN ($placeholders)", $daysOfWeek)
+            // Nằm trong khoảng ngày xét duyệt
+            ->where('date', '>=', $startDate)
+            ->when($endDate, fn ($query) => $query->where('date', '<=', $endDate))
+            // Giao thoa thời gian
+            ->where('start_time', '<', $endTime)
+            ->where('end_time', '>', $startTime)
+            // Chỉ quan tâm các buổi chưa bị hủy
+            ->whereIn('status', [ScheduleStatus::Upcoming->value, ScheduleStatus::Completed->value])
+            ->with('class')
             ->first();
     }
-
-    public function findTeacherConflict($teacherId, $date, $startTime, $endTime, $ignoreId = null)
-    {
-        return DB::table('schedule_instances as si2')
-            ->join('classes', 'si2.class_id', '=', 'classes.id')
-            ->where('si2.teacher_id', $teacherId)
-            ->where('si2.date', $date)
-            ->where('si2.status', '!=', ScheduleStatus::Cancelled->value)
-            ->when($ignoreId, fn ($q) => $q->where('si2.id', '!=', $ignoreId))
-            ->where('si2.start_time', '<', $endTime)
-            ->where('si2.end_time', '>', $startTime)
-            ->select('classes.name', 'si2.start_time', 'si2.end_time')
-            ->first();
-    }
-
-    public function getSalarySnapshot(int $teacherId, int $classId, string $date): ?float
-    {
-        return \App\Models\TeacherSalaryConfig::query()
-            ->where('teacher_id', $teacherId)
-            ->where('class_id', $classId)
-            ->where('effective_from', '<=', $date)
-            ->where(function ($q) use ($date) {
-                $q->whereNull('effective_to')
-                    ->orWhere('effective_to', '>=', $date);
-            })
-            ->orderBy('effective_from', 'desc')
-            ->value('salary_per_session');
-    }
-
 
     /**
      * Lấy lịch học cho calendar

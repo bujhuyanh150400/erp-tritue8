@@ -7,7 +7,7 @@ readonly class ServiceReturn
     public function __construct(
         private bool             $success,
         private string           $message,
-        private mixed            $data = null,
+        public mixed             $data = null,
         private null| \Throwable $error = null
     )
     {

@@ -47,6 +47,7 @@ class ClassForm
 
                             Select::make('grade_level')
                                 ->label('Khối')
+                                ->searchable()
                                 ->required()
                                 ->options(GradeLevel::options())
                                 ->live()

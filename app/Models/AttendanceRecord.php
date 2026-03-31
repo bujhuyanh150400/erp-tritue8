@@ -21,6 +21,7 @@ class AttendanceRecord extends Model
         'check_in_time',
         'is_fee_counted',
         'teacher_comment',
+        'reason_absent',
         'private_note',
     ];
 
@@ -46,7 +47,7 @@ class AttendanceRecord extends Model
 
     public function scores(): HasMany
     {
-        return $this->hasMany(Score::class);
+        return $this->hasMany(Score::class, 'attendance_record_id', 'id');
     }
 
     // ─── Helpers ─────────────────────────────────────────────────

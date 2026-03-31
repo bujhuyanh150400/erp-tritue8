@@ -113,4 +113,38 @@ class ClassEnrollmentRepository extends BaseRepository
             ->orderBy('enrolled_at', 'asc')
             ->first();
     }
+
+
+    /**
+     * Lấy danh sách học sinh đang học tại thời điểm diễn ra buổi học
+     * @param int $sessionId ID sessiong điểm danh
+     * @param int $classId ID lớp học
+     * @param string $startDate Ngày bắt đầu điểm danh
+     * @return \Illuminate\Database\Eloquent\Collection
+     */
+    public function getStudentListForAttendance(int $sessionId,int $classId, string $startDate)
+    {
+        return $this->query()
+            ->with([
+                'student' => function ($query) use ($sessionId) {
+                    // Tự động tính tổng sao
+                    $query->withSum('rewardPoints as total_reward_points', 'amount')
+                        // Load bảng điểm danh CỦA ĐÚNG BUỔI NÀY
+                        ->with(['attendanceRecords' => function ($q) use ($sessionId) {
+                            $q->where('session_id', $sessionId)
+                                ->with(['scores' => function ($scoreQuery) {
+                                    $scoreQuery->orderBy('exam_slot', 'asc');
+                                }]);
+                        }]);
+                },
+            ])
+            ->where('class_id', $classId)
+            // Điều kiện chốt chặn: Đang học tại thời điểm đó
+            ->whereDate('enrolled_at', '<=', $startDate)
+            ->where(function ($query) use ($startDate) {
+                $query->whereNull('left_at')
+                    ->orWhereDate('left_at', '>=', $startDate);
+            })
+            ->get();
+    }
 }

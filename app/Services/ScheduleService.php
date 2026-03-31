@@ -25,7 +25,7 @@ class ScheduleService extends BaseService
     {
         return $this->execute(function () use ($data) {
 
-            $roomConflict = $this->repository->findRoomConflict(
+            $roomConflict = $this->scheduleInstanceRepository->findRoomConflicts(
                 $data['room_id'],
                 $data['date'],
                 $data['start_time'],
@@ -169,46 +169,5 @@ class ScheduleService extends BaseService
             return 'Tạo buổi bù thành công';
 
         }, useTransaction: true);
-    }
-
-    /**
-     * Lấy lịch học theo thời gian và lọc
-     * @param Carbon $start
-     * @param Carbon $end
-     * @param array $filters
-     * @return ServiceReturn
-     * @throws \Throwable
-     */
-    public function getScheduleInstancesCalendar(Carbon $start, Carbon $end,array $filters): ServiceReturn
-    {
-        return $this->execute(function () use ($start, $end, $filters) {
-            $schedules = $this->scheduleInstanceRepository->getScheduleInstancesForCalendar($start, $end, $filters);
-            return $schedules->map(function ($si) {
-                $cleanDate = Carbon::parse($si->date)->format('Y-m-d');
-                // Logic đổ màu theo loại lịch
-                $color = $si->schedule_type->color();
-                $class = $si->class;
-                $teacher = $si->teacher;
-                $room = $si->room;
-                $subject = $class->subject;
-
-                return EventData::make()
-                    ->id($si->id)
-                    ->title("Lớp: {$class->name} (GV: {$teacher->full_name}) Phòng: {$room->name} | Sĩ số: {$si->si_so}")
-                    ->start("{$cleanDate}T{$si->start_time}")
-                    ->end("{$cleanDate}T{$si->end_time}")
-                    ->backgroundColor($color)
-                    ->extendedProps([
-                        'start_time' => $si->start_time,
-                        'end_time' => $si->end_time,
-                        'subject' => $subject->name,
-                        'class' => $class->name,
-                        'teacher' => $teacher->full_name,
-                        'room' => $room->name,
-                        'si_so' => $si->si_so,
-                    ])
-                    ->borderColor('transparent');
-            })->toArray();
-        });
     }
 }

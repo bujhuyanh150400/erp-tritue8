@@ -5,13 +5,17 @@ namespace App\Filament\Resources\Classes\Components;
 use App\Constants\AttendanceStatus;
 use App\Constants\ScheduleStatus;
 use App\Constants\ScheduleType;
+use App\Filament\Resources\AttendanceSessions\AttendanceSessionResource;
+use App\Models\ClassEnrollment;
 use App\Models\ScheduleInstance;
 use App\Models\SchoolClass;
 use App\Repositories\ScheduleInstanceRepository;
+use App\Services\AttendanceService;
 use Filament\Actions\Action;
 use Filament\Actions\Concerns\InteractsWithActions;
 use Filament\Actions\Contracts\HasActions;
 use Filament\Forms\Components\DatePicker;
+use Filament\Notifications\Notification;
 use Filament\Schemas\Concerns\InteractsWithSchemas;
 use Filament\Schemas\Contracts\HasSchemas;
 use Filament\Tables\Columns\TextColumn;
@@ -39,7 +43,20 @@ class ClassScheduleHistoryTable extends Component implements HasActions, HasSche
         return $table
             ->query(function (ScheduleInstanceRepository $instanceRepository) {
                 return $instanceRepository->query()
-                    ->where('class_id', $this->record->id)
+                    ->where('schedule_instances.class_id', $this->record->id)
+                    // BỔ SUNG ADD SELECT ĐỂ TÍNH SĨ SỐ BẰNG SUBQUERY
+                    ->select('schedule_instances.*')
+                    ->addSelect([
+                        'active_students_count' => ClassEnrollment::selectRaw('count(*)')
+                            ->whereColumn('class_enrollments.class_id', 'schedule_instances.class_id')
+                            // Điều kiện 1: Đã vào lớp trước ngày học này
+                            ->whereRaw('class_enrollments.enrolled_at::date <= schedule_instances.date')
+                            // Điều kiện 2: Chưa nghỉ hoặc nghỉ sau ngày học này
+                            ->where(function ($query) {
+                                $query->whereNull('class_enrollments.left_at')
+                                    ->orWhereRaw('class_enrollments.left_at::date >= schedule_instances.date');
+                            })
+                    ])
                     ->with([
                         'room',
                         'teacher',
@@ -54,8 +71,9 @@ class ClassScheduleHistoryTable extends Component implements HasActions, HasSche
                             ]);
                         }
                     ])
-                    ->orderBy('date', 'desc');
+                    ->orderBy('date', 'asc');
             })
+            // Color today record
             ->recordClasses(fn(ScheduleInstance $record) => Carbon::parse($record->date)->isToday()
                 ? 'bg-primary-500/10 dark:bg-primary-500/20 border-l-4 border-primary-500'
                 : null
@@ -66,8 +84,18 @@ class ClassScheduleHistoryTable extends Component implements HasActions, HasSche
                     ->date('d/m/Y')
                     ->description(fn(ScheduleInstance $record) => $record->start_time . ' - ' . $record->end_time)
                     ->sortable()
-                    ->formatStateUsing(function(ScheduleInstance $record){
-                        return $record->date;
+                    ->formatStateUsing(function (ScheduleInstance $record) {
+                        $date = Carbon::parse($record->date)->locale('vi'); // Ép kiểu sang tiếng Việt
+                        // 'l' là thứ đầy đủ (Thứ Hai), 'D' là thứ viết tắt (T2)
+                        $dayOfWeek = $date->translatedFormat('l');
+                        $formattedDate = $date->format('d/m/Y');
+
+                        $state = "{$dayOfWeek}, {$formattedDate}";
+                        // Logic: Quá khứ + Không phải hôm nay + Trạng thái là Sắp diễn ra
+                        if ($date->isPast() && !$date->isToday() && $record->status === ScheduleStatus::Upcoming) {
+                            return "{$state} - (Cảnh báo: Chưa mở lớp)";
+                        }
+                        return $state;
                     })
                     ->color(fn(ScheduleInstance $record) => Carbon::parse($record->date)->isPast() && !Carbon::parse($record->date)->isToday() && $record->status === ScheduleStatus::Upcoming ? 'danger' : null),
 
@@ -97,9 +125,10 @@ class ClassScheduleHistoryTable extends Component implements HasActions, HasSche
                     ->placeholder('Chưa chọn GV'),
 
                 TextColumn::make('attendanceSession.present_count')
-                    ->label('Số HS có mặt')
+                    ->label('Điểm danh')
                     ->badge()
-                    ->color('success')
+                    ->formatStateUsing(fn($state, ScheduleInstance $record) => $state . ' / ' . $record->active_students_count)
+                    ->color('primary')
                     ->alignCenter()
                     ->default(0),
 
@@ -132,16 +161,27 @@ class ClassScheduleHistoryTable extends Component implements HasActions, HasSche
             )
             ->recordActions([
                 // 1. Xem điểm danh / Bắt đầu điểm danh
-//                Action::make('view_attendance')
-//                    ->label(fn (ScheduleInstance $record) => $record->attendanceSession ? 'Xem điểm danh' : 'Bắt đầu điểm danh')
-//                    ->icon(Heroicon::ClipboardDocumentCheck)
-//                    ->color('success')
-//                    ->action(function (ScheduleInstance $record) {
-//                        if ($record->attendanceSession) {
-//                            return redirect("/admin/attendance-sessions/{$record->attendanceSession->id}");
-//                        }
-//                        return redirect("/admin/attendance-sessions/create?schedule_instance_id={$record->id}");
-//                    }),
+                Action::make('view_attendance')
+                    ->label(fn(ScheduleInstance $record) => $record->attendanceSession ? 'Xem điểm danh' : 'Bắt đầu điểm danh')
+                    ->icon(Heroicon::ClipboardDocumentCheck)
+                    ->hidden(function (ScheduleInstance $record) {
+                        return $record->schedule_type === ScheduleType::Holiday; // Không hiển thị cho ngày nghỉ
+                    })
+                    ->color(fn(ScheduleInstance $record) => $record->attendanceSession ? 'info' : 'success')
+                    ->action(function (ScheduleInstance $record, AttendanceService $attendanceService) {
+                        $result = $attendanceService->startOrGetSession($record);
+                        if ($result->isSuccess()) {
+                            $data = $result->getData();
+                            $this->redirect(AttendanceSessionResource::getUrl('view', ['record' => $data]));
+                        } else {
+                            // Bắt lỗi Validation và hiện Notification góc phải
+                            Notification::make()
+                                ->title('Lỗi')
+                                ->body($result->getMessage())
+                                ->danger()
+                                ->send();
+                        }
+                    }),
 
                 // 2. Tạo buổi bù
                 CreateMakeupSessionAction::make(),

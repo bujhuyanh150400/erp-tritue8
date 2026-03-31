@@ -10,6 +10,9 @@
 - failed_jobs
 - personal_access_tokens
 - password_reset_tokens
+- telescope_entries
+- telescope_entries_tags
+- telescope_monitoring
 
 # Sơ đồ nhóm bảng và phụ thuộc
 
@@ -344,6 +347,7 @@
     - check_in_time (time nullable) - Giờ check-in thực tế
     - is_fee_counted (boolean) - Có tính vào học phí không
     - teacher_comment (text nullable) - Nhận xét cá nhân GV
+    - reason_absent (text nullable) - Lý do không có mặt
     - private_note (text nullable) - Nhắc riêng gửi phụ huynh
     - created_at (datetime not null default current_timestamp) - Thời gian tạo
     - updated_at (datetime not null default current_timestamp on update current_timestamp) - Thời gian cập nhật
@@ -362,7 +366,7 @@
     # cấu trúc
     - id (unsigned bigint auto increment)
     - attendance_record_id (unsigned bigint) - ID phiên điểm danh, khóa ngoại tham chiếu đến attendance_records.id
-    - exam_slot (unsigned tinyint) - Vị trí bài kiểm tra, 1 hoặc 2 (tối đa 2 bài/buổi)
+    - exam_slot (unsigned tinyint) - Vị trí bài kiểm tra
     - exam_name (varchar(100) nullable) - Tên bài kiểm tra
     - score (decimal(5,2) nullable) - Điểm số
     - max_score (decimal(5,2) not null default 10) - Điểm tối đa
