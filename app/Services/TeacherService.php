@@ -144,4 +144,51 @@ class TeacherService extends BaseService implements SelectableServiceInterface
                 ->value('full_name');
         });
     }
+
+    /**
+     * Lấy các chỉ số KPI của giáo viên
+     */
+    public function getKpiOverview(int $teacherId, string $month): ServiceReturn
+    {
+        return $this->execute(function () use ($teacherId, $month) {
+            $stats = $this->teacherRepository->getKpiStats($teacherId, $month);
+
+            $warnings = [];
+            // Cảnh báo: Chưa nộp báo cáo tháng & Đã quá deadline
+            if ($stats['has_reports'] && $stats['draft_count'] > 0 && $stats['is_past_deadline']) {
+                $warnings[] = [
+                    'type' => 'danger',
+                    'message' => 'Chưa nộp báo cáo tháng: ' . $stats['draft_count'] . '/' . $stats['total_reports'] . ' báo cáo đang ở trạng thái Nháp (Đã quá deadline)'
+                ];
+            } elseif ($stats['has_reports'] && $stats['draft_count'] > 0) {
+                 $warnings[] = [
+                    'type' => 'warning',
+                    'message' => 'Còn ' . $stats['draft_count'] . '/' . $stats['total_reports'] . ' báo cáo chưa nộp (Đang ở trạng thái Nháp)'
+                ];
+            }
+
+            // Cảnh báo: Tỷ lệ chuyên cần < 70%
+            if ($stats['attendance_rate'] > 0 && $stats['attendance_rate'] < 70) {
+                $warnings[] = [
+                    'type' => 'warning',
+                    'message' => 'Tỷ lệ chuyên cần trung bình của các lớp thấp (' . $stats['attendance_rate'] . '% < 70%)'
+                ];
+            }
+
+            return [
+                'stats' => $stats,
+                'warnings' => $warnings,
+            ];
+        });
+    }
+
+    /**
+     * Lấy dữ liệu biểu đồ chuyên cần
+     */
+    public function getAttendanceChartData(int $teacherId, string $month): ServiceReturn
+    {
+        return $this->execute(function () use ($teacherId, $month) {
+            return $this->teacherRepository->getAttendanceStatsByClass($teacherId, $month);
+        });
+    }
 }
