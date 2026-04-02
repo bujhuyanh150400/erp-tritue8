@@ -3,6 +3,7 @@
 namespace App\Filament\Components;
 
 use Filament\Forms\Components\RichEditor;
+use Filament\Forms\Components\RichEditor\ToolbarButtonGroup;
 
 class AppRichEditor extends RichEditor
 {
@@ -15,7 +16,8 @@ class AppRichEditor extends RichEditor
             ->toolbarButtons([
                 ['bold', 'italic', 'underline', 'strike', 'subscript', 'superscript', 'link'],
                 ['h2', 'h3'],
-                ['alignStart', 'alignCenter', 'alignEnd'],
+                [ToolbarButtonGroup::make('Heading', ['h1', 'h2', 'h3'])->icon('fi-o-heading')],
+                [ToolbarButtonGroup::make('Alignment', ['alignStart', 'alignCenter', 'alignEnd', 'alignJustify'])],
                 ['blockquote', 'codeBlock', 'bulletList', 'orderedList'],
                 ['table', 'attachFiles'],
                 ['undo', 'redo'],

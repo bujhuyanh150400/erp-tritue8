@@ -15,6 +15,8 @@ use App\Models\ScheduleInstance;
 use App\Repositories\AttendanceRecordRepository;
 use App\Repositories\AttendanceSessionRepository;
 use App\Repositories\ClassEnrollmentRepository;
+use App\Repositories\RewardPointRepository;
+use App\Repositories\ScheduleInstanceRepository;
 use App\Repositories\ScoreRepository;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
@@ -23,10 +25,12 @@ use function PHPUnit\Framework\callback;
 class AttendanceService extends BaseService
 {
     public function __construct(
+        protected ScheduleInstanceRepository  $scheduleInstanceRepository,
         protected AttendanceSessionRepository $attendanceSessionRepository,
         protected AttendanceRecordRepository  $attendanceRecordRepository,
         protected ClassEnrollmentRepository   $classEnrollmentRepository,
         protected ScoreRepository             $scoreRepository,
+        protected RewardPointRepository       $rewardPointRepository,
     )
     {
     }
@@ -110,7 +114,7 @@ class AttendanceService extends BaseService
     {
         return $this->execute(
             callback: function () use ($session) {
-                $dateStr = \Carbon\Carbon::parse($session->session_date)->toDateString();
+                $dateStr = Carbon::parse($session->session_date)->toDateString();
 
                 $enrollments = $this->classEnrollmentRepository->getStudentListForAttendance($session->id, $session->class_id, $dateStr);
 
@@ -123,7 +127,7 @@ class AttendanceService extends BaseService
                     // Lấy record điểm danh của buổi này
                     $record = $student->attendanceRecords->first();
 
-                    $scoresData = $record && !$record->scores->isEmpty() ?  $record->scores->map(function ($s) {
+                    $scoresData = $record && !$record->scores->isEmpty() ? $record->scores->map(function ($s) {
                         return [
                             'id' => $s->id,
                             'exam_slot' => $s->exam_slot,
@@ -166,6 +170,9 @@ class AttendanceService extends BaseService
     {
         return $this->execute(
             callback: function () use ($session, $data) {
+                if (!$session->isDraft()) {
+                    throw new ServiceException("Buổi học này không thể cập nhật thông tin vì đã được chốt sổ.");
+                }
                 $dataUpdate = collect($data)->only([
                     'lesson_content',
                     'homework',
@@ -173,6 +180,11 @@ class AttendanceService extends BaseService
                     'general_note'
                 ])->toArray();
                 $session->update($dataUpdate);
+                // Ghi Log hệ thống
+                Logging::userActivity(
+                    action: 'Cập nhật thông tin buổi học',
+                    description: "Cập nhật thông tin buổi học cho lớp {$session->class->name} "
+                );
                 return ServiceReturn::success($session);
             }
         );
@@ -190,6 +202,9 @@ class AttendanceService extends BaseService
     {
         return $this->execute(
             callback: function () use ($session, $studentId, $status, $data) {
+                if (!$session->isDraft()) {
+                    throw new ServiceException("Buổi học này không thể đánh dấu điểm danh vì đã được chốt sổ.");
+                }
                 // VALIDATE THỜI GIAN ĐI MUỘN (Nếu có nhập)
                 if ($status === AttendanceStatus::Late && !empty($data['check_in_time'])) {
                     $inputTime = Carbon::parse($data['check_in_time']);
@@ -247,7 +262,11 @@ class AttendanceService extends BaseService
                 if (!$status->statusPresentInAttendance()) {
                     $this->scoreRepository->deleteScoresByAttendanceRecord($record->id);
                 }
-
+                // Ghi Log hệ thống
+                Logging::userActivity(
+                    action: 'Đánh dấu điểm danh',
+                    description: "Đánh dấu {$status->label()} cho học sinh {$record->student->name} (ID: {$record->student->id})",
+                );
                 // Trả về data mới để Component cập nhật lên RAM
                 return $record;
             },
@@ -263,13 +282,16 @@ class AttendanceService extends BaseService
      * @return ServiceReturn
      * @throws \Throwable
      */
-    public function saveStudentScores(int $sessionId, int $studentId, array $scoresData): ServiceReturn
+    public function saveStudentScores(AttendanceSession $session, int $studentId, array $scoresData): ServiceReturn
     {
         return $this->execute(
-            callback: function () use ($sessionId, $studentId, $scoresData) {
+            callback: function () use ($session, $studentId, $scoresData) {
+                if (!$session->isDraft()) {
+                    throw new ServiceException("Buổi học này không thể cập nhật điểm số vì đã được chốt sổ.");
+                }
                 // Tìm bản ghi điểm danh
                 $attendanceRecord = $this->attendanceRecordRepository->query()
-                    ->where('session_id', $sessionId)
+                    ->where('session_id', $session->id)
                     ->where('student_id', $studentId)
                     ->whereIn('status', AttendanceStatus::presentStatus()) // Chỉ lấy các trạng thái có mặt trong buổi học
                     ->first();
@@ -288,13 +310,13 @@ class AttendanceService extends BaseService
                     $this->scoreRepository->query()->updateOrCreate(
                         [
                             'attendance_record_id' => $attendanceRecord->id,
-                            'exam_slot'            => $slot,
+                            'exam_slot' => $slot,
                         ],
                         [
                             'exam_name' => $item['exam_name'] ?? "Đầu điểm {$slot}",
-                            'score'     => $item['score'],
+                            'score' => $item['score'],
                             'max_score' => $item['max_score'] ?? 10,
-                            'note'      => $item['note'] ?? null,
+                            'note' => $item['note'] ?? null,
                         ]
                     );
                 }
@@ -306,9 +328,194 @@ class AttendanceService extends BaseService
                     ->whereNotIn('exam_slot', $activeSlots)
                     ->delete();
 
+                // Ghi Log hệ thống
+                Logging::userActivity(
+                    action: 'Nhập điểm',
+                    description: "Nhập điểm cho học sinh {$attendanceRecord->student->name} (ID: {$attendanceRecord->student->id})",
+                );
                 return true;
             },
             useTransaction: true // Luôn dùng Transaction khi loop lưu nhiều record
+        );
+    }
+
+    /**
+     * Cập nhật điểm thưởng của một học sinh trong một buổi học
+     * @param int $sessionId
+     * @param int $studentId
+     * @param int $amount
+     * @param string|null $reason
+     * @return ServiceReturn
+     */
+    public function updateStudentRewardPoints(AttendanceSession $session, int $studentId, int $amount, ?string $reason = null): ServiceReturn
+    {
+        return $this->execute(
+            callback: function () use ($session, $studentId, $amount, $reason) {
+                if (!$session->isDraft()) {
+                    throw new ServiceException("Buổi học này không thể cập nhật điểm thưởng vì đã được chốt sổ.");
+                }
+                $reward = $this->rewardPointRepository->query()->create([
+                    'student_id' => $studentId,
+                    'session_id' => $session->id,
+                    'amount' => $amount,
+                    'reason' => $reason ?? ($amount > 0 ? 'Thưởng trong giờ' : 'Trừ điểm thái độ'),
+                    'awarded_by' => auth()->user()->id,
+                ]);
+                Logging::userActivity(
+                    action: 'Cập nhật điểm thưởng',
+                    description: "Cập nhật điểm thưởng cho học sinh {$reward->student->name} (ID: {$reward->student->id})",
+                );
+                return $reward;
+            });
+    }
+
+    /**
+     * Cập nhật ghi chú nội bộ (Private Note) cho học sinh
+     * @param int $sessionId
+     * @param int $studentId
+     * @param string $note
+     * @return ServiceReturn
+     * @throws \Throwable
+     */
+    public function updatePrivateNoteStudent(AttendanceSession $session, int $studentId, string $note): ServiceReturn
+    {
+        return $this->execute(callback: function () use ($session, $studentId, $note) {
+            if (!$session->isDraft()) {
+                throw new ServiceException("Buổi học này không thể cập nhật ghi chú nội bộ vì đã được chốt sổ.");
+            }
+            $record = $this->attendanceRecordRepository->query()->updateOrCreate(
+                [
+                    'session_id' => $session->id,
+                    'student_id' => $studentId,
+                ],
+                [
+                    'private_note' => $note,
+                ]
+            );
+            Logging::userActivity(
+                action: 'Ghi chú nội bộ',
+                description: "Ghi chú nội bộ cho học sinh {$record->student->name} (ID: {$record->student->id})",
+            );
+            return $record;
+        });
+    }
+
+    /**
+     * Chốt sổ buổi học
+     * @param int $sessionId
+     * @return ServiceReturn
+     * @throws \Throwable
+     */
+    public function completeSession(int $sessionId): ServiceReturn
+    {
+        return $this->execute(
+            callback: function () use ($sessionId) {
+                $session = $this->attendanceSessionRepository->findById($sessionId);
+
+                if (!$session) {
+                    throw new ServiceException("Không tìm thấy buổi học.");
+                }
+
+                if (!$session->isDraft()) {
+                    throw new ServiceException("Buổi học này đã được chốt sổ từ trước.");
+                }
+                // Validation: Đảm bảo TẤT CẢ học sinh đã được điểm danh
+                $dateStr = Carbon::parse($session->session_date)->toDateString();
+                $totalStudentInClass = $this->classEnrollmentRepository->countTotalStudentPresent($session->class_id, $dateStr);
+                $markedStudentsCount = $this->attendanceRecordRepository->query()
+                    ->where('session_id', $sessionId)
+                    ->count();
+                if ($markedStudentsCount < $totalStudentInClass) {
+                    $unmarkedCount = $totalStudentInClass - $markedStudentsCount;
+                    throw new ServiceException(
+                        "Lỗi chốt sổ: Lớp có {$totalStudentInClass} học sinh nhưng mới điểm danh {$markedStudentsCount} em. " .
+                        "Vẫn còn {$unmarkedCount} học sinh chưa được xác nhận trạng thái."
+                    );
+                }
+
+                // Cập nhật attendance_sessions
+                $session->update([
+                    'status' => AttendanceSessionStatus::Completed,
+                    'completed_at' => Carbon::now(),
+                ]);
+
+                // Cập nhật schedule_instances (Lịch học)
+                $this->scheduleInstanceRepository->query()
+                    ->where('id', $session->schedule_instance_id)
+                    ->update(['status' => ScheduleStatus::Completed]);
+
+                // TODO: Queue Gửi tin nhắn Zalo/SMS cho Phụ huynh và Lớp (G6)
+                // SendParentNotificationsJob::dispatch($sessionId);
+                // SendClassNotificationsJob::dispatch($sessionId);
+                // 6. Ghi Log hệ thống
+                Logging::userActivity(
+                    action: 'Chốt sổ buổi học',
+                    description: "Chốt sổ buổi học {$session->session_date} (ID: {$sessionId})",
+                );
+                return true;
+            },
+            useTransaction: true,
+        );
+    }
+
+    /**
+     * Mở lại buổi đã hoàn thành (Sensitive action - Admin only).
+     *
+     * @param int $sessionId
+     * @return ServiceReturn
+     * @throws \Throwable
+     */
+    public function reopenCompletedSession(int $sessionId): ServiceReturn
+    {
+        return $this->execute(
+            callback: function () use ($sessionId) {
+                $user = Auth::user();
+
+                if (!$user?->isAdmin()) {
+                    throw new ServiceException('Bạn không có quyền thực hiện thao tác này.');
+                }
+
+                /** @var AttendanceSession|null $session */
+                $session = $this->attendanceSessionRepository->findById(
+                    id: $sessionId,
+                    relations: ['scheduleInstance', 'class', 'teacher'],
+                );
+
+                if (!$session) {
+                    throw new ServiceException('Không tìm thấy buổi điểm danh.');
+                }
+
+                if ($session->status !== AttendanceSessionStatus::Completed) {
+                    throw new ServiceException('Chỉ có thể mở lại buổi đang ở trạng thái Hoàn thành.');
+                }
+
+                if (! $session->scheduleInstance) {
+                    throw new ServiceException('Không tìm thấy lịch học tương ứng của buổi điểm danh.');
+                }
+
+                // 1) Reopen attendance session
+                $session->update([
+                    'status' => AttendanceSessionStatus::Draft,
+                    'completed_at' => null,
+                    'locked_at' => null,
+                ]);
+
+                // 2) Reopen schedule instance
+                $session->scheduleInstance->update([
+                    'status' => ScheduleStatus::Upcoming,
+                ]);
+
+                // 3) Audit trail (file log)
+                $sessionDate = Carbon::parse($session->session_date)->format('Y-m-d');
+                Logging::userActivity(
+                    action: 'Mở chốt sổ buổi học',
+                    description: "Admin {$user->username} đã mở chốt sổ buổi điểm danh ID {$session->id} (ngày {$sessionDate}) vào lúc "
+                        . Carbon::now()->format('Y-m-d H:i:s')
+                        . ". ScheduleInstance ID: {$session->schedule_instance_id}.",
+                );
+                return true;
+            },
+            useTransaction: true,
         );
     }
 }

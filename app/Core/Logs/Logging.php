@@ -25,7 +25,7 @@ class Logging
         if ($userId) {
             $userRequestId = $userId;
         }
-        if (! empty($userRequestId)) {
+        if (empty($userRequestId)) {
             $userRequestId = 'guest';
         }
         $context = [

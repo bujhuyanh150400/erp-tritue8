@@ -76,19 +76,21 @@ class ScheduleCalendar extends Page implements HasSchemas
                         Toggle::make('active_classes_only')
                             ->label('Chỉ lớp Đang mở')
                             ->inline(false),
+
                         Actions::make([
                             Action::make('filter_button')
                                 ->label('Lọc Lịch Học')
                                 ->icon(Heroicon::Funnel)
                                 ->action('applyFilters')
-                        ])->columnSpanFull()->alignEnd()
+                        ])
+                            ->columnSpanFull()
+                            ->alignEnd()
                     ])
             ])
             ->statePath('filters');
     }
 
     /**
-     * SỨC MẠNH CỦA LIVEWIRE 4
      * Hàm này sẽ tự động được gọi mỗi khi có bất kỳ ô input nào (có gắn ->live()) thay đổi giá trị.
      */
     public function applyFilters()

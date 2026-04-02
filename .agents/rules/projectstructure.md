@@ -128,7 +128,6 @@ Khi them/chinh sua tinh nang:
 4. Them/sua Service cho business rule.
 5. Noi vao Filament Resource/Page/Action.
 6. Ghi `user_logs` cho action quan trong.
-7. Bo sung test (`tests/`) cho rule quan trong.
 
 ## 7) Uu tien mo rong tiep theo
 Theo hien trang code va docs, uu tien tiep theo nen la:
