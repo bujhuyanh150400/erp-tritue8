@@ -5,12 +5,17 @@ namespace App\Filament\Resources\Teachers\Widgets;
 use App\Models\Teacher;
 use App\Services\TeacherService;
 use Filament\Widgets\ChartWidget;
+use Livewire\Attributes\Reactive;
 
 class TeacherAttendanceChart extends ChartWidget
 {
     protected ?string $heading = 'Tỷ lệ chuyên cần các lớp';
+
+    #[Reactive]
     public ?Teacher $record = null;
-    public string $selectedMonth;
+
+    #[Reactive]
+    public string $selectedMonth = '';
 
     protected function getData(): array
     {
