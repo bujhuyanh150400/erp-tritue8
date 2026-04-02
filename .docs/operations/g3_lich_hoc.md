@@ -113,7 +113,13 @@ Có thể chọn nhiều điều kiện cùng lúc
 ### Hiển thị mỗi block lịch
 
 ```
-Mỗi schedule_instance hiển thị trên calendar:
+Mỗi schedule_instance hiển thị trên calendar hiển thị 
+- Lớp
+- Môn học
+- Thời gian
+- GV hiện tại
+- Phòng học
+- Sĩ số
 
 → SELECT
     si.id, si.date, si.start_time, si.end_time,
