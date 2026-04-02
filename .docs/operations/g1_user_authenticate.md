@@ -281,10 +281,6 @@ Bảng hiển thị:
 
 ```
 Tab 1 — Thông tin cá nhân:
-  → SELECT students.*, users.username, users.is_active, users.last_login_at
-    FROM students
-    JOIN users ON students.user_id = users.id
-    WHERE students.id = ?
 
   Hiển thị: họ tên, ngày sinh, giới tính, khối, địa chỉ,
              tên PH, SĐT PH, zalo_id, ghi chú,
@@ -334,24 +330,7 @@ Tab 2 — Báo cáo theo môn:
       AND mr.month = 'YYYY-MM'
 
 Tab 3 — Sao thưởng:
-  Tổng sao hiện tại:
-  → SELECT SUM(amount) FROM reward_points WHERE student_id = ?
-
-  Lịch sử cộng/trừ sao:
-  → SELECT rp.created_at, rp.amount, rp.reason, users.username as nguoi_tao
-    FROM reward_points rp
-    JOIN users ON rp.awarded_by = users.id
-    WHERE rp.student_id = ?
-    ORDER BY rp.created_at DESC
-
-  Lịch sử đổi thưởng:
-  → SELECT rr.redeemed_at, ri.name as ten_thuong,
-           rr.points_spent, users.username as nguoi_xu_ly
-    FROM reward_redemptions rr
-    JOIN reward_items ri ON rr.reward_item_id = ri.id
-    JOIN users ON rr.processed_by = users.id
-    WHERE rr.student_id = ?
-    ORDER BY rr.redeemed_at DESC
+ > Nằm ở g4_diemdanh_diemso, Phần đổi thưởng
 ```
 
 ---

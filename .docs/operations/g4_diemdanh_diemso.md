@@ -285,30 +285,47 @@ Toàn bộ chuỗi hành động dưới đây phải được bọc trong **Dat
 ### Chốt tháng (Lock buổi học)
 
 ```
-Admin bấm "Chốt tháng" cho lớp (hoặc toàn bộ lớp)
+## 1. Mục đích & Bản chất
+- **Bản chất:** Là bước chuyển giao dữ liệu từ  Đào tạo  sang Tài chính
+- **Mục đích:** Đóng băng toàn bộ hoạt động học thuật của một lớp trong một tháng cụ thể, làm căn cứ gốc (Single Source of Truth) để xuất hóa đơn học phí (G5) và tính lương nhân sự.
 
-Điều kiện:
-  - Tất cả buổi trong tháng phải có status = completed
-    → SELECT COUNT(*) FROM attendance_sessions
-      WHERE class_id = ? AND MONTH(session_date) = ? AND YEAR(session_date) = ?
-        AND status = draft
-      → Nếu > 0: "Còn X buổi chưa hoàn thành điểm danh"
+## 2. Ràng buộc & Kiểm duyệt (Validation)
+Hệ thống phải thực hiện 2 lớp kiểm tra trước khi cho phép chốt tháng:
 
-Service:
-  UPDATE attendance_sessions
-    SET status = locked,
-        locked_at = now()
-    WHERE class_id = ?
-      AND EXTRACT(MONTH FROM session_date) = ?
-      AND EXTRACT(YEAR FROM session_date) = ?
-      AND status = completed
+- **Kiểm tra 1: Chống "Tháng rỗng" (Zero Sessions)**
+  - Hệ thống đếm tổng số buổi học có phát sinh trong tháng của lớp.
+  - *Nếu Tổng = 0:* Báo lỗi `"Lớp không có buổi học nào trong tháng MM/YYYY"` (Ngăn chặn việc khóa nhầm tháng nghỉ Tết/Dịch bệnh).
 
-Sau khi lock:
-  - Không sửa được bất kỳ field nào trong attendance_sessions
-  - Không sửa attendance_records (điểm danh, điểm số, sao thưởng)
-  - Dùng làm căn cứ tính hóa đơn học phí tháng (G5)
+- **Kiểm tra 2: Đảm bảo hoàn tất 100% (Strict Completion)**
+  - *Truy vấn:* Tìm số lượng buổi học trong tháng có trạng thái `NOT IN ('completed', 'locked', 'cancelled')`.
+  - *Xử lý:* Nếu tồn tại dù chỉ 1 buổi (Draft, Ongoing, v.v.), hệ thống ném ngoại lệ (Exception): `"Còn X buổi học trong tháng chưa được chốt sổ. Vui lòng yêu cầu giáo viên hoàn thành trước khi chốt tháng."`
 
-Ghi user_logs: admin X chốt tháng MM/YYYY lớp Y lúc Z
+*Lưu ý: Các buổi học bị hủy (`cancelled`) được phép bỏ qua trong quá trình đối chiếu.*
+
+## 3. Xử lý hệ thống (Service Logic)
+Toàn bộ luồng dữ liệu chạy trong **Database Transaction**:
+- **Cập nhật dữ liệu:**
+  - Lệnh `UPDATE` tìm tất cả các buổi học của lớp trong tháng đó có `status = 'completed'` và đổi thành `locked`.
+  - Cập nhật thời gian chốt: `locked_at = now()`.
+- **Bulk Action (Chốt hàng loạt nhiều lớp):**
+  - Kế toán có thể chọn nhiều lớp cùng lúc.
+  - Hệ thống áp dụng cơ chế **"Bỏ qua lỗi" (Skip on Error)**: Chỉ khóa các lớp đủ điều kiện. Các lớp chưa chốt sổ xong sẽ bị bỏ qua.
+  - Trả về kết quả: *"Đã chốt thành công 8/10 lớp. Các lớp chưa đủ điều kiện: Toán 9, Anh 10."*
+- **Audit Log:** Ghi nhận lịch sử vào `user_logs`: *[Kế toán X] đã chốt tháng [MM/YYYY] cho lớp [Y] vào lúc [Z]*.
+
+## 4. Tác động hệ thống sau khi khóa (Post-Lock)
+- **Vô hiệu hóa UI:** Toàn bộ nút "Sửa", "Xóa", "Chốt sổ" trên danh sách buổi học của tháng đó bị ẩn (Hidden/Disabled) đối với Giáo viên.
+- **Đóng băng chi tiết:** Các bản ghi `attendance_records` thuộc tháng này không thể thao tác:
+  - Không thay đổi trạng thái điểm danh.
+  - Không sửa/xóa/thêm điểm kiểm tra.
+  - Không cộng/trừ điểm thưởng (sao).
+- **Kích hoạt luồng Tài chính:** Module Học phí/Hóa đơn chính thức được quyền truy xuất dữ liệu `is_fee_counted` của tháng này để lên Bill cho phụ huynh.
+
+## 5. Xử lý ngoại lệ: Mở khóa tháng (Unlock Month)
+- **Phân quyền:** Action này BẮT BUỘC chỉ hiển thị với vai trò `Super Admin` hoặc `Accountant Manager` (Kế toán trưởng).
+- **Thao tác:** Mở khóa các buổi học (`locked` -> `completed`).
+- **Cảnh báo (Modal):** *"Việc mở khóa có thể làm sai lệch báo cáo doanh thu và hóa đơn đã xuất. Bạn có chắc chắn muốn thực hiện?"*
+- Bắt buộc ghi Log hệ thống khi thực hiện hành động này.
 ```
 
 ---
@@ -333,88 +350,121 @@ Danh sách hiển thị cho GV khi bấm "Đổi thưởng" trong buổi điểm
 ### Quản lý danh mục phần thưởng (Admin)
 
 ```
-Danh sách:
-  → SELECT * FROM reward_items ORDER BY points_required ASC
+## 1. Danh sách (List View)
+- **Truy vấn:** Lấy danh sách quà tặng, ưu tiên hiển thị theo số điểm từ thấp đến cao để dễ nhìn.
+  `SELECT * FROM reward_items ORDER BY points_required ASC`
+- **Cột hiển thị:**
+  - Tên phần thưởng (name)
+  - Điểm cần đổi (points_required)
+  - Loại phần thưởng (reward_type)
+  - Trạng thái (is_active: Đang áp dụng / Tạm ngưng)
+- **Thao tác (Action):** Chỉnh sửa | Bật/Tắt trạng thái (Toggle Active).
 
-  Bảng:
-    - Tên phần thưởng  → reward_items.name
-    - Điểm cần đổi     → reward_items.points_required
-    - Loại             → reward_items.reward_type
-    - Trạng thái       → reward_items.is_active
-    - Action: Chỉnh sửa | Bật/Tắt
+## 2. Tạo phần thưởng (Create)
+- **Form đầu vào:**
+  - `name`: Text (Bắt buộc).
+  - `points_required`: Integer (Bắt buộc, > 0).
+  - `reward_type`: Select (Bắt buộc).
+  - `note`: Textarea (Tùy chọn).
+  - `is_active`: Boolean (Mặc định: true).
+- **Service logic:** Thực hiện `INSERT` dữ liệu vào bảng `reward_items`.
 
-Tạo phần thưởng:
-  Form:
-    - name             (required)
-    - points_required  (required, > 0)
-    - reward_type      (required)
-    - note             (optional)
-    - is_active        (default: true)
-  Service: INSERT reward_items
-
-Sửa phần thưởng:
-  Service: UPDATE reward_items
-  Không cho sửa nếu đã có reward_redemptions dùng item này
-    → Chỉ cho đổi is_active, không cho đổi points_required
+## 3. Sửa phần thưởng (Update)
+- **Service logic:** Thực hiện `UPDATE` bảng `reward_items`.
+- **Ràng buộc bảo vệ dữ liệu (Validation):**
+  - Trước khi update, hệ thống kiểm tra ID của phần thưởng này đã tồn tại trong bảng `reward_redemptions` (Lịch sử đổi quà) hay chưa.
+  - **Nếu ĐÃ CÓ người đổi:** Tuyệt đối không cho phép sửa trường `points_required` (để bảo vệ lịch sử trừ điểm). Chỉ cho phép cập nhật `name`, `note` và trạng thái `is_active`.
 ```
 
 ### Đổi thưởng cho học sinh
 
 ```
-GV bấm "Đổi thưởng" tại dòng HS trong buổi điểm danh
+## 1. Giao diện & Hiển thị (UI/UX)
+- **Vị trí thao tác:** Action "Đổi thưởng" đặt tại tab "Sao & thưởng (trong màn chi tiết học sinh)".
+- **Thông tin khởi tạo Form:**
+  - **Tổng sao hiện có:** Truy vấn `SELECT SUM(amount) FROM reward_points WHERE student_id = ?`.
+  - **Danh sách quà tặng:** Dropdown hiển thị các phần thưởng hợp lệ (`is_active = true`).
+  - Gợi ý: Có thể vô hiệu hóa (disabled) các món quà mà điểm yêu cầu lớn hơn tổng sao hiện tại của học sinh để tránh click nhầm.
 
-Hiển thị:
-  - Tổng sao hiện tại:
-      → SELECT SUM(amount) FROM reward_points WHERE student_id = ?
-  - Danh sách phần thưởng đang active
+## 2. Kiểm duyệt & Ràng buộc (Validation)
+- **Kiểm tra số dư điểm:**
+  - So sánh: Tổng sao của học sinh >= `points_required` của món quà được chọn.
+  - Lỗi (Exception): 
+    + Nếu không đủ sao, chặn giao dịch và báo lỗi: `"Học sinh chỉ có [X] sao, cần [Y] sao để đổi [Tên món quà]."`.
 
-GV chọn phần thưởng
+## 3. Xử lý hệ thống (Service Logic)
+Toàn bộ luồng xử lý phải được bọc trong **Database Transaction**:
 
-Validation:
-  - Kiểm tra đủ điểm:
-      SUM(reward_points.amount) WHERE student_id = ? >= reward_items.points_required
-      → Nếu không đủ: "Học sinh chỉ có X sao, cần Y sao"
+- Bước 1: Ghi nhận lịch sử đổi quà
+  - Thực hiện `INSERT` vào bảng `reward_redemptions`.
+  - Dữ liệu chuẩn bị: 
+    + `student_id`, `reward_item_id`, `points_spent` (lấy từ giá trị `points_required` của item tại thời điểm này), 
+    + Thời gian đổi
+    + người xử lý (`Auth::id()`).
 
-Service (transaction):
-  1. INSERT reward_redemptions (
-       student_id,
-       reward_item_id,
-       points_spent  = reward_items.points_required,
-       redeemed_at   = now(),
-       processed_by  = Auth::id(),
-       invoice_id    = NULL  ← gắn sau nếu type = discount
-     )
+- Bước 2: Cấn trừ số dư điểm
+  - Thực hiện `INSERT` vào bảng `reward_points` một bản ghi mang giá trị **ÂM**.
+    > amount      = -(reward_items.points_required),  ← âm = trừ điểm
+    > reason      = 'Đổi thưởng: ' + reward_items.name,
+    > awarded_by  = Auth::id()
+    > session_id  = null (vi là đổi thưởng)
 
-  2. INSERT reward_points (
-       student_id,
-       session_id  = as_sess.id,
-       amount      = -(reward_items.points_required),  ← âm = trừ điểm
-       reason      = 'Đổi thưởng: ' + reward_items.name,
-       awarded_by  = Auth::id()
-     )
+- **Bước 3: Ghi Log hệ thống**
+  - Ghi nhận vào `user_logs`: *Giáo viên [X] đã đổi thưởng [Tên quà] cho Học sinh [Y] vào lúc [Z].*
 
-
-Ghi user_logs: GV X đổi thưởng [tên thưởng] cho HS Y lúc Z
 ```
 
 ### Lịch sử đổi thưởng
 
 ```
-Xem lịch sử đổi thưởng của học sinh:
+## 1. Giao diện & Vị trí (UI/UX)
+- Vị trí: 
+    > Đặt ở trang chi tiết Hồ sơ học sinh, Tab "Sao & thưởng (trong màn chi tiết học sinh)".
+    > Thành 1 component hiển thị lịch sử đổi quà của học sinh.
+- Phân trang (Pagination): Áp dụng phân trang  để tối ưu hiệu năng nếu lịch sử đổi quà của học sinh quá dài.
 
-  → SELECT
+## 2. Truy vấn dữ liệu (Query Logic)
+- **Truy vấn lõi (Core SQL):**
+  ```sql
+  SELECT
       rr.redeemed_at,
       ri.name as ten_thuong,
       ri.reward_type,
       rr.points_spent,
-      u.username as nguoi_xu_ly
-    FROM reward_redemptions rr
-    JOIN reward_items ri ON rr.reward_item_id = ri.id
-    JOIN users u ON rr.processed_by = u.id
-    WHERE rr.student_id = ?
-    ORDER BY rr.redeemed_at DESC
+      u.name as nguoi_xu_ly,   -- Dùng name thay vì username để hiển thị thân thiện hơn
+      rr.invoice_id            -- Bổ sung để check trạng thái kế toán
+  FROM reward_redemptions rr
+  JOIN reward_items ri ON rr.reward_item_id = ri.id
+  JOIN users u ON rr.processed_by = u.id
+  WHERE rr.student_id = ?
+  ORDER BY rr.redeemed_at DESC
+```
 
-  Bảng: Ngày | Phần thưởng | Loại | Sao đã dùng | Người xử lý
+### Lịch sử cộng/trừ sao
+```
+## 1. Giao diện & Vị trí (UI/UX)
+- Vị trí: 
+    > Trong Tab "Lịch sử đổi thưởng" trong trang Chi tiết Học sinh (Student View Page).
+    > Thành 1 component hiển thị
+    > Ngay phía trên bảng lịch sử đổi thưởng, nên có một Section nhỏ hiển thị: Tổng sao hiện tại (Current Balance) = `SUM(amount)`.
+
+## 2. Truy vấn dữ liệu (Query Logic)
+- **Truy vấn lõi (Core SQL):**
+  Hệ thống truy xuất toàn bộ giao dịch (cả cộng và trừ) từ bảng `reward_points`. Dùng `LEFT JOIN` với bảng buổi học (nếu sao được tặng trong lớp).
+
+  ```sql
+  SELECT
+      rp.created_at AS thoi_gian,
+      rp.amount AS bien_dong,
+      rp.reason AS ly_do,
+      u.name AS nguoi_thuc_hien,
+      sess.session_date AS buoi_hoc_lien_quan
+  FROM reward_points rp
+  LEFT JOIN users u ON rp.awarded_by = u.id
+  LEFT JOIN attendance_sessions sess ON rp.session_id = sess.id
+  WHERE rp.student_id = ?
+  ORDER BY rp.created_at DESC
+
 ```
 
 
