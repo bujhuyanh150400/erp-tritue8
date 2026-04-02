@@ -418,9 +418,10 @@ Toàn bộ luồng xử lý phải được bọc trong **Database Transaction**
 
 ```
 ## 1. Giao diện & Vị trí (UI/UX)
-- **Vị trí hiển thị:** 
-    - Đặt ở trang chi tiết Hồ sơ học sinh, Tab "Lịch sử đổi thưởng".
-- **Phân trang (Pagination):** Áp dụng phân trang  để tối ưu hiệu năng nếu lịch sử đổi quà của học sinh quá dài.
+- Vị trí: 
+    > Đặt ở trang chi tiết Hồ sơ học sinh, Tab "Sao & thưởng (trong màn chi tiết học sinh)".
+    > Thành 1 component hiển thị lịch sử đổi quà của học sinh.
+- Phân trang (Pagination): Áp dụng phân trang  để tối ưu hiệu năng nếu lịch sử đổi quà của học sinh quá dài.
 
 ## 2. Truy vấn dữ liệu (Query Logic)
 - **Truy vấn lõi (Core SQL):**
@@ -437,6 +438,33 @@ Toàn bộ luồng xử lý phải được bọc trong **Database Transaction**
   JOIN users u ON rr.processed_by = u.id
   WHERE rr.student_id = ?
   ORDER BY rr.redeemed_at DESC
+```
+
+### Lịch sử cộng/trừ sao
+```
+## 1. Giao diện & Vị trí (UI/UX)
+- Vị trí: 
+    > Trong Tab "Lịch sử đổi thưởng" trong trang Chi tiết Học sinh (Student View Page).
+    > Thành 1 component hiển thị
+    > Ngay phía trên bảng lịch sử đổi thưởng, nên có một Section nhỏ hiển thị: Tổng sao hiện tại (Current Balance) = `SUM(amount)`.
+
+## 2. Truy vấn dữ liệu (Query Logic)
+- **Truy vấn lõi (Core SQL):**
+  Hệ thống truy xuất toàn bộ giao dịch (cả cộng và trừ) từ bảng `reward_points`. Dùng `LEFT JOIN` với bảng buổi học (nếu sao được tặng trong lớp).
+
+  ```sql
+  SELECT
+      rp.created_at AS thoi_gian,
+      rp.amount AS bien_dong,
+      rp.reason AS ly_do,
+      u.name AS nguoi_thuc_hien,
+      sess.session_date AS buoi_hoc_lien_quan
+  FROM reward_points rp
+  LEFT JOIN users u ON rp.awarded_by = u.id
+  LEFT JOIN attendance_sessions sess ON rp.session_id = sess.id
+  WHERE rp.student_id = ?
+  ORDER BY rp.created_at DESC
+
 ```
 
 
