@@ -2,10 +2,13 @@
 
 namespace App\Filament\Resources\AttendanceSessions\Components;
 
+use App\Constants\AttendanceSessionStatus;
 use App\Constants\AttendanceStatus;
 use App\Filament\Resources\AttendanceSessions\Traits\AttendanceStudentTableActions;
+use App\Filament\Resources\Students\StudentResource;
 use App\Models\AttendanceSession;
 use App\Services\AttendanceService;
+use Filament\Actions\ActionGroup;
 use Filament\Actions\Concerns\InteractsWithActions;
 use Filament\Actions\Contracts\HasActions;
 use Filament\Schemas\Concerns\InteractsWithSchemas;
@@ -26,8 +29,6 @@ class AttendanceStudentTable extends Component implements HasActions, HasSchemas
     use AttendanceStudentTableActions;
 
     public AttendanceSession $record;
-
-
 
     public function mount(AttendanceService $service): void
     {
@@ -62,11 +63,29 @@ class AttendanceStudentTable extends Component implements HasActions, HasSchemas
             ->columns([
                 TextColumn::make('student_name')
                     ->label('Họ và tên học sinh')
-                    ->searchable() // Kích hoạt ô tìm kiếm
                     ->weight('bold')
                     ->color('primary')
-                    // Hiển thị tổng sao (Data đã được Service tính sẵn qua withSum)
-                    ->description(fn(array $record): string => '⭐ Tổng sao hiện tại: ' . ($record['total_reward_points'] ?? 0)),
+                    ->url(fn(array $record): string => StudentResource::getUrl('view', ['record' => $record['student_id']]))
+                    ->formatStateUsing(function ($state, array $record) {
+                        $html = '<div class="flex flex-col">';
+                        $html .= '<span class="font-bold text-primary-600">' . $state . '</span>';
+
+                        if (!empty($record['private_note'])) {
+                            $html .= '<div class="text-xs font-normal text-gray-500 whitespace-normal max-w-xs mt-1">📝 ' . $record['private_note'] . '</div>';
+                        }
+
+                        $html .= '</div>';
+                        return $html;
+                    })
+                    ->html()
+                    ->searchable(),
+
+                TextColumn::make('total_reward_points')
+                    ->label('⭐ Sao')
+                    ->badge()
+                    ->color('warning')
+                    ->default(0)
+                    ->formatStateUsing(fn(int $state): string => $state . ' sao'),
 
                 TextColumn::make('attendance_status')
                     ->label('Trạng thái')
@@ -90,11 +109,18 @@ class AttendanceStudentTable extends Component implements HasActions, HasSchemas
                 $this->actionAttendance(isBulk: true),
             ])
             ->recordActions([
-                // Action điểm danh
-                $this->actionAttendance(isBulk: false),
-
-                // Nhập điểm
-                $this->actionSaveScore(),
+                ActionGroup::make([
+                    // Action điểm danh
+                    $this->actionAttendance(isBulk: false),
+                    // Action điểm thưởng
+                    $this->actionRewards(),
+                    // Nhập điểm
+                    $this->actionSaveScore(),
+                    // Action ghi chú riêng
+                    $this->actionPrivateNote(),
+                ])
+                    ->visible(fn(): bool => $this->record->isDraft())
+                    ->label("Tác vụ")
             ]);
     }
 

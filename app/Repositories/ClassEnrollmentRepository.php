@@ -147,4 +147,23 @@ class ClassEnrollmentRepository extends BaseRepository
             })
             ->get();
     }
+
+    /**
+     * Lấy số học sinh đang học tại thời điểm diễn ra buổi học
+     * @param int $classId
+     * @param string $startDate
+     * @return int
+     */
+    public function countTotalStudentPresent(int $classId, string $startDate): int
+    {
+        return $this->query()
+            ->where('class_id', $classId)
+            // Điều kiện chốt chặn: Đang học tại thời điểm đó
+            ->whereDate('enrolled_at', '<=', $startDate)
+            ->where(function ($query) use ($startDate) {
+                $query->whereNull('left_at')
+                    ->orWhereDate('left_at', '>=', $startDate);
+            })
+            ->count();
+    }
 }

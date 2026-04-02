@@ -94,7 +94,7 @@ là `Upcoming` hoặc `Completed`. Chặn nếu đã bị `Cancelled` hoặc `Re
 - **Lưu ý kiến trúc:** Chỉ tạo "Vỏ" Session. KHÔNG tự động sinh (bulk insert) danh sách học sinh vào bảng `attendance_records` lúc này để tránh rác dữ liệu và xử lý được bài toán học sinh mới nhập học phút chót.
 ```
 
-### Trang điểm danh (màn hình chính của GV)
+### Trang điểm danh
 
 #### 1. Thông tin buổi học & Nội dung chung
 ```
@@ -120,7 +120,6 @@ là `Upcoming` hoặc `Completed`. Chặn nếu đã bị `Cancelled` hoặc `Re
 **Thao tác:** - Nút "Sửa thông tin": Mở popup để giáo viên nhập nhanh nội dung bài giảng, Bài tập về nhà, dặn dò, ghi chú nội bộ.
 ```
 
-
 #### 2. Bảng học sinh
 ```
 *Hiển thị danh sách lớp thực tế tại thời điểm diễn ra buổi học và bộ công cụ nhập liệu.*
@@ -138,11 +137,12 @@ Giao diện nhập liệu (Table & Search):
 
 - Action:
   - Nút "Điểm danh"
-
+  - Nút "Khen thưởng"
+  - Nút "Chấm điểm"
+  - Nút "Ghi chú riêng"
 ```
 
-
-### Điểm danh từng học sinh
+##### Điểm danh từng học sinh
 
 ```
 ## 1. Có mặt (Present)
@@ -166,7 +166,7 @@ Giao diện nhập liệu (Table & Search):
 - **Service:** Lưu `is_fee_counted = false`, `check_in_time = null`, `reason_absent = null`. Đồng thời **xóa bản ghi điểm** của HS này trong bảng `scores` (nếu có).
 ```
 
-### Nhập điểm kiểm tra
+##### Nhập điểm kiểm tra
 
 ```
 ## 1. Thao tác (Action)
@@ -194,89 +194,124 @@ Giao diện nhập liệu (Table & Search):
 - **Real-time:** Cập nhật mảng RAM (`attendance_scores`) ngay sau khi lưu và trigger sự kiện `refresh-table-ui` để đồng bộ giao diện lập tức.
 ```
 
-### Điểm thưởng (Sao)
+##### Điểm thưởng (Sao)
 
 ```
-GV cộng/trừ sao cho từng HS trong buổi:
+## 1. Thưởng/Phạt nhanh
+- **Action:** Nút bấm trực tiếp (+1 sao hoặc -1 sao).
+- **Mục đích:** Tuyên dương hoặc nhắc nhở tức thì trong lúc giảng dạy mà không làm gián đoạn bài học.
+- **Service:** Tạo bản ghi vào bảng `reward_points` với `amount` tương ứng và lý do mặc định (VD: "Thưởng trong giờ học").
 
-Form:
-  - amount (int, dương = cộng, âm = trừ)
-  - reason (varchar, optional)
+## 2. Thưởng tùy chỉnh (Custom Reward)
+- **Action:** Mở Modal nhập số điểm và nội dung (Lý do thưởng).
+- **Validate:** Số điểm phải là số nguyên (Integer).
+- **Service:** Lưu bản ghi vào DB gắn với `student_id` và `session_id` hiện tại.
+
+## 3. Xử lý dữ liệu (Data Flow)
+- **Database:** Lưu vào bảng `reward_points` để làm lịch sử (Log).
+- **State Management (RAM):** - Lấy giá trị `total_reward_points` hiện có từ mảng RAM.
+    - Cộng/trừ giá trị mới vào và gọi `updateStudentRowOnUI`.
+- **Hiển thị:** Cột "Điểm thưởng" hiển thị tổng số điểm tích lũy của học sinh kèm hiệu ứng màu sắc nổi bật.
+```
+
+##### Nhắc riêng (Private note)
+
+```
+## 1. Bản chất dữ liệu
+- **Tính riêng tư:** Chỉ hiển thị cho Giáo viên và Admin. Tuyệt đối không xuất hiện trong báo cáo gửi Phụ huynh/Học sinh.
+- **Hình thức:** Lưu trữ theo từng buổi học (Session)
+
+## 2. Thao tác (Action)
+- **Hình thức:** Mở Modal nhập liệu.
+- **Dữ liệu:** Một đoạn văn bản tự do (Textarea).
+
+## 3. Xử lý Logic (Service)
+- **Lưu trữ:** Cập nhật trực tiếp vào trường `private_note` trong bảng `attendance_records`.
+- **Cập nhật UI:** Hiển thị một icon "Note" nhỏ màu xám trên bảng nếu dòng đó đã có ghi chú, giúp giáo viên nhận biết em nào có lưu ý mà không cần mở modal.
+```
+
+##### Hoàn thành buổi học
+
+```
+## 1. Thao tác (UI/UX Action)
+- **Trạng thái hiển thị:** Nút chỉ xuất hiện (Visible) khi buổi học đang ở trạng thái chưa hoàn thành (Draft/Ongoing).
+- **Xác nhận (Confirmation):** Bắt buộc hiển thị Modal cảnh báo xác nhận trước khi thực thi để tránh giáo viên bấm nhầm, gây ảnh hưởng đến hệ thống tính phí và gửi tin nhắn.
+
+## 2. Ràng buộc & Kiểm soát (Validation)
+- **Tuyệt đối không bỏ sót:** Bắt buộc 100% học sinh trong lớp phải được xác nhận trạng thái (Có mặt / Đi muộn / Vắng...).
+- **Thuật toán đối chiếu:**
+  1. Lấy **Sĩ số lớp thực tế** tại thời điểm diễn ra buổi học (từ bảng `class_enrollments`).
+  2. Đếm **Số lượng học sinh đã điểm danh** (bản ghi có `status` khác Null).
+  3. Nếu `(Đã điểm danh) < (Sĩ số lớp)` -> Báo lỗi chặn lại, hiển thị rõ số lượng học sinh còn sót.
+  4. Nếu `(Đã điểm danh) > (Sĩ số lớp)` -> Cảnh báo dữ liệu bất thường (vượt sĩ số).
+
+## 3. Xử lý hệ thống (Service Logic)
+Toàn bộ chuỗi hành động dưới đây phải được bọc trong **Database Transaction** để đảm bảo tính toàn vẹn (ACID):
+- **Cập nhật Buổi học:** Đổi `status` của `attendance_sessions` thành `Completed` và lưu thời gian chốt sổ (`completed_at`).
+- **Cập nhật Lịch học:** Đổi `status` của `schedule_instances` (nếu có liên kết) thành `Completed`.
+- **Ghi Log (Audit):** Lưu lại lịch sử hoạt động bằng hệ thống Logging (Giáo viên X chốt sổ buổi Y lúc Z) để truy vết khi có khiếu nại.
+
+## 4. Hệ thống thông báo (Notification/Queue)
+*Lưu ý: Không gửi tin nhắn trực tiếp trong luồng này để tránh timeout.*
+- **Đẩy vào Hàng đợi (Job Queue):** Kích hoạt các Jobs chạy ngầm để gửi thông báo (Zalo/SMS).
+- **Luồng tin nhắn dự kiến (G6):**
+  - Nhắn riêng cho Phụ huynh: Báo cáo đi học, bài tập, điểm số, điểm thưởng, ghi chú riêng.
+  - Nhắn chung cho Lớp: Nội dung bài học, dặn dò buổi sau.
+```
+
+### Mở lại buổi đã hoàn thành 
+```
+## 1. Mục đích & Bản chất
+- **Mục đích:** Xử lý các trường hợp ngoại lệ khi Giáo viên bấm chốt sổ nhầm, quên nhập điểm, hoặc điểm danh sai cần đính chính lại dữ liệu.
+- **Bản chất:** Đây là một thao tác **nhạy cảm (Sensitive Action)** vì nó trực tiếp mở lại khả năng can thiệp vào các dữ liệu liên quan đến tài chính (Học phí) và tính lương (KPI Giáo viên).
+
+## 2. Phân quyền & Thao tác (UI/UX)
+- Vị trí: Action Header 
+- Phân quyền (Authorization):
+    + Chỉ hiển thị cho tài khoản có Role là `Admin`
+- Trạng thái hiển thị (Visibility): Chỉ xuất hiện khi buổi học đang ở trạng thái `Completed`.
+- Bảo mật thao tác:** Yêu cầu Modal xác nhận (Confirmation) với cảnh báo đỏ: *"Việc mở chốt sổ sẽ cho phép thay đổi dữ liệu điểm danh và điểm số, có thể ảnh hưởng đến học phí đã tính. Bạn có chắc chắn?"*
+
+## 3. Xử lý hệ thống (Service Logic)
+- Cập nhật Buổi học:** Chuyển `status` của `attendance_sessions` từ `AttendanceSessionStatus.Completed` về lại `AttendanceSessionStatus.Draft`.
+- Cập nhật Lịch học:** Chuyển `status` của `schedule_instances` về lại `ScheduleStatus.Upcoming`.
+- Ghi Log (Audit Trail - BẮT BUỘC):** Phải lưu lại lịch sử chi tiết vào `user_logs`: *Admin X đã mở chốt sổ buổi học Y vào lúc Z.* Việc này để truy cứu trách nhiệm nếu có khiếu nại về sửa điểm/sửa điểm danh gian lận.
+
+## 4. Lưu ý Vận hành (Operational Impacts)
+- Dữ liệu Phụ huynh: Nếu hệ thống (Queue) đã lỡ gửi tin nhắn báo cáo Zalo/SMS cho phụ huynh ở lúc "Chốt sổ", hệ thống **không thể thu hồi** tin nhắn này. Do đó, sau khi mở chốt và sửa lỗi, trung tâm cần có quy trình nhắn tin thủ công hoặc gửi lại thông báo đính chính nếu cần thiết.
+- Tính toán lại (Recalculation): Việc mở chốt sổ không làm thay đổi trực tiếp học phí, nhưng khi Admin chốt sổ lại lần 2, hệ thống sẽ thực hiện lại bước "Final Sweep" (quét và tính lại `is_fee_counted`), đảm bảo số liệu tài chính cuối cùng luôn đúng với trạng thái điểm danh thực tế.
+```
+
+### Chốt tháng (Lock buổi học)
+
+```
+Admin bấm "Chốt tháng" cho lớp (hoặc toàn bộ lớp)
+
+Điều kiện:
+  - Tất cả buổi trong tháng phải có status = completed
+    → SELECT COUNT(*) FROM attendance_sessions
+      WHERE class_id = ? AND MONTH(session_date) = ? AND YEAR(session_date) = ?
+        AND status = draft
+      → Nếu > 0: "Còn X buổi chưa hoàn thành điểm danh"
 
 Service:
-  INSERT reward_points (
-    student_id,
-    session_id = as_sess.id,
-    amount     = ?,
-    reason     = ?,
-    awarded_by = Auth::id()
-  )
-  ← Không UPDATE tổng, luôn INSERT record mới
+  UPDATE attendance_sessions
+    SET status = locked,
+        locked_at = now()
+    WHERE class_id = ?
+      AND EXTRACT(MONTH FROM session_date) = ?
+      AND EXTRACT(YEAR FROM session_date) = ?
+      AND status = completed
 
-Tổng sao hiện tại (real-time):
-  → SELECT SUM(amount) FROM reward_points WHERE student_id = ?
+Sau khi lock:
+  - Không sửa được bất kỳ field nào trong attendance_sessions
+  - Không sửa attendance_records (điểm danh, điểm số, sao thưởng)
+  - Dùng làm căn cứ tính hóa đơn học phí tháng (G5)
 
-Lịch sử sao trong buổi này:
-  → SELECT rp.amount, rp.reason, rp.created_at
-    FROM reward_points rp
-    WHERE rp.student_id = ? AND rp.session_id = ?
-    ORDER BY rp.created_at DESC
+Ghi user_logs: admin X chốt tháng MM/YYYY lớp Y lúc Z
 ```
 
-### Nhắc riêng (Private note)
-
-```
-GV nhập ghi chú riêng cho từng HS:
-  - Nội dung này sẽ được chèn vào tin nhắn cá nhân gửi phụ huynh
-
-Service:
-  UPDATE attendance_records
-    SET private_note = ?, teacher_comment = ?
-    WHERE id = ?
-```
-
-### Hoàn thành buổi học
-
-```
-GV bấm "Hoàn thành & Gửi thông báo"
-
-Validation:
-  - Tất cả HS phải có trạng thái điểm danh (không được để null)
-    → SELECT COUNT(*) FROM attendance_records
-      WHERE session_id = ? AND status IS NULL = 0
-
-Service (transaction):
-  1. UPDATE attendance_sessions
-       SET status = completed,
-           completed_at = now()
-       WHERE id = ?
-
-  2. UPDATE schedule_instances
-       SET status = completed
-       WHERE id = as_sess.schedule_instance_id
-
-  3. Cập nhật is_fee_counted theo trạng thái:
-     UPDATE attendance_records
-       SET is_fee_counted = CASE
-         WHEN status IN (present, late) THEN true
-         ELSE false
-       END
-       WHERE session_id = ?
-
-  4. Gửi tin nhắn cá nhân đến từng phụ huynh (G6): -> để sau
-     Mỗi phụ huynh nhận tin gồm:
-       - Ngày, môn, tình trạng đi học
-       - Nội dung bài học, BTVN
-       - Điểm kiểm tra 1, 2 (nếu có)
-       - Điểm thưởng hôm nay + tổng hiện tại
-       - Nhắc riêng (private_note)
-
-  5. Gửi tin nhắn chung lớp (G6): -> để sau
-       - Nội dung bài, BTVN, nhắc buổi sau
-       - Không gửi thông tin cá nhân
-
-Ghi user_logs: GV X hoàn thành điểm danh lớp Y buổi Z lúc T
-```
+---
 
 
 ## Đổi thưởng
@@ -382,38 +417,6 @@ Xem lịch sử đổi thưởng của học sinh:
   Bảng: Ngày | Phần thưởng | Loại | Sao đã dùng | Người xử lý
 ```
 
----
-
-## Chốt tháng (Lock buổi học)
-
-```
-Admin bấm "Chốt tháng" cho lớp (hoặc toàn bộ lớp)
-
-Điều kiện:
-  - Tất cả buổi trong tháng phải có status = completed
-    → SELECT COUNT(*) FROM attendance_sessions
-      WHERE class_id = ? AND MONTH(session_date) = ? AND YEAR(session_date) = ?
-        AND status = draft
-      → Nếu > 0: "Còn X buổi chưa hoàn thành điểm danh"
-
-Service:
-  UPDATE attendance_sessions
-    SET status = locked,
-        locked_at = now()
-    WHERE class_id = ?
-      AND EXTRACT(MONTH FROM session_date) = ?
-      AND EXTRACT(YEAR FROM session_date) = ?
-      AND status = completed
-
-Sau khi lock:
-  - Không sửa được bất kỳ field nào trong attendance_sessions
-  - Không sửa attendance_records (điểm danh, điểm số, sao thưởng)
-  - Dùng làm căn cứ tính hóa đơn học phí tháng (G5)
-
-Ghi user_logs: admin X chốt tháng MM/YYYY lớp Y lúc Z
-```
-
----
 
 ## Phân quyền trong module này
 

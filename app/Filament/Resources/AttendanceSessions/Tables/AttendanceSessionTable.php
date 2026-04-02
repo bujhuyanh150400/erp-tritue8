@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\AttendanceSessions\Tables;
 
 use App\Constants\AttendanceSessionStatus;
+use App\Filament\Components\CommonAction;
 use App\Models\AttendanceSession;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
@@ -33,20 +34,14 @@ class AttendanceSessionTable
                     ->label('Trạng thái')
                     ->badge()
                     ->formatStateUsing(fn (AttendanceSessionStatus $state): string => $state->label())
-                    ->color(fn (AttendanceSessionStatus $state): string => match ($state) {
-                        AttendanceSessionStatus::Draft => 'gray',
-                        AttendanceSessionStatus::Completed => 'success',
-                        AttendanceSessionStatus::Locked => 'danger',
-                    })
-                    ->sortable(),
+                    ->color(fn (AttendanceSessionStatus $state): string => $state->colorFilament()),
 
                 TextColumn::make('attendance_records_count')
                     ->label('Sĩ số')
                     ->counts('attendanceRecords'),
             ])
             ->recordActions([
-                ViewAction::make(),
-                EditAction::make(),
+                CommonAction::viewAction()
             ]);
     }
 }

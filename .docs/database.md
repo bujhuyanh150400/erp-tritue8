@@ -1,6 +1,6 @@
-# Database use: Postgres
+﻿# Database use: Postgres
 
-# các bảng mặc dịnh của laravel
+# các bảng mặc định của laravel
 
 - sessions
 - cache

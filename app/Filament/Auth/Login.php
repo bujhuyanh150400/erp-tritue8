@@ -21,9 +21,6 @@ class Login extends BaseLogin
     public function boot()
     {
         $this->authService = app(AuthService::class);
-        FilamentAsset::register([
-            Css::make('app-css', Vite::asset('resources/css/app.css')),
-        ]);
     }
 
     public function getView(): string

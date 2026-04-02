@@ -8,6 +8,7 @@ use App\Repositories\AttendanceSessionRepository;
 use App\Repositories\ClassEnrollmentRepository;
 use App\Repositories\ClassRepository;
 use App\Repositories\ClassScheduleTemplateRepository;
+use App\Repositories\RewardPointRepository;
 use App\Repositories\RoomRepository;
 use App\Repositories\ScheduleInstanceRepository;
 use App\Repositories\ScoreRepository;
@@ -39,6 +40,7 @@ class RepositoryServiceProvider extends ServiceProvider
         $this->app->singleton(AttendanceSessionRepository::class, AttendanceSessionRepository::class);
         $this->app->singleton(AttendanceRecordRepository::class, AttendanceRecordRepository::class);
         $this->app->singleton(ScoreRepository::class, ScoreRepository::class);
+        $this->app->singleton(RewardPointRepository::class, RewardPointRepository::class);
     }
 
     /**

@@ -33,14 +33,9 @@ class AttendanceSessionInfolist
                 Tabs::make()
                     ->hiddenLabel()
                     ->columnSpanFull()
+                    ->persistTabInQueryString()
                     ->contained(false)
                     ->tabs([
-                        Tab::make('Danh sách điểm danh')
-                            ->icon(Heroicon::UserGroup)
-                            ->iconPosition(IconPosition::Before)
-                            ->schema([
-                                Livewire::make(AttendanceStudentTable::class)->lazy()
-                            ]),
                         Tab::make('Thông tin buổi học')
                             ->icon(Heroicon::DocumentText)
                             ->iconPosition(IconPosition::Before)
@@ -116,7 +111,12 @@ class AttendanceSessionInfolist
                                         self::getTextEntryContentAtLessonContent('general_note', 'Ghi chú'),
                                     ]),
                             ]),
-
+                        Tab::make('Danh sách điểm danh')
+                            ->icon(Heroicon::UserGroup)
+                            ->iconPosition(IconPosition::Before)
+                            ->schema([
+                                Livewire::make(AttendanceStudentTable::class)->lazy()
+                            ]),
                     ])
             ]);
     }

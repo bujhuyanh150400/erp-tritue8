@@ -1,5 +1,4 @@
 <x-filament-panels::page>
-    @vite(['resources/css/app.css', 'resources/js/app.js'])
     {{ $this->form }}
 
     {{-- Danh sách loại lịch --}}

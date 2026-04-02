@@ -1,4 +1,3 @@
-@vite(['resources/css/app.css'])
 <div>
     <div class="mb-6 flex items-center gap-4">
         <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Chọn tháng báo cáo:</label>

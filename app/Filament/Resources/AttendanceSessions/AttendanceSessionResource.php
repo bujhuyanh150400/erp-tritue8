@@ -3,12 +3,8 @@
 namespace App\Filament\Resources\AttendanceSessions;
 
 use App\Filament\Navigation\NavigationGroup;
-use App\Filament\Resources\AttendanceSessions\Pages\CreateAttendanceSession;
-use App\Filament\Resources\AttendanceSessions\Pages\EditAttendanceSession;
 use App\Filament\Resources\AttendanceSessions\Pages\ListAttendanceSessions;
-use App\Filament\Resources\AttendanceSessions\Pages\ManageAttendance;
 use App\Filament\Resources\AttendanceSessions\Pages\ViewAttendanceSession;
-use App\Filament\Resources\AttendanceSessions\Schemas\AttendanceSessionForm;
 use App\Filament\Resources\AttendanceSessions\Schemas\AttendanceSessionInfolist;
 use App\Filament\Resources\AttendanceSessions\Tables\AttendanceSessionTable;
 use App\Models\AttendanceSession;
@@ -32,11 +28,6 @@ class AttendanceSessionResource extends Resource
     protected static ?string $modelLabel = 'buổi điểm danh';
 
     protected static ?string $pluralModelLabel = 'buổi điểm danh';
-
-    public static function form(Schema $schema): Schema
-    {
-        return AttendanceSessionForm::configure($schema);
-    }
 
     public static function table(Table $table): Table
     {
