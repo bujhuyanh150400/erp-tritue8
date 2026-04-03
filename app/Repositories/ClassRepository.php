@@ -117,4 +117,12 @@ class ClassRepository extends BaseRepository implements FilterFilament
             ->update($data);
     }
 
+    public function countActiveByTeacher(int $teacherId): int
+    {
+        return $this->query()
+            ->where('teacher_id', $teacherId)
+            ->where('status', ClassStatus::Active->value)
+            ->count();
+    }
+
 }

@@ -5,6 +5,7 @@ namespace App\Filament\Resources\Students\Schemas;
 use App\Constants\Gender;
 use App\Constants\GradeLevel;
 use App\Filament\Resources\Students\Components\StudentMonthlyReport;
+use App\Filament\Resources\Students\Components\StudentRewardPanel;
 use Filament\Infolists\Components\IconEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Grid;
@@ -12,7 +13,6 @@ use Filament\Schemas\Components\Livewire;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Tabs;
 use Filament\Schemas\Schema;
-use Filament\Support\Enums\TextSize;
 use Filament\Support\Icons\Heroicon;
 
 class StudentInfolist
@@ -92,16 +92,7 @@ class StudentInfolist
                         Tabs\Tab::make('Sao & Thưởng')
                             ->icon('heroicon-m-star')
                             ->schema([
-                                Section::make('Tổng quan sao')
-                                    ->schema([
-                                        TextEntry::make('total_stars')
-                                            ->label('Tổng sao hiện tại')
-                                            ->size(TextSize::Large)
-                                            ->color('warning')
-                                            ->icon(Heroicon::Star)
-                                            // Tự động tính tổng điểm từ bảng reward_points
-                                            ->state(fn ($record) => $record->rewardPoints()->sum('amount')),
-                                    ]),
+                                Livewire::make(StudentRewardPanel::class),
                             ]),
                     ])
             ]);

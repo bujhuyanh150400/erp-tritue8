@@ -5,12 +5,14 @@ namespace App\Filament\Resources\AttendanceSessions\Traits;
 use App\Constants\AttendanceSessionStatus;
 use App\Constants\AttendanceStatus;
 use App\Services\AttendanceService;
+use App\Services\RewardRedemptionService;
 use Closure;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
 use Filament\Forms\Components\Repeater;
+use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\TimePicker;
@@ -302,7 +304,7 @@ trait AttendanceStudentTableActions
                 ->action(function (array $record, AttendanceService $service) {
                     $newPoints = $record['total_reward_points'] + 1;
                     $result = $service->updateStudentRewardPoints(
-                        $this->record->id, $record['student_id'], 1);
+                        $this->record, $record['student_id'], 1);
                     if ($result->isError()) {
                         Notification::make()->title("Lỗi cập nhật điểm thưởng")
                             ->body($result->getMessage())->danger()->send();
@@ -322,7 +324,7 @@ trait AttendanceStudentTableActions
                 ->requiresConfirmation() // Trừ điểm thì nên hỏi lại cho chắc
                 ->action(function (array $record, AttendanceService $service) {
                     $newPoints = $record['total_reward_points'] - 1;
-                    $result = $service->updateStudentRewardPoints($this->record->id, $record['student_id'], -1);
+                    $result = $service->updateStudentRewardPoints($this->record, $record['student_id'], -1);
                     if ($result->isError()) {
                         Notification::make()->title("Lỗi cập nhật điểm thưởng")
                             ->body($result->getMessage())->danger()->send();
@@ -352,7 +354,7 @@ trait AttendanceStudentTableActions
                     $amount = (int) $data['amount'];
                     $newPoints = $record['total_reward_points'] + $amount;
 
-                    $result = $service->updateStudentRewardPoints($this->record->id, $record['student_id'], $amount, $data['reason']);
+                    $result = $service->updateStudentRewardPoints($this->record, $record['student_id'], $amount, $data['reason']);
                     if ($result->isError()) {
                         Notification::make()->title("Lỗi cập nhật điểm thưởng")
                             ->body($result->getMessage())->danger()->send();
@@ -362,6 +364,47 @@ trait AttendanceStudentTableActions
                         'total_reward_points' => $newPoints
                     ]);
                     Notification::make()->title("Đã thưởng {$amount} sao cho học sinh")->success()->send();
+                }),
+
+            Action::make('redeem_reward')
+                ->label('Đổi thưởng')
+                ->icon(Heroicon::Gift)
+                ->color('info')
+                ->modalHeading(fn (array $record) => 'Đổi thưởng cho ' . $record['student_name'])
+                ->modalDescription(fn (array $record) => 'Học sinh hiện có ' . $record['total_reward_points'] . ' sao.')
+                ->schema([
+                    Select::make('reward_item_id')
+                        ->label('Chọn phần thưởng')
+                        ->required()
+                        ->searchable()
+                        ->options(function (array $record) {
+                            $service = app(RewardRedemptionService::class);
+                            $result = $service->getCatalogForRedemption($record['student_id']);
+
+                            if ($result->isError()) {
+                                return [];
+                            }
+
+                            return collect($result->getData()['items'] ?? [])
+                                ->mapWithKeys(fn (array $item) => [$item['id'] => $item['label']])
+                                ->all();
+                        }),
+                ])
+                ->action(function (array $data, array $record) {
+                    $service = app(RewardRedemptionService::class);
+                    $result = $service->redeemForStudent($record['student_id'], (int) $data['reward_item_id']);
+
+                    if ($result->isError()) {
+                        Notification::make()->title('Lỗi đổi thưởng')
+                            ->body($result->getMessage())->danger()->send();
+                        throw new Halt();
+                    }
+
+                    $this->updateStudentRowOnUI($record['student_id'], [
+                        'total_reward_points' => $result->getData()['remaining_points'] ?? $record['total_reward_points'],
+                    ]);
+
+                    Notification::make()->title('Đổi thưởng thành công')->success()->send();
                 }),
         ])
             ->visible(fn(): bool => $this->record->isDraft())
