@@ -5,6 +5,8 @@ namespace App\Providers;
 use App\Services\AuthService;
 use App\Services\ClassService;
 use App\Services\RoomService;
+use App\Services\RewardItemService;
+use App\Services\RewardRedemptionService;
 use App\Services\StaffService;
 use App\Services\StudentService;
 use App\Services\SubjectService;
@@ -18,6 +20,8 @@ class ServiceServiceProvider extends ServiceProvider
     {
         $this->app->singleton(AuthService::class, AuthService::class);
         $this->app->singleton(RoomService::class, RoomService::class);
+        $this->app->singleton(RewardItemService::class, RewardItemService::class);
+        $this->app->singleton(RewardRedemptionService::class, RewardRedemptionService::class);
         $this->app->singleton(StaffService::class, StaffService::class);
         $this->app->singleton(StudentService::class, StudentService::class);
         $this->app->singleton(TeacherService::class, TeacherService::class);

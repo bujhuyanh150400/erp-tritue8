@@ -41,7 +41,19 @@ class RewardItemForm
                 Select::make('reward_type')
                     ->label('Loại phần thưởng')
                     ->required()
-                    ->options(RewardType::options()),
+                    ->options(RewardType::options())
+                    ->live()
+                    ->afterStateHydrated(function ($component, $state, $record) {
+                        if (!$record) return;
+
+                        $service = app(RewardItemService::class);
+                        $hasRedemptions = $service->hasRedemptions($record->id);
+
+                        if ($hasRedemptions) {
+                            $component->disabled(true);
+                            $component->helperText('Không thể đổi loại phần thưởng khi đã có học sinh đổi quà.');
+                        }
+                    }),
 
                 Textarea::make('note')
                     ->label('Ghi chú')

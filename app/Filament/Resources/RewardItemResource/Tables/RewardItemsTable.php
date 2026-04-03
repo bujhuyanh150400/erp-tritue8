@@ -8,7 +8,6 @@ use Filament\Actions\Action;
 use Filament\Actions\EditAction;
 use Filament\Notifications\Notification;
 use Filament\Support\Icons\Heroicon;
-use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 
@@ -37,11 +36,11 @@ class RewardItemsTable
                     ->icon(Heroicon::OutlinedCube)
                     ->formatStateUsing(fn ($state) => $state->label()),
 
-                IconColumn::make('is_active')
+                TextColumn::make('is_active')
                     ->label('Trạng thái')
-                    ->boolean()
-                    ->trueIcon(Heroicon::OutlinedCheckCircle)
-                    ->falseIcon(Heroicon::OutlinedXCircle)
+                    ->badge()
+                    ->formatStateUsing(fn (bool $state) => $state ? 'Đang áp dụng' : 'Tạm ngưng')
+                    ->color(fn (bool $state) => $state ? 'success' : 'gray')
                     ->sortable(),
             ])
             ->defaultSort('points_required', 'asc')

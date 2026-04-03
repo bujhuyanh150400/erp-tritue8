@@ -6,6 +6,7 @@ use App\Core\Interfaces\Paginate;
 use App\Core\Repository\BaseRepository;
 use App\Models\RewardItem;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Collection;
 use Illuminate\Pagination\LengthAwarePaginator;
 
 class RewardItemRepository extends BaseRepository implements Paginate
@@ -54,5 +55,22 @@ class RewardItemRepository extends BaseRepository implements Paginate
     public function hasRedemptions(int $id): bool
     {
         return \DB::table('reward_redemptions')->where('reward_item_id', $id)->exists();
+    }
+
+    public function getActiveCatalog(): Collection
+    {
+        return $this->query()
+            ->select(['id', 'name', 'points_required', 'reward_type'])
+            ->where('is_active', true)
+            ->orderBy('points_required')
+            ->get();
+    }
+
+    public function findActiveById(int $id): ?RewardItem
+    {
+        return $this->query()
+            ->where('id', $id)
+            ->where('is_active', true)
+            ->first();
     }
 }
