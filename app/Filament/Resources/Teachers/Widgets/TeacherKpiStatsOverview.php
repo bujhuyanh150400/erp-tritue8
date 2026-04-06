@@ -6,11 +6,15 @@ use App\Models\Teacher;
 use App\Services\TeacherService;
 use Filament\Widgets\StatsOverviewWidget as BaseWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
+use Livewire\Attributes\Reactive;
 
 class TeacherKpiStatsOverview extends BaseWidget
 {
+    #[Reactive]
     public ?Teacher $record = null;
-    public string $selectedMonth;
+
+    #[Reactive]
+    public string $selectedMonth = '';
 
     protected function getStats(): array
     {

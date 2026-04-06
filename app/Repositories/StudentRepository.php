@@ -98,4 +98,11 @@ class StudentRepository extends BaseRepository implements FilterFilament
             ->select('students.*');
     }
 
+    public function findStudentById(int $studentId): ?Student
+    {
+        return $this->query()
+            ->with('user')
+            ->find($studentId);
+    }
+
 }

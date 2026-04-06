@@ -4,13 +4,16 @@ namespace App\Services;
 
 use App\Constants\EmployeeStatus;
 use App\Constants\UserRole;
-use App\Core\DTOs\FilterDTO;
 use App\Core\Logs\Logging;
 use App\Core\Services\BaseService;
 use App\Core\Services\ServiceException;
 use App\Core\Services\ServiceReturn;
 use App\Interface\SelectableServiceInterface;
 use App\Models\Teacher;
+use App\Repositories\AttendanceSessionRepository;
+use App\Repositories\ClassRepository;
+use App\Repositories\MonthlyReportRepository;
+use App\Repositories\ScoreRepository;
 use App\Repositories\TeacherRepository;
 use App\Repositories\UserRepository;
 use Carbon\Carbon;
@@ -20,7 +23,11 @@ class TeacherService extends BaseService implements SelectableServiceInterface
 {
     public function __construct(
         protected TeacherRepository $teacherRepository,
-        protected UserRepository $userRepository
+        protected UserRepository $userRepository,
+        protected ClassRepository $classRepository,
+        protected AttendanceSessionRepository $attendanceSessionRepository,
+        protected MonthlyReportRepository $monthlyReportRepository,
+        protected ScoreRepository $scoreRepository
     ) {}
 
 
@@ -151,7 +158,37 @@ class TeacherService extends BaseService implements SelectableServiceInterface
     public function getKpiOverview(int $teacherId, string $month): ServiceReturn
     {
         return $this->execute(function () use ($teacherId, $month) {
-            $stats = $this->teacherRepository->getKpiStats($teacherId, $month);
+            $monthCarbon = Carbon::parse($month);
+            $monthStart = $monthCarbon->copy()->startOfMonth();
+            $monthEnd = $monthCarbon->copy()->endOfMonth();
+            $deadline = $monthCarbon->copy()->addMonth()->startOfMonth()->addDays(4)->endOfDay();
+            // Đếm số lớp đang hoạt động của giáo viên
+            $totalActiveClasses = $this->classRepository->countActiveByTeacher($teacherId);
+            // Đếm
+            $totalSessions = $this->attendanceSessionRepository->countCompletedByTeacherInRange($teacherId, $monthStart, $monthEnd);
+
+            $attendanceStats = $this->attendanceSessionRepository->getTeacherAttendanceStatsInRange($teacherId, $monthStart, $monthEnd);
+
+            $reportStats = $this->monthlyReportRepository->getTeacherMonthlyStats($teacherId, $month, $deadline);
+
+            $stats = [
+                'total_active_classes' => $totalActiveClasses,
+                'total_sessions' => $totalSessions,
+                'attendance_rate' => $attendanceStats['total'] > 0
+                    ? round(($attendanceStats['present_count'] / $attendanceStats['total']) * 100, 1)
+                    : 0,
+                'submission_rate' => $reportStats['total'] > 0
+                    ? round(($reportStats['on_time_count'] / $reportStats['total']) * 100, 1)
+                    : 0,
+                'approval_rate' => $reportStats['reviewed_count'] > 0
+                    ? round(($reportStats['approved_count'] / $reportStats['reviewed_count']) * 100, 1)
+                    : 0,
+                'avg_score' => $this->scoreRepository->getTeacherAverageScoreInRange($teacherId, $monthStart, $monthEnd),
+                'draft_count' => $reportStats['draft_count'],
+                'is_past_deadline' => now()->greaterThan($deadline),
+                'has_reports' => $reportStats['total'] > 0,
+                'total_reports' => $reportStats['total'],
+            ];
 
             $warnings = [];
             // Cảnh báo: Chưa nộp báo cáo tháng & Đã quá deadline
