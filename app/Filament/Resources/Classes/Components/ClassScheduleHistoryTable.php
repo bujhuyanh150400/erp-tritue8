@@ -42,7 +42,8 @@ class ClassScheduleHistoryTable extends Component implements HasActions, HasSche
     public function table(Table $table): Table
     {
         return $table
-            ->query(function (Builder $query, ScheduleInstanceRepository $instanceRepository) {
+            ->query(function (ScheduleInstanceRepository $instanceRepository) {
+                $query = $instanceRepository->query();
                 return $instanceRepository->getListingQuery($query)
                     ->where('schedule_instances.class_id', $this->record->id)
                     ->orderBy('schedule_instances.date', 'asc');
@@ -138,9 +139,7 @@ class ClassScheduleHistoryTable extends Component implements HasActions, HasSche
                 Action::make('view_attendance')
                     ->label(fn(ScheduleInstance $record) => $record->attendanceSession ? 'Xem điểm danh' : 'Bắt đầu điểm danh')
                     ->icon(Heroicon::ClipboardDocumentCheck)
-                    ->hidden(function (ScheduleInstance $record) {
-                        return $record->schedule_type === ScheduleType::Holiday; // Không hiển thị cho ngày nghỉ
-                    })
+                    ->hidden(fn(ScheduleInstance $record) => $record->isDayOff())
                     ->color(fn(ScheduleInstance $record) => $record->attendanceSession ? 'info' : 'success')
                     ->action(function (ScheduleInstance $record, AttendanceService $attendanceService) {
                         $result = $attendanceService->startOrGetSession($record);

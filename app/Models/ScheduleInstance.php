@@ -117,7 +117,7 @@ class ScheduleInstance extends Model
 
     public function isDayOff(): bool
     {
-        return $this->schedule_type === ScheduleType::Holiday && $this->status === ScheduleStatus::Cancelled;
+        return $this->schedule_type === ScheduleType::Holiday || $this->status === ScheduleStatus::Cancelled;
     }
 
 }
