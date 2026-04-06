@@ -25,6 +25,7 @@ class Teacher extends Model
         'bank_account_number',
         'bank_account_holder',
         'status',
+        'color',
         'joined_at',
     ];
 

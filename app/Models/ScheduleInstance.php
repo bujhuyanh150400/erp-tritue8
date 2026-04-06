@@ -114,4 +114,10 @@ class ScheduleInstance extends Model
     {
         return (int)($this->custom_salary ?? $this->teacher_salary_snapshot);
     }
+
+    public function isDayOff(): bool
+    {
+        return $this->schedule_type === ScheduleType::Holiday && $this->status === ScheduleStatus::Cancelled;
+    }
+
 }

@@ -6,6 +6,7 @@ use App\Constants\ClassStatus;
 use App\Constants\DayOfWeek;
 use App\Core\Repository\BaseRepository;
 use App\Models\ClassScheduleTemplate;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 
 class ClassScheduleTemplateRepository extends BaseRepository
@@ -45,56 +46,38 @@ class ClassScheduleTemplateRepository extends BaseRepository
     }
 
     /**
-     * Kiểm tra trùng PHÒNG trên lịch cố định (Templates)
+     * Tìm xung đột PHÒNG hoặc GIÁO VIÊN trên lịch cố định (Templates)
      * @param int $roomId  ID phòng học
+     * @param int $teacherId  ID giáo viên
      * @param array $daysOfWeek  Thứ học (mảng số nguyên theo DayOfWeek::class)
      * @param string $startTime  Giờ bắt đầu
      * @param string $endTime  Giờ kết thúc
      * @param string $startDate  Ngày bắt đầu kiểm tra
      * @param string $endDate  Ngày kết thúc kiểm tra
+     * @param int|null $excludeTemplateId  ID lịch cố định không kiểm tra
+     * @return ClassScheduleTemplate|Model|null
      */
-    public function findRoomConflicts(int $roomId, array $daysOfWeek, string $startTime, string $endTime, string $startDate, string $endDate)
+    public function findConflicts(int $roomId, int $teacherId, array $daysOfWeek, string $startTime, string $endTime, string $startDate, string $endDate, int|null $excludeTemplateId = null)
     {
-
         return $this->query()
-            ->where('room_id', $roomId)
-            ->whereIn('day_of_week', $daysOfWeek) // TÌM TẤT CẢ CÁC THỨ CÙNG LÚC
-            // 1. Giao thoa thời gian trong ngày (Time Overlap)
+            // Dùng Closure để gom nhóm điều kiện OR (Phòng hỏng HOẶC Giáo viên bận)
+            ->where(function ($query) use ($roomId, $teacherId) {
+                $query->where('room_id', $roomId)
+                    ->orWhere('teacher_id', $teacherId);
+            })
+            ->when($excludeTemplateId, function ($query) use ($excludeTemplateId) {
+                $query->where('id', '!=', $excludeTemplateId);
+            })
+            ->whereIn('day_of_week', $daysOfWeek)
+            // 1. Giao thoa thời gian trong ngày
             ->where('start_time', '<', $endTime)
             ->where('end_time', '>', $startTime)
-            // 2. Giao thoa khoảng ngày (Date Range Overlap)
+            // 2. Giao thoa khoảng ngày
             ->where('start_date', '<=', $endDate)
             ->where(function ($query) use ($startDate) {
                 $query->whereNull('end_date')
                     ->orWhere('end_date', '>=', $startDate);
             })
-            ->with('class') // Load relationship class để lấy tên báo lỗi
-            ->first();
-    }
-
-    /**
-     * Kiểm tra trùng GIÁO VIÊN trên lịch cố định (Templates)
-     * @param int $teacherId  ID giáo viên
-     * @param array $daysOfWeek  Thứ học (mảng số nguyên theo DayOfWeek::class)
-     * @param string $startTime  Giờ bắt đầu kiểm tra
-     * @param string $endTime  Giờ kết thúc kiểm tra
-     * @param string $startDate  Ngày bắt đầu kiểm tra
-     * @param string $endDate  Ngày kết thúc kiểm tra
-     */
-    public function findTeacherConflicts(int $teacherId, array $daysOfWeek, string $startTime, string $endTime, string $startDate, string $endDate)
-    {
-        return $this->query()
-            ->where('teacher_id', $teacherId)
-            ->whereIn('day_of_week', $daysOfWeek) // TÌM TẤT CẢ CÁC THỨ CÙNG LÚC
-            ->where('start_time', '<', $endTime)
-            ->where('end_time', '>', $startTime)
-            ->where('start_date', '<=', $endDate)
-            ->where('end_date', '>=', $startDate)
-            ->where(function ($query) use ($startDate) {
-                $query->whereNull('end_date')
-                    ->orWhere('end_date', '>=', $startDate);
-            })
-            ->with('class')
             ->first();
     }
 

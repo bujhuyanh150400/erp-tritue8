@@ -2,11 +2,12 @@
 
 namespace App\Filament\Resources\Classes\Components;
 
-use App\Constants\AttendanceStatus;
 use App\Constants\ScheduleStatus;
 use App\Constants\ScheduleType;
 use App\Filament\Resources\AttendanceSessions\AttendanceSessionResource;
-use App\Models\ClassEnrollment;
+use App\Filament\Resources\Classes\Actions\CancelScheduleInstanceAction;
+use App\Filament\Resources\Classes\Actions\ChangeRoomAction;
+use App\Filament\Resources\Classes\Actions\CreateMakeupSessionAction;
 use App\Models\ScheduleInstance;
 use App\Models\SchoolClass;
 use App\Repositories\ScheduleInstanceRepository;
@@ -18,13 +19,13 @@ use Filament\Forms\Components\DatePicker;
 use Filament\Notifications\Notification;
 use Filament\Schemas\Concerns\InteractsWithSchemas;
 use Filament\Schemas\Contracts\HasSchemas;
+use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Concerns\InteractsWithTable;
 use Filament\Tables\Contracts\HasTable;
 use Filament\Tables\Enums\FiltersLayout;
 use Filament\Tables\Filters\Filter;
 use Filament\Tables\Table;
-use Filament\Support\Icons\Heroicon;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
@@ -41,37 +42,10 @@ class ClassScheduleHistoryTable extends Component implements HasActions, HasSche
     public function table(Table $table): Table
     {
         return $table
-            ->query(function (ScheduleInstanceRepository $instanceRepository) {
-                return $instanceRepository->query()
+            ->query(function (Builder $query, ScheduleInstanceRepository $instanceRepository) {
+                return $instanceRepository->getListingQuery($query)
                     ->where('schedule_instances.class_id', $this->record->id)
-                    // BỔ SUNG ADD SELECT ĐỂ TÍNH SĨ SỐ BẰNG SUBQUERY
-                    ->select('schedule_instances.*')
-                    ->addSelect([
-                        'active_students_count' => ClassEnrollment::selectRaw('count(*)')
-                            ->whereColumn('class_enrollments.class_id', 'schedule_instances.class_id')
-                            // Điều kiện 1: Đã vào lớp trước ngày học này
-                            ->whereRaw('class_enrollments.enrolled_at::date <= schedule_instances.date')
-                            // Điều kiện 2: Chưa nghỉ hoặc nghỉ sau ngày học này
-                            ->where(function ($query) {
-                                $query->whereNull('class_enrollments.left_at')
-                                    ->orWhereRaw('class_enrollments.left_at::date >= schedule_instances.date');
-                            })
-                    ])
-                    ->with([
-                        'room',
-                        'teacher',
-                        'attendanceSession' => function ($query) {
-                            $query->withCount([
-                                'attendanceRecords as present_count' => function ($q) {
-                                    $q->whereIn('status', [
-                                        AttendanceStatus::Present->value,
-                                        AttendanceStatus::Late->value,
-                                    ]);
-                                }
-                            ]);
-                        }
-                    ])
-                    ->orderBy('date', 'asc');
+                    ->orderBy('schedule_instances.date', 'asc');
             })
             // Color today record
             ->recordClasses(fn(ScheduleInstance $record) => Carbon::parse($record->date)->isToday()

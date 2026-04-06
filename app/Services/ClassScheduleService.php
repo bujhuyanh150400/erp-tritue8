@@ -6,7 +6,8 @@ use App\Constants\DayOfWeek;
 use App\Constants\FeeType;
 use App\Constants\ScheduleStatus;
 use App\Constants\ScheduleType;
-use App\Core\Helpers\Snowflake;
+use App\Models\ScheduleInstance;
+use Filament\Support\Colors\Color;
 use App\Core\Logs\Logging;
 use App\Core\Services\BaseService;
 use App\Core\Services\ServiceException;
@@ -45,6 +46,7 @@ class ClassScheduleService extends BaseService
      * @param string $endTime Thời gian kết thúc
      * @param string $startDate Ngày bắt đầu kiểm tra
      * @param string $endDate Ngày kết thúc kiểm tra
+     * @param int|null $excludeInstanceId ID buổi học thực tế không kiểm tra
      * @return void
      * @throws ServiceException -- Nếu xung đột xảy ra
      */
@@ -56,29 +58,40 @@ class ClassScheduleService extends BaseService
         string $endTime,
         string $startDate,
         string $endDate,
+        int|null $excludeTemplateId = null,
+        int|null $excludeInstanceId = null,
+
     ): void
     {
-        // Kiểm tra trùng PHÒNG trên lịch cố định
-        $templateRoom = $this->templateRepository->findRoomConflicts($roomId, $dayValues, $startTime, $endTime, $startDate, $endDate);
-        if ($templateRoom) {
-            throw new ServiceException("Thứ {$templateRoom->day_of_week->label()}: Phòng đã bị đặt cố định bởi lớp [{$templateRoom->class->name}].");
+        // Kiểm tra trùng lịch cố định (Templates)
+        $templateConflict = $this->templateRepository->findConflicts(
+            roomId: $roomId,
+            teacherId: $teacherId,
+            daysOfWeek: $dayValues,
+            startTime: $startTime,
+            endTime: $endTime,
+            startDate: $startDate,
+            endDate: $endDate,
+            excludeTemplateId: $excludeTemplateId,
+        );
+        if ($templateConflict) {
+            throw new ServiceException("Thứ {$templateConflict->day_of_week->label()}: Lịch bị vướng bởi lớp [{$templateConflict->class->name}].");
         }
-        // Kiểm tra trùng PHÒNG trên các buổi học thực tế (Instances)
-        $instanceRoom = $this->instanceRepository->findRoomConflicts($roomId, $dayValues, $startTime, $endTime, $startDate, $endDate);
-        if ($instanceRoom) {
-            $dayName = Carbon::parse($instanceRoom->date)->dayOfWeekIso;
-            throw new ServiceException("Thứ {$dayName}: Phòng vướng lịch thực tế của lớp [{$instanceRoom->class->name}] ngày " . Carbon::parse($instanceRoom->date)->format('d/m/Y'));
-        }
-        // Kiểm tra trùng Giáo viên trên lịch cố định
-        $templateTeacher = $this->templateRepository->findTeacherConflicts($teacherId, $dayValues, $startTime, $endTime, $startDate, $endDate);
-        if ($templateTeacher) {
-            throw new ServiceException("Thứ {$templateTeacher->day_of_week->label()}: Giáo viên đang dạy cố định lớp [{$templateTeacher->class->name}].");
-        }
-        // Kiểm tra trùng Giáo viên trên các buổi học thực tế (Instances)
-        $instanceTeacher = $this->instanceRepository->findTeacherConflicts($teacherId, $dayValues, $startTime, $endTime, $startDate, $endDate);
-        if ($instanceTeacher) {
-            $dayName = Carbon::parse($instanceTeacher->date)->dayOfWeekIso;
-            throw new ServiceException("Thứ {$dayName}: Giáo viên vướng lịch thực tế của lớp [{$instanceTeacher->class->name}] ngày " . Carbon::parse($instanceTeacher->date)->format('d/m/Y'));
+
+        // Kiểm tra trùng lịch thực tế (Instances)
+        $instanceConflict = $this->instanceRepository->findConflicts(
+            roomId: $roomId,
+            teacherId: $teacherId,
+            daysOfWeek: $dayValues,
+            startTime: $startTime,
+            endTime: $endTime,
+            startDate: $startDate,
+            endDate: $endDate,
+            excludeInstanceId: $excludeInstanceId,
+        );
+        if ($instanceConflict) {
+            $dayName = Carbon::parse($instanceConflict->date)->dayOfWeekIso;
+            throw new ServiceException("Thứ {$dayName}: Vướng lịch thực tế của lớp [{$instanceConflict->class->name}] ngày " . Carbon::parse($instanceConflict->date)->format('d/m/Y'));
         }
     }
 
@@ -86,6 +99,7 @@ class ClassScheduleService extends BaseService
     /**
      * ---- Public Methods ----
      */
+
     /**
      * Tạo lịch cố định (Template)
      * @param SchoolClass $class
@@ -238,7 +252,7 @@ class ClassScheduleService extends BaseService
     }
 
     /**
-     * Lấy lịch học theo thời gian và lọc
+     * Lấy lịch học theo thời gian và lọc cho Calendar
      * @param Carbon $start
      * @param Carbon $end
      * @param array $filters
@@ -247,33 +261,132 @@ class ClassScheduleService extends BaseService
     public function getScheduleInstancesCalendar(Carbon $start, Carbon $end,array $filters): ServiceReturn
     {
         return $this->execute(function () use ($start, $end, $filters) {
-            $schedules = $this->instanceRepository->getScheduleInstancesForCalendar($start, $end, $filters);
+            $query = $this->instanceRepository->query();
+            $query = $this->instanceRepository->getListingQuery($query);
+
+            // Lọc theo thời gian
+            $filters['start_date'] = $start->toDateString();
+            $filters['end_date'] = $end->toDateString();
+
+            $schedules = $this->instanceRepository->setFilters($query, $filters)->get();
+
             return $schedules->map(function ($si) {
                 $cleanDate = Carbon::parse($si->date)->format('Y-m-d');
                 // Logic đổ màu theo loại lịch
-                $color = $si->schedule_type->color();
                 $class = $si->class;
                 $teacher = $si->teacher;
                 $room = $si->room;
                 $subject = $class->subject;
-
+                $teacherColor = $teacher->color ?? Color::Blue['500'];
+                // Trạng thái điểm danh lịch học
+                $attendanceSession = $si->attendanceSession ?? null;
+                if ($attendanceSession) {
+                    $labelStatus = $attendanceSession->status->label();
+                }else{
+                    $labelStatus = 'Chưa điểm danh';
+                }
                 return EventData::make()
                     ->id($si->id)
-                    ->title("Lớp: {$class->name} (GV: {$teacher->full_name}) Phòng: {$room->name} | Sĩ số: {$si->si_so}")
+                    ->title("\n{$subject->name}\n {$room->name} - {$class->name}")
                     ->start("{$cleanDate}T{$si->start_time}")
                     ->end("{$cleanDate}T{$si->end_time}")
-                    ->backgroundColor($color)
+                    ->backgroundColor("transparent")
+                    ->borderColor("transparent")
                     ->extendedProps([
+                        'teacher' => $teacher->full_name,
+                        'teacher_color' => $teacherColor,
+                        'teacher_id' => $teacher->id,
                         'start_time' => $si->start_time,
                         'end_time' => $si->end_time,
-                        'subject' => $subject->name,
+                        'subject_name' => $subject->name,
                         'class' => $class->name,
-                        'teacher' => $teacher->full_name,
-                        'room' => $room->name,
-                        'si_so' => $si->si_so,
+                        'room_name' => $room->name,
+                        'active_students_count' => $si->active_students_count,
+                        'status_attendance_label' => $labelStatus,
                     ])
                     ->borderColor('transparent');
             })->toArray();
+        });
+    }
+
+    /**
+     * Lấy chi tiết của lịch học theo ID
+     * @param int $instanceId
+     * @return ServiceReturn
+     * @throws \Throwable
+     */
+    public function getDetailInstanceById(int $instanceId): ServiceReturn
+    {
+        return $this->execute(function () use ($instanceId) {
+            $query = $this->instanceRepository->query();
+            $instance = $this->instanceRepository
+                ->getListingQuery($query)
+                ->where('id', $instanceId)
+                ->first();
+            if (!$instance) {
+                throw new ServiceException('Lịch học không tồn tại');
+            }
+            return $instance;
+        });
+    }
+
+    /**
+     * Cập nhật lịch học
+     * @param ScheduleInstance $instance
+     * @param array $data
+     * @return ServiceReturn
+     * @throws \Throwable
+     */
+    public function updateInstance(ScheduleInstance $instance, array $data)
+    {
+        return $this->execute(function () use ($instance, $data) {
+            $roomId = $data['room_id'] ?? $instance->room_id;
+            $teacherId = $data['teacher_id'] ?? $instance->teacher_id;
+            $date = $data['date'] ?? $instance->date;
+            $dayValues =  [DayOfWeek::from(Carbon::parse($date)->dayOfWeekIso)];
+            $startTime = $data['start_time'] ?? $instance->start_time;
+            $endTime = $data['end_time'] ?? $instance->end_time;
+
+            // Check conflict lịch học
+            $this->checkConflictInstances(
+                roomId: $roomId,
+                teacherId: $teacherId,
+                dayValues: $dayValues,
+                startTime: $startTime,
+                endTime: $endTime,
+                startDate: $date,
+                endDate: $date,
+                excludeTemplateId: $instance->template_id,
+                excludeInstanceId: $instance->id,
+            );
+
+            // Cập nhật lịch học
+            $instance->update([
+                'room_id' => $roomId,
+                'teacher_id' => $teacherId,
+                'date' => $date,
+                'start_time' => $startTime,
+                'end_time' => $endTime,
+            ]);
+
+
+
+            return $instance;
+        });
+    }
+
+    public function cancelInstance(ScheduleInstance $instance, string $reason)
+    {
+        return $this->execute(function () use ($instance, $reason) {
+            if ($instance->attendanceSession()->exists()) {
+                throw new ServiceException("Không thể báo nghỉ: Buổi học này đã có dữ liệu điểm danh.");
+            }
+            $instance->update([
+                'status'        => ScheduleStatus::Cancelled,
+                'schedule_type' => ScheduleType::Holiday,
+                'note' => $reason,
+            ]);
+            return $instance;
         });
     }
 }

@@ -2,6 +2,10 @@
 
 namespace App\Filament\Resources\Classes\Components;
 
+use App\Filament\Resources\Classes\Actions\AddStudentToClassAction;
+use App\Filament\Resources\Classes\Actions\EditStudentFeeAction;
+use App\Filament\Resources\Classes\Actions\LeaveClassAction;
+use App\Filament\Resources\Classes\Actions\TransferStudentClassAction;
 use App\Models\SchoolClass;
 use App\Repositories\ClassEnrollmentRepository;
 use Filament\Actions\Concerns\InteractsWithActions;

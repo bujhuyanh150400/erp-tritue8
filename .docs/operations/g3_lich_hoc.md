@@ -86,9 +86,8 @@ Chế độ xem:
   - Theo ngày
   - Theo tuần (mặc định)
   - Theo tháng
-  - Toàn màn hình
-
-Khung giờ hiển thị: 06:00 – 22:00
+  - Theo lịch biểu 
+Khung giờ hiển thị: 06:00 – 23:00
 Hiển thị dạng lưới thời gian (Google Calendar style)
 Hỗ trợ kéo thả để đổi giờ (chỉ Admin)
 ```
@@ -113,87 +112,52 @@ Có thể chọn nhiều điều kiện cùng lúc
 ### Hiển thị mỗi block lịch
 
 ```
-Mỗi schedule_instance hiển thị trên calendar hiển thị 
-- Lớp
-- Môn học
-- Thời gian
-- GV hiện tại
-- Phòng học
-- Sĩ số
-
-→ SELECT
-    si.id, si.date, si.start_time, si.end_time,
-    si.schedule_type, si.status,
-    classes.name as ten_lop,
-    classes.grade_level,
-    teachers.full_name as ten_gv,
-    rooms.name as phong,
-    COUNT(ce.id) as si_so
-  FROM schedule_instances si
-  JOIN classes ON si.class_id = classes.id
-  JOIN teachers ON si.teacher_id = teachers.id
-  JOIN rooms ON si.room_id = rooms.id
-  LEFT JOIN class_enrollments ce ON ce.class_id = si.class_id
-    AND ce.left_at IS NULL
-  WHERE si.date BETWEEN [range hiện tại]
-    AND [bộ lọc đang chọn]
-  GROUP BY si.id, classes.id, teachers.id, rooms.id
-
-Màu sắc theo schedule_type:
-  main    → xanh
-  makeup  → cam
-  extra   → tím
-  holiday → đỏ
-  cancelled → xám
-
-Hover vào block → popup chi tiết đầy đủ
-```
-
-### Popup chi tiết buổi học
-
-```
-- Tooltip
-    + Lớp
+- Mỗi schedule_instance hiển thị trên calendar hiển thị 
+    + Thời gian (chỉ hiện giờ)
     + Môn học
-    + Thời gian
+    + Phòng - lớp 
+Hover vào block → tooltip chi tiết đầy đủ
+    + Lớp
+    + M học
     + GV hiện tại
+    + Môn học
+    + GV Thời gian GV hiện
     + Phòng học
     + Sĩ số
-- Hiển thị chi tiết modal:
-    + Lớp
-    + Môn học
-    + Thời gian
-    + GV hiện tại
-    + Phòng học
-    + Sĩ số
-    + Ghi chú
-    + Ngày học bù (nếu có)
-→ SELECT
-    si.*,
-    classes.name, classes.code,
-    subjects.name as ten_mon,
-    t_current.full_name as ten_gv_hien_tai,
-    t_original.full_name as ten_gv_goc,
-    rooms.name as phong,
-    si.teacher_salary_snapshot,
-    si.custom_salary,
-    si.fee_type,
-    si.custom_fee_per_session,
-    si.note,
-    COUNT(ce.id) as si_so,
-    si_makeup.date as ngay_bu  ← nếu linked_makeup_for != null
-  FROM schedule_instances si
-  JOIN classes ON si.class_id = classes.id
-  JOIN subjects ON classes.subject_id = subjects.id
-  JOIN teachers t_current ON si.teacher_id = t_current.id
-  LEFT JOIN teachers t_original ON si.original_teacher_id = t_original.id
-  JOIN rooms ON si.room_id = rooms.id
-  LEFT JOIN class_enrollments ce ON ce.class_id = si.class_id AND ce.left_at IS NULL
-  LEFT JOIN schedule_instances si_makeup ON si.linked_makeup_for = si_makeup.id
-  WHERE si.id = ?
+Chi tiết block
+1. Thông tin hiển thị (Read-only view):
+  - Thông tin chung: Tên lớp, Mã lớp, Môn học, Khối lớp
+  - Thời gian: Ngày học, Giờ bắt đầu - Giờ kết thúc
+  - Nhân sự: Giáo viên hiện tại (Nếu có dạy thay, hiển thị: GV hiện tại / GV gốc)
+  - Địa điểm: Phòng học
+  - Thông tin lịch: Loại lịch (Chính/Bù/Tăng cường/Nghỉ), Trạng thái lịch (Chưa học/Đã học/Đã hủy)
+  - Sĩ số: Số lượng học sinh đang Active trong lớp (query từ class_enrollments)
+  - Thông tin tài chính (chỉ Admin): Lương GV ca này, Học phí ca này.
+
+2. Các hành động (Actions dành cho Admin):
+  - [ Action: Chỉnh sửa lịch ]
+    + Cho phép đổi Ngày, Giờ bắt đầu/kết thúc, Phòng học, Giáo viên.
+    + Validation: Bắt buộc check trùng phòng, trùng lịch giáo viên.
+  - [ Action: Báo nghỉ ]
+    + Validation: 
+        > KHÔNG cho phép báo nghỉ nếu buổi học đã có dữ liệu trong bảng attendance_sessions.
+    + Nhập ghi chú (required).        
+    + Đổi `status` thành Cancelled.
+    + Đổi type thành Holiday.
+    .
+  - [ Action: Tùy chỉnh tài chính ]
+    + Cho phép cập nhật `custom_salary` (Lương tùy chỉnh ca này nếu có thoả thuận khác).
+    + Cho phép cập nhật `custom_fee_per_session` (Học phí tùy chỉnh).
+  - [ Action: Chuyển hướng ]
+    + Nút "Vào điểm danh" -> Mở resource `attendance_sessions` của buổi học này.
+    + Nút "Xem danh sách lớp" -> Link tới trang chi tiết lớp học.
 ```
 
----
+### Kéo thả để thay đổi giờ học
+```
+
+
+```
 
 ## Lịch cố định (Template)
 

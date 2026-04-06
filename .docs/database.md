@@ -85,6 +85,7 @@
     - bank_account_number (varchar(30)) - Số tài khoản ngân hàng
     - bank_account_holder (varchar(100)) - Chủ tài khoản ngân hàng
     - status (unsigned tinyint) - Trạng thái, lưu trong EmployeeStatus
+    - color (varchar(20)) - Màu sắc tượng chưng của giáo viên - bảng màu hex
     - joined_at (date) - Ngày bắt đầu làm việc
     - created_at (timestamp) - Thời gian tạo
     - updated_at (timestamp) - Thời gian cập nhật

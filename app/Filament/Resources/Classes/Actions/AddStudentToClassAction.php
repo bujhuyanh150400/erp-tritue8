@@ -1,7 +1,8 @@
 <?php
 
-namespace App\Filament\Resources\Classes\Components;
+namespace App\Filament\Resources\Classes\Actions;
 
+use App\Filament\Resources\Classes\Components\AddStudentToClassTable;
 use App\Models\SchoolClass;
 use Filament\Actions\Action;
 use Filament\Support\Enums\Width;

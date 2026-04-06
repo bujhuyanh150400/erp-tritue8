@@ -8,6 +8,7 @@ use App\Constants\GradeLevel;
 use App\Core\Helpers\BankInfo;
 use App\Filament\Components\CommonForm;
 use Filament\Actions\Action;
+use Filament\Forms\Components\ColorPicker;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
@@ -110,6 +111,13 @@ class TeacherForm
                                         'required' => 'Vui lòng chọn ngày vào làm.',
                                     ])
                                     ->displayFormat('d/m/Y'),
+
+                                ColorPicker::make('color')
+                                    ->label('Màu sắc tượng chưng')
+                                    ->required()
+                                    ->validationMessages([
+                                        'required' => 'Vui lòng chọn màu sắc tượng chưng.',
+                                    ]),
                             ]),
 
                         Tab::make('Thông tin ngân hàng')

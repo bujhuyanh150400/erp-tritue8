@@ -12,7 +12,7 @@ enum ScheduleType: int implements HasLabel
     case Main    = 0; // Lịch chính
     case Makeup  = 1; // Học bù
     case Extra   = 2; // Tăng cường
-    case Holiday = 3; // Nghỉ lễ
+    case Holiday = 3; // Nghỉ
 
     public function label(): string
     {
@@ -20,7 +20,7 @@ enum ScheduleType: int implements HasLabel
             self::Main    => 'Lịch chính',
             self::Makeup  => 'Học bù',
             self::Extra   => 'Tăng cường',
-            self::Holiday => 'Nghỉ lễ',
+            self::Holiday => 'Nghỉ',
         };
     }
 

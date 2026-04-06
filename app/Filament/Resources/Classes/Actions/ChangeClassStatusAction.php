@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Filament\Resources\Classes\Components;
+namespace App\Filament\Resources\Classes\Actions;
 
 use App\Constants\ClassStatus;
 use App\Models\SchoolClass;

@@ -287,6 +287,39 @@ Tab 1 — Thông tin cá nhân:
              username, trạng thái tài khoản
 
 Tab 2 — Báo cáo theo môn:
+
+# NGHIỆP VỤ BÁO CÁO HỌC TẬP THEO MÔN (STUDENT SUBJECT REPORT)
+
+## 1. Mục đích & Giao diện (UI/UX)
+- **Vị trí:** Tab "Báo cáo tháng" trong chi tiết Hồ sơ học sinh.
+- **Cấu trúc hiển thị:** Render theo dạng từng Block (Card) cho mỗi môn học mà học sinh đang theo học. Cấu trúc mỗi Block gồm 3 phần:
+  1. Header: Tên môn, Tên lớp, Tên GV.
+  2. Stats: Thống kê tổng quan (Buổi học, Tỷ lệ chuyên cần, Điểm TB).
+  3. Body: Bảng chi tiết điểm & Nhận xét đánh giá của GV.
+
+## 2. Truy vấn dữ liệu (Service Logic)
+
+### Bước 1: Lấy danh sách Lớp/Môn đang học
+- Lấy các lớp học sinh đang tham gia (`left_at IS NULL`) kết hợp thông tin Môn học và Giáo viên.
+
+### Bước 2: Truy xuất Dữ liệu Khối (Attendance & Scores)
+Thay vì dùng SQL tính toán trực tiếp dễ gây lỗi nhân bản dữ liệu, hệ thống sẽ truy xuất dữ liệu gốc qua Eloquent Eager Loading:
+- Lấy toàn bộ `attendance_records` trong tháng của học sinh tại lớp đó.
+- Kèm theo relation `scores` và `session`.
+
+### Bước 3: Tính toán bằng Collection (In-Memory Processing)
+- `tong_buoi` = Đếm tổng số bản ghi điểm danh lấy được.
+- `co_mat` = Lọc các bản ghi có `status IN (Present, Late)` và đếm.
+- `diem_tb` = Lấy tất cả `scores` từ các buổi học, tính trung bình cộng (AVG). *Lưu ý: Bỏ qua các điểm Null hoặc vắng thi.*
+
+### Bước 4: Lấy Đánh giá tháng (Monthly Report)
+- Truy vấn bảng `monthly_reports` để lấy Nhận xét của GV dựa trên `student_id`, `class_id` và `month`.
+- Hiển thị theo Trạng thái (Đã duyệt / Chờ duyệt / Bị từ chối). Nếu đang `Chờ duyệt`, có thể ẩn với phụ huynh nhưng vẫn hiện cho Admin.
+
+## 3. Cấu trúc Cột & Hiển thị
+- **Bảng điểm (Table):** Ngày học | Tên bài kiểm tra | Điểm số | Thang điểm | Ghi chú.
+- **Nhận xét (Textblock):** Hiển thị nguyên văn dưới dạng trích dẫn (Blockquote), kèm huy hiệu (Badge) thể hiện trạng thái báo cáo.
+
   Lấy danh sách môn HS đang học:
   → SELECT DISTINCT subjects.id, subjects.name,
            classes.id as class_id, classes.name as class_name,

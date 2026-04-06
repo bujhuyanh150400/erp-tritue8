@@ -1,15 +1,16 @@
 <?php
 
-namespace App\Filament\Resources\Classes\Components;
+namespace App\Filament\Resources\Classes\Actions;
 
+use App\Filament\Resources\Classes\Components\FeeHistoryTable;
 use App\Models\ClassEnrollment;
 use App\Services\ClassService;
+use Filament\Actions\Action;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\TextInput;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Notifications\Notification;
 use Filament\Support\Exceptions\Halt;
-use Filament\Actions\Action;
 use Filament\Support\Icons\Heroicon;
 use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\HtmlString;

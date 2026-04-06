@@ -5,6 +5,7 @@ namespace App\Filament\Resources\Teachers\Schemas;
 use App\Constants\ClassStatus;
 use App\Core\Helpers\BankInfo;
 use App\Filament\Resources\Teachers\Components\TeacherKpiOverview;
+use Filament\Infolists\Components\ColorEntry;
 use Filament\Infolists\Components\IconEntry;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\TextEntry;
@@ -41,7 +42,6 @@ class TeacherInfolist
                                             TextEntry::make('user.username')
                                                 ->label('Tên đăng nhập')
                                                 ->icon('heroicon-m-at-symbol'),
-
                                             IconEntry::make('user.is_active')
                                                 ->label('Trạng thái')
                                                 ->boolean(),
@@ -67,6 +67,9 @@ class TeacherInfolist
                                                 ->label('Email')
                                                 ->icon(Heroicon::Envelope),
 
+                                            ColorEntry::make('color')
+                                                ->label('Màu sắc giáo viên'),
+
                                             TextEntry::make('joined_at')
                                                 ->label('Ngày vào làm')
                                                 ->icon(Heroicon::Calendar)
@@ -87,34 +90,27 @@ class TeacherInfolist
                                                 ->label('Địa chỉ')
                                                 ->icon('heroicon-m-map-pin'),
 
-                                            // ==========================================
-                                            // Ô BOX NGÂN HÀNG (Nằm trong Hồ sơ giáo viên)
-                                            // ==========================================
-                                            Grid::make(2)
+                                            TextEntry::make('bank_bin')
+                                                ->label('Ngân hàng')
+                                                ->icon(Heroicon::Banknotes)
+                                                ->badge()
+                                                ->color('warning')
+                                                ->formatStateUsing(fn ($state) => BankInfo::getBankByBin($state)['short_name'] ?? '-'),
+
+                                            TextEntry::make('bank_account_holder')
+                                                ->label('Chủ tài khoản')
+                                                ->weight('bold')
+                                                ->icon(Heroicon::User)
+                                                ->formatStateUsing(fn ($state) => strtoupper($state)),
+
+                                            TextEntry::make('bank_account_number')
+                                                ->label('Số tài khoản')
+                                                ->copyable()
+                                                ->fontFamily('mono')
                                                 ->columnSpanFull()
-                                                ->schema([
-                                                    TextEntry::make('bank_bin')
-                                                        ->label('Ngân hàng')
-                                                        ->icon(Heroicon::Banknotes)
-                                                        ->badge()
-                                                        ->color('warning')
-                                                        ->formatStateUsing(fn ($state) => BankInfo::getBankByBin($state)['short_name'] ?? '-'),
-
-                                                    TextEntry::make('bank_account_holder')
-                                                        ->label('Chủ tài khoản')
-                                                        ->weight('bold')
-                                                        ->icon(Heroicon::User)
-                                                        ->formatStateUsing(fn ($state) => strtoupper($state)),
-
-                                                    TextEntry::make('bank_account_number')
-                                                        ->label('Số tài khoản')
-                                                        ->copyable()
-                                                        ->fontFamily('mono')
-                                                        ->columnSpanFull()
-                                                        ->icon(Heroicon::CreditCard)
-                                                        ->badge()
-                                                        ->formatStateUsing(fn ($state) => chunk_split($state, 4, ' ')),
-                                                ]),
+                                                ->icon(Heroicon::CreditCard)
+                                                ->badge()
+                                                ->formatStateUsing(fn ($state) => chunk_split($state, 4, ' ')),
                                         ]),
                                 ]),
                             ]),

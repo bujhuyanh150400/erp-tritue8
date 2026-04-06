@@ -16,7 +16,7 @@ enum AttendanceSessionStatus: int implements HasLabel
     public function label(): string
     {
         return match ($this) {
-            self::Draft => 'Bắt đầu buổi học',
+            self::Draft => 'Bắt đầu',
             self::Completed => 'Hoàn thành',
             self::Locked => 'Đã khóa',
         };

@@ -1,18 +1,14 @@
 <?php
 
-namespace App\Filament\Resources\Classes\Components;
+namespace App\Filament\Resources\Classes\Actions;
 
-use App\Constants\UserRole;
 use App\Filament\Components\CustomSelect;
 use App\Models\SchoolClass;
-use App\Models\User;
 use App\Services\ClassService;
 use App\Services\TeacherService;
 use Filament\Actions\Action;
-use Filament\Forms\Components\Select;
 use Filament\Notifications\Notification;
 use Filament\Support\Icons\Heroicon;
-use Illuminate\Database\Eloquent\Builder;
 
 class ChangeTeacherAction
 {

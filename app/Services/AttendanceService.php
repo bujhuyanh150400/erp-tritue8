@@ -76,11 +76,7 @@ class AttendanceService extends BaseService
                     throw new ServiceException("Bạn không phải giáo viên phụ trách của buổi học này.");
                 }
 
-                // ==========================================
                 // 3. THỰC THI TẠO MỚI (Atomic)
-                // ==========================================
-
-                // firstOrCreate bản thân nó đã là một thao tác an toàn với database
                 $session = $this->attendanceSessionRepository->query()->firstOrCreate(
                     [
                         'schedule_instance_id' => $si->id,

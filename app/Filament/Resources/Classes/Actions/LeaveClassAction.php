@@ -1,14 +1,14 @@
 <?php
 
-namespace App\Filament\Resources\Classes\Components;
+namespace App\Filament\Resources\Classes\Actions;
 
 use App\Models\ClassEnrollment;
 use App\Services\ClassService;
+use Filament\Actions\Action;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Textarea;
 use Filament\Notifications\Notification;
 use Filament\Support\Exceptions\Halt;
-use Filament\Actions\Action;
 
 class LeaveClassAction
 {

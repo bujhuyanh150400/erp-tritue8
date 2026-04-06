@@ -4,6 +4,7 @@ namespace App\Providers\Filament;
 
 
 use App\Filament\Auth\Login;
+use App\Filament\Pages\ScheduleCalendar\ScheduleCalendar;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
@@ -16,6 +17,7 @@ use Filament\Support\Colors\Color;
 use Filament\Support\Icons\Heroicon;
 use Filament\View\PanelsRenderHook;
 use Filament\Widgets\AccountWidget;
+use Illuminate\Contracts\View\View;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
@@ -58,9 +60,9 @@ class AdminPanelProvider extends PanelProvider
             '))
             ->maxContentWidth('full')
             ->discoverResources(in: app_path('Filament/Resources'), for: 'App\Filament\Resources')
-            ->discoverPages(in: app_path('Filament/Pages'), for: 'App\Filament\Pages')
             ->pages([
                 Dashboard::class,
+                ScheduleCalendar::class,
             ])
             ->widgets([
                 AccountWidget::class,
@@ -77,9 +79,9 @@ class AdminPanelProvider extends PanelProvider
                 DispatchServingFilamentEvent::class,
             ])
             ->navigationItems([
-//                NavigationItem::make("Log hệ thống")
-//                    ->url(url('log-viewer'), shouldOpenInNewTab: true)
-//                    ->icon(Heroicon::DocumentMagnifyingGlass),
+                NavigationItem::make("Log hệ thống")
+                    ->url(url('log-viewer'), shouldOpenInNewTab: true)
+                    ->icon(Heroicon::DocumentMagnifyingGlass),
             ])
             ->renderHook(
                 PanelsRenderHook::HEAD_END,

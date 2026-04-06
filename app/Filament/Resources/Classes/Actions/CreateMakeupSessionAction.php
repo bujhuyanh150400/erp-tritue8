@@ -1,23 +1,22 @@
 <?php
 
-namespace App\Filament\Resources\Classes\Components;
+namespace App\Filament\Resources\Classes\Actions;
 
 use App\Constants\FeeType;
 use App\Constants\ScheduleStatus;
-use App\Constants\ScheduleType;
 use App\Filament\Components\CustomSelect;
 use App\Models\ScheduleInstance;
 use App\Services\RoomService;
-use App\Services\TeacherService;
 use App\Services\ScheduleService;
+use App\Services\TeacherService;
 use Filament\Actions\Action;
 use Filament\Forms\Components\DatePicker;
-use Filament\Schemas\Components\Grid;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
-use Filament\Schemas\Components\Utilities\Get;
 use Filament\Notifications\Notification;
+use Filament\Schemas\Components\Grid;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Support\Icons\Heroicon;
 
 class CreateMakeupSessionAction

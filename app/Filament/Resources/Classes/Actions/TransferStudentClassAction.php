@@ -1,19 +1,16 @@
 <?php
 
-namespace App\Filament\Resources\Classes\Components;
+namespace App\Filament\Resources\Classes\Actions;
 
-use App\Constants\ClassStatus;
 use App\Filament\Components\CustomSelect;
 use App\Models\ClassEnrollment;
-use App\Models\SchoolClass;
 use App\Services\ClassService;
+use Filament\Actions\Action;
 use Filament\Forms\Components\DatePicker;
-use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Support\Exceptions\Halt;
-use Filament\Actions\Action;
 
 class TransferStudentClassAction
 {

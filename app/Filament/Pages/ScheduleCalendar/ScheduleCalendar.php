@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Filament\Pages;
+namespace App\Filament\Pages\ScheduleCalendar;
 
 use App\Constants\GradeLevel;
 use App\Constants\ScheduleStatus;

@@ -2,57 +2,24 @@
 
 namespace App\Repositories;
 
+use App\Constants\AttendanceStatus;
 use App\Constants\ClassStatus;
 use App\Constants\DayOfWeek;
 use App\Constants\ScheduleStatus;
+use App\Core\Interfaces\FilterFilament;
 use App\Core\Repository\BaseRepository;
+use App\Models\ClassEnrollment;
 use App\Models\ScheduleInstance;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
-class ScheduleInstanceRepository extends BaseRepository
+class ScheduleInstanceRepository extends BaseRepository implements FilterFilament
 {
     public function getModel(): string
     {
         return ScheduleInstance::class;
-    }
-
-    public function createScheduleInstance(array $data)
-    {
-        return $this->model->create($data);
-    }
-
-    public function updateRoom(int $id, int $roomId): int
-    {
-        return $this->query()
-            ->where('id', $id)
-            ->update([
-                'room_id' => $roomId
-            ]);
-    }
-
-    public function cancelSchedule(int $id, array $data): int
-    {
-        return $this->query()
-            ->where('id', $id)
-            ->update([
-                'status' => ScheduleStatus::Cancelled->value,
-                'note' => $data['reason'] ?? null,
-            ]);
-    }
-
-    public function updateAttendanceFee(int $scheduleInstanceId): void
-    {
-        DB::table('attendance_records')
-            ->whereIn('session_id', function ($q) use ($scheduleInstanceId) {
-                $q->select('id')
-                    ->from('attendance_sessions')
-                    ->where('schedule_instance_id', $scheduleInstanceId);
-            })
-            ->update([
-                'is_fee_counted' => false
-            ]);
     }
 
     /**
@@ -118,71 +85,111 @@ class ScheduleInstanceRepository extends BaseRepository
     }
 
     /**
-     * Kiểm tra trùng GIÁO VIÊN trên các buổi học thực tế (Instances)
-     * @param int $teacherId  ID GV
-     * @param array $daysOfWeek  Thứ học (mảng số nguyên theo DayOfWeek::class)
-     * @param string $startTime  Giờ bắt đầu
-     * @param string $endTime  Giờ kết thúc
-     * @param string $startDate  Ngày bắt đầu kiểm tra
-     * @param string|null $endDate  Ngày kết thúc kiểm tra
-     */
-    public function findTeacherConflicts(int $teacherId, array $daysOfWeek, string $startTime, string $endTime, string $startDate, ?string $endDate)
-    {
-        $placeholders = implode(',', array_fill(0, count($daysOfWeek), '?'));
-        return $this->model->newQuery()
-            ->where('teacher_id', $teacherId)
-            ->whereRaw("EXTRACT(ISODOW FROM date) IN ($placeholders)", $daysOfWeek)
-            ->where('date', '>=', $startDate)
-            ->when($endDate, fn ($query) => $query->where('date', '<=', $endDate))
-            ->where('start_time', '<', $endTime)
-            ->where('end_time', '>', $startTime)
-            ->whereIn('status', [ScheduleStatus::Upcoming->value, ScheduleStatus::Completed->value])
-            ->with('class')
-            ->first();
-    }
-
-    /**
-     * Kiểm tra trùng PHÒNG trên các buổi học thực tế (Instances)
+     * Tìm xung đột PHÒNG hoặc GIÁO VIÊN trên các buổi học thực tế (Instances)
      * @param int $roomId  ID phòng học
      * @param array $daysOfWeek  Thứ học (mảng số nguyên theo DayOfWeek::class)
      * @param string $startTime  Giờ bắt đầu
      * @param string $endTime  Giờ kết thúc
      * @param string $startDate  Ngày bắt đầu kiểm tra
      * @param string|null $endDate  Ngày kết thúc kiểm tra
+     * @param int|null $excludeInstanceId ID buổi học thực tế không kiểm tra
      */
-    public function findRoomConflicts(int $roomId, array $daysOfWeek, string $startTime, string $endTime, string $startDate, ?string $endDate)
-    {
+    public function findConflicts(
+        int $roomId,
+        int $teacherId,
+        array $daysOfWeek,
+        string $startTime,
+        string $endTime,
+        string $startDate,
+        ?string $endDate = null,
+        int|null $excludeInstanceId = null
+    ) {
         $placeholders = implode(',', array_fill(0, count($daysOfWeek), '?'));
+
         return $this->query()
-            ->where('room_id', $roomId)
-            // Lọc ra các buổi có thứ trùng khớp (Postgres: 1=Mon, 7=Sun)
+            // 1. Nhóm điều kiện OR: Trùng phòng HOẶC trùng giáo viên
+            ->where(function ($query) use ($roomId, $teacherId) {
+                $query->where('room_id', $roomId)
+                    ->orWhere('teacher_id', $teacherId);
+            })
+
+            // 2. Loại trừ ID hiện tại (khi chỉnh sửa)
+            ->when($excludeInstanceId, fn ($query) => $query->where('id', '!=', $excludeInstanceId))
+
+            // 3. Lọc theo Thứ (Postgres ISODOW: 1=Mon, 7=Sun)
             ->whereRaw("EXTRACT(ISODOW FROM date) IN ($placeholders)", $daysOfWeek)
-            // Nằm trong khoảng ngày xét duyệt
+
+            // 4. Nằm trong khoảng ngày xét duyệt
             ->where('date', '>=', $startDate)
             ->when($endDate, fn ($query) => $query->where('date', '<=', $endDate))
-            // Giao thoa thời gian
+
+            // 5. Giao thoa thời gian (Time Overlap logic)
             ->where('start_time', '<', $endTime)
             ->where('end_time', '>', $startTime)
-            // Chỉ quan tâm các buổi chưa bị hủy
-            ->whereIn('status', [ScheduleStatus::Upcoming->value, ScheduleStatus::Completed->value])
-            ->with('class')
+
+            // 6. Chỉ xét các buổi có hiệu lực
+            ->whereIn('status', [
+                ScheduleStatus::Upcoming->value,
+                ScheduleStatus::Completed->value
+            ])
             ->first();
     }
 
     /**
-     * Lấy lịch học cho calendar
-     * @param Carbon $start
-     * @param Carbon $end
-     * @param array $filters
-     * @return Collection
+     * Lấy query danh sách các buổi học thực tế (Instances)
+     * @param Builder $query
+     * @return Builder
      */
-    public function getScheduleInstancesForCalendar(Carbon $start, Carbon $end, array $filters = []): Collection    {
-        $query = $this->model->newQuery()
-            ->with(['class', 'teacher', 'room', 'class.subject'])
-            ->withCount('classEnrollments as si_so')
-            ->where('date', '>=', $start->toDateString())
-            ->where('date', '<=', $end->toDateString());
+    public function getListingQuery(Builder $query): Builder
+    {
+        return $query
+            ->select('schedule_instances.*') // Đảm bảo lấy các cột của bảng chính
+            ->with([
+                'class.subject', // Gộp 'class' và 'class.subject'
+                'teacher',
+                'room',
+                'attendanceSession' => function ($q) {
+                    $q->withCount([
+                        'attendanceRecords as present_count' => function ($recordQuery) {
+                            $recordQuery->whereIn('status', [
+                                AttendanceStatus::Present->value,
+                                AttendanceStatus::Late->value,
+                            ]);
+                        }
+                    ]);
+                }
+            ])
+            ->addSelect([
+                'active_students_count' => ClassEnrollment::query()
+                    ->selectRaw('count(*)')
+                    ->whereColumn('class_enrollments.class_id', 'schedule_instances.class_id')
+                    // Tối ưu Postgres: Tránh ép kiểu ::date trên cột enrolled_at để tận dụng Index
+                    ->whereRaw('class_enrollments.enrolled_at < (schedule_instances.date + INTERVAL \'1 day\')')
+                    ->where(function ($subQuery) {
+                        $subQuery->whereNull('class_enrollments.left_at')
+                            // left_at đã là kiểu DATE (theo database.md), có thể dùng whereColumn thay vì whereRaw
+                            ->orWhereColumn('class_enrollments.left_at', '>=', 'schedule_instances.date');
+                    })
+            ]);
+    }
 
+    /**
+     * Lọc query theo các trường lọc
+     * @param Builder $query
+     * @param array $filters
+     * @return Builder
+     */
+    public function setFilters(Builder $query, array $filters = []): Builder
+    {
+        if (!empty($filters['start_date'])) {
+            $query->where('date', '>=', $filters['start_date']);
+        }
+        if (!empty($filters['end_date'])) {
+            $query->where('date', '<=', $filters['end_date']);
+        }
+        if (!empty($filters['class_id'])) {
+            $query->where('class_id', $filters['class_id']);
+        }
         if (!empty($filters['teacher_id'])) {
             $query->where('teacher_id', $filters['teacher_id']);
         }
@@ -210,6 +217,6 @@ class ScheduleInstanceRepository extends BaseRepository
                 $classQuery->where('status', ClassStatus::Active);
             });
         }
-        return $query->get();
+        return $query;
     }
 }

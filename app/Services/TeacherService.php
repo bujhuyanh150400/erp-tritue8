@@ -53,6 +53,7 @@ class TeacherService extends BaseService implements SelectableServiceInterface
                     'bank_account_number' => $data['bank_account_number'] ?? null,
                     'bank_account_holder' => $data['bank_account_holder'] ?? null,
                     'status' => $data['status'],
+                    'color' => $data['color'] ?? null,
                     'joined_at' => Carbon::parse($data['joined_at']),
                 ]);
                 return ServiceReturn::success(
@@ -85,6 +86,7 @@ class TeacherService extends BaseService implements SelectableServiceInterface
                     'bank_account_number' => $data['bank_account_number'] ?? null,
                     'bank_account_holder' => $data['bank_account_holder'] ?? null,
                     'status' => $data['status'],
+                    'color' => $data['color'] ?? null,
                     'joined_at' => Carbon::parse($data['joined_at']),
                     'updated_at' => now(),
                 ];
@@ -105,7 +107,6 @@ class TeacherService extends BaseService implements SelectableServiceInterface
             useTransaction: true
         );
     }
-
 
     /**
      * Lấy danh sách giáo viên cho dropdown
@@ -191,4 +192,5 @@ class TeacherService extends BaseService implements SelectableServiceInterface
             return $this->teacherRepository->getAttendanceStatsByClass($teacherId, $month);
         });
     }
+
 }
