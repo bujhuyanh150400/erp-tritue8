@@ -11,4 +11,11 @@ class RewardPointRepository extends BaseRepository
     {
         return RewardPoint::class;
     }
+
+    public function getStudentBalance(int $studentId): int
+    {
+        return (int) $this->query()
+            ->where('student_id', $studentId)
+            ->sum('amount');
+    }
 }

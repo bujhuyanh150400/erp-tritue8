@@ -6,6 +6,7 @@ use App\Filament\Resources\Teachers\Widgets\TeacherAttendanceChart;
 use App\Filament\Resources\Teachers\Widgets\TeacherKpiStatsOverview;
 use App\Models\Teacher;
 use App\Services\TeacherService;
+use Carbon\Carbon;
 use Livewire\Component;
 
 class TeacherKpiOverview extends Component
@@ -20,6 +21,13 @@ class TeacherKpiOverview extends Component
     {
         $this->record = $record;
         $this->selectedMonth = now()->format('Y-m');
+    }
+
+    public function updatedSelectedMonth(?string $value): void
+    {
+        $this->selectedMonth = filled($value)
+            ? Carbon::parse($value)->format('Y-m')
+            : now()->format('Y-m');
     }
 
     public function render()
