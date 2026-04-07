@@ -1,0 +1,102 @@
+<?php
+
+namespace App\Repositories;
+
+use App\Constants\InvoiceStatus;
+use App\Core\Repository\BaseRepository;
+use App\Models\TuitionInvoice;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\DB;
+
+class TuitionInvoiceRepository extends BaseRepository
+{
+    public function getModel(): string
+    {
+        return TuitionInvoice::class;
+    }
+
+    protected function getBaseQuery(): Builder
+    {
+        return $this->query()
+            ->from('tuition_invoices as ti')
+            ->join('students', 'ti.student_id', '=', 'students.id')
+            ->join('classes', 'ti.class_id', '=', 'classes.id');
+    }
+
+    public function getListingQuery(): Builder
+    {
+        return $this->getBaseQuery()
+            ->leftJoin('teachers', 'classes.teacher_id', '=', 'teachers.id')
+            ->select([
+                'ti.*',
+                'students.full_name as student_name',
+                'classes.name as class_name',
+                'classes.grade_level as class_grade_level',
+                'teachers.full_name as teacher_name',
+                DB::raw('(ti.total_amount - ti.paid_amount) as remaining_amount'),
+            ]);
+    }
+
+    public function applyFilters(Builder $query, array $filters = []): Builder
+    {
+        $month = $filters['month'] ?? now()->format('Y-m');
+        $query->where('ti.month', $month);
+
+        if (filled($filters['status'])) {
+            $query->where('ti.status', $filters['status']);
+        }
+
+        if (filled($filters['class_id'])) {
+            $query->where('ti.class_id', $filters['class_id']);
+        }
+
+        if (filled($filters['teacher_id'])) {
+            $query->where('classes.teacher_id', $filters['teacher_id']);
+        }
+
+        if (filled($filters['grade_level'])) {
+            $query->where('classes.grade_level', $filters['grade_level']);
+        }
+
+        if (filled($filters['payment_method'])) {
+            $query->whereExists(function ($sub) use ($filters) {
+                $sub->selectRaw(1)
+                    ->from('tuition_invoice_logs as til')
+                    ->whereColumn('til.invoice_id', 'ti.id')
+                    ->where('til.is_cancelled', false)
+                    ->where('til.payment_method', $filters['payment_method']);
+            });
+        }
+
+        return $query;
+    }
+
+    public function getSummaryStats(array $filters = []): object
+    {
+        $query = $this->applyFilters($this->getBaseQuery(), $filters);
+
+        return $query->selectRaw('
+                COALESCE(SUM(ti.total_study_fee), 0) as total_study_fee,
+                COALESCE(SUM(ti.previous_debt), 0) as total_previous_debt,
+                COALESCE(SUM(ti.total_amount - ti.paid_amount), 0) as total_remaining
+            ')
+            ->first();
+    }
+
+    public function syncStatus(TuitionInvoice $invoice): TuitionInvoice
+    {
+        $remaining = max((int) $invoice->total_amount - (int) $invoice->paid_amount, 0);
+
+        $status = match (true) {
+            $invoice->paid_amount <= 0 => InvoiceStatus::Unpaid,
+            $remaining <= 0 => InvoiceStatus::Paid,
+            default => InvoiceStatus::PartiallyPaid,
+        };
+
+        $invoice->update([
+            'status' => $status,
+        ]);
+
+        return $invoice->refresh();
+    }
+}

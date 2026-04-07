@@ -11,11 +11,14 @@ enum NavigationGroup implements HasLabel
 
     case EDUCATION;
 
+    case FINANCE;
+
     public function getLabel(): string|Htmlable|null
     {
         return match ($this) {
             self::USER => 'Người dùng',
             self::EDUCATION => 'Học vụ',
+            self::FINANCE => 'Tài chính',
         };
     }
 }
