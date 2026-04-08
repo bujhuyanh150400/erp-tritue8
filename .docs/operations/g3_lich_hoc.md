@@ -262,78 +262,48 @@ Ghi user_logs: admin X đổi lịch cố định lớp Y từ ngày Z lúc T
 
 ---
 
-## Thêm Học bù / Tăng cường
+## Học bù / Tăng cường
 
-### Tạo học bù / tăng cường
+### Tạo học bù
 
 ```
-Admin nhập:
-  - class_id       (required) — 1 lớp hoặc nhiều lớp
-  - student_ids    (optional) — chọn riêng từng HS (nếu chỉ một nhóm)
-  - date           (required) — ngày học
-  - start_time     (required)
-  - end_time       (required)
-  - room_id        (required)
-  - teacher_id     (required)
-  - schedule_type  (required) — makeup hoặc extra
-  - linked_makeup_for (optional) — buổi nào đang bù (nếu là makeup)
+1. Điều kiện kích hoạt (Guard Clause)
+Chỉ cho phép tạo lịch bù khi buổi học gốc thỏa mãn:
 
-  Tài chính:
-  - fee_type (required):
-      0 = normal  — tính học phí như bình thường
-      1 = free    — miễn phí
-      2 = custom  — nhập học phí riêng
-  - custom_fee_per_session (nếu fee_type = custom)
+Là Ngày nghỉ (isDayOff).
 
-  Lương GV:
-  - custom_salary (optional) — nhập cố định cho buổi này
-                               NULL = dùng teacher_salary_snapshot
+Chưa điểm danh (hasAttendance = false).
 
-Validation — kiểm tra trùng phòng:
-  → SELECT si.start_time, si.end_time, classes.name
-    FROM schedule_instances si
-    JOIN classes ON si.class_id = classes.id
-    WHERE si.room_id = ?
-      AND si.date = ?
-      AND si.status != cancelled
-      AND (si.start_time < end_time_mới AND si.end_time > start_time_mới)
+Chưa có lịch bù nào khác trỏ tới (Quan hệ 1-1, chặn bằng unique DB).
 
-Validation — kiểm tra trùng GV:
-  → SELECT si.date, classes.name
-    FROM schedule_instances si
-    JOIN classes ON si.class_id = classes.id
-    WHERE si.teacher_id = ?
-      AND si.date = ?
-      AND si.status != cancelled
-      AND (si.start_time < end_time_mới AND si.end_time > start_time_mới)
+Không phải là buổi đi bù cho một buổi khác.
 
-Validation — kiểm tra trùng HS (cảnh báo):
-  → SELECT students.full_name, classes.name as ten_lop_khac
-    FROM class_enrollments ce
-    JOIN students ON ce.student_id = students.id
-    JOIN schedule_instances si ON si.class_id = ce.class_id
-    WHERE ce.class_id = class_id_mới
-      AND ce.left_at IS NULL
-      AND si.date = date_mới
-      AND si.status != cancelled
-      AND (si.start_time < end_time_mới AND si.end_time > start_time_mới)
-      AND si.class_id != class_id_mới
+2. Thông tin đầu vào
+Thời gian: Ngày (phải sau buổi gốc), Giờ bắt đầu < Giờ kết thúc.
 
-Service:
-  INSERT schedule_instances (
-    class_id, template_id = NULL,
-    date, start_time, end_time, room_id, teacher_id,
-    original_teacher_id = teacher_id,
-    teacher_salary_snapshot = [...],
-    custom_salary,
-    schedule_type = makeup/extra,
-    status = scheduled,
-    linked_makeup_for,
-    fee_type, custom_fee_per_session,
-    created_by = Auth::id()
-  )
+Nguồn lực: Phòng học & Giáo viên (Hệ thống tự động check xung đột).
 
-Ghi user_logs: admin X tạo buổi [makeup/extra] lớp Y ngày Z lúc T
+Tài chính: * fee_type: Bình thường / Miễn phí / Tùy chỉnh.
+
+custom_salary: Lương riêng cho buổi này (nếu có).
+
+3. Quy trình thực thi (Service Logic)
+Validate: Check trùng phòng/giáo viên (bao gồm cả lịch cố định và thực tế).
+
+Snapshot Lương: * Nếu có custom_salary: Dùng luôn.
+
+Nếu không: Tự động lấy lương hiệu lực của GV tại thời điểm đó để chốt số (teacher_salary_snapshot).
+
+Liên kết: Gán linked_makeup_for = ID buổi gốc.
+
+Lưu vết: Lưu original_teacher_id (GV chủ nhiệm) và created_by.
+
+4. Hiển thị & Nhận diện (UI/UX)
+Tại buổi gốc: Hiện Badge "Đã có lịch bù: [Ngày]", ẩn nút tạo bù.
+
+Tại buổi bù: Hiện Badge "Lịch học bù", có link quay lại buổi gốc.
+
+Đồng bộ: Xóa buổi bù thì buổi gốc tự động mở lại trạng thái "Có thể tạo bù".
 ```
 
 ---

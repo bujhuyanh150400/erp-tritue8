@@ -4,74 +4,65 @@ namespace App\Filament\Resources\Classes\Actions;
 
 use App\Constants\ScheduleStatus;
 use App\Models\ScheduleInstance;
+use App\Services\ClassScheduleService;
 use App\Services\ScheduleService;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Checkbox;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Textarea;
 use Filament\Notifications\Notification;
+use Filament\Support\Exceptions\Halt;
 use Filament\Support\Icons\Heroicon;
+use Livewire\Component;
 
-class CancelScheduleInstanceAction
+class CancelScheduleInstanceAction extends Action
 {
-    public static function make(): Action
+    protected function setUp(): void
     {
-        return Action::make('cancel_session')
-            ->label('Hủy buổi')
-            ->icon(Heroicon::XCircle)
-            ->color('danger')
-            ->visible(fn (ScheduleInstance $record) => $record->status === ScheduleStatus::Upcoming)
-            ->modalHeading('Xác nhận hủy buổi học')
-            ->form(function (ScheduleInstance $record) {
+        parent::setUp();
 
-                $isUrgent = now()->diffInHours(
-                        $record->date->copy()->setTimeFromTimeString($record->start_time),
-                        false
-                    ) < 6;
-
-                return [
-
-                    Placeholder::make('cancel_info')
-                        ->content(
-                            "Bạn sắp hủy buổi học ngày {$record->date->format('d/m/Y')} " .
-                            "({$record->start_time} - {$record->end_time}) tại phòng {$record->room->name}, " .
-                            "GV {$record->teacher->full_name}."
-                        ),
-
-                    Placeholder::make('warning')
-                        ->content('Buổi học sắp diễn ra (< 6 giờ). Bạn có muốn gửi thông báo khẩn không?')
-                        ->visible($isUrgent),
-
-                    Checkbox::make('urgent_notify')
-                        ->label('Gửi thông báo khẩn cho học sinh')
-                        ->visible($isUrgent),
-
-                    Textarea::make('reason')
-                        ->label('Lý do hủy'),
-
-                    Checkbox::make('is_fee_counted')
-                        ->label('Vẫn tính tiền buổi học này cho học sinh')
-                        ->default(false),
-                ];
+        $this->label('Báo nghỉ')
+            ->visible(function (ScheduleInstance $record) {
+                // attendanceSession phải được khai báo with, tránh n+1 query
+                return $record->canEditingInstance(); // Nếu là ngày nghỉ hoặc đã có dữ liệu điểm danh thì không thể báo nghỉ
             })
-            ->action(function (ScheduleInstance $record, array $data) {
-
-                $service = app(ScheduleService::class);
-
-                $result = $service->cancelSession($record, $data);
-
+            ->color('danger')
+            ->icon(Heroicon::CalendarDays)
+            ->requiresConfirmation()
+            ->modalHeading('Xác nhận báo nghỉ')
+            ->modalDescription('Buổi học sẽ được chuyển thành lịch Nghỉ/Lễ. Vui lòng nhập lý do cụ thể.')
+            ->modalSubmitActionLabel('Xác nhận báo nghỉ')
+            ->mountUsing(function (ScheduleInstance $record, Action $action) {
+                if ($record->attendanceSession()->exists()) {
+                    Notification::make()
+                        ->warning()
+                        ->color('warning')
+                        ->title('Thao tác bị chặn')
+                        ->body('Buổi học đã có dữ liệu điểm danh.')
+                        ->persistent()
+                        ->send();
+                    // Hủy mở Action Modal ngay lập tức
+                    $action->cancel();
+                }
+            })
+            ->schema([
+                Textarea::make('reason')
+                    ->label('Ghi chú / Lý do nghỉ')
+                    ->helperText('Ví dụ: Giáo viên ốm, Nghỉ lễ Quốc Khánh...')
+                    ->required()
+                    ->maxLength(255),
+            ])
+            ->action(function (array $data, ScheduleInstance $record, ClassScheduleService $service, Component $livewire) {
+                $result = $service->cancelInstance($record, $data['reason']);
                 if ($result->isError()) {
                     Notification::make()
+                        ->title('Báo nghỉ thất bại')
+                        ->body($result->getMessage())
                         ->danger()
-                        ->title($result->getMessage())
                         ->send();
-                    return;
+                    throw new Halt();
                 }
-
-                Notification::make()
-                    ->success()
-                    ->title($result->getMessage() ?: 'Đã hủy buổi học')
-                    ->send();
+                Notification::make()->success()->title('Báo nghỉ thành công')->send();
             });
     }
 }

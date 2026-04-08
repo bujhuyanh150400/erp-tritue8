@@ -126,7 +126,8 @@ class AdminCalendarWidget extends FullCalendarWidget
                     👨‍🏫 GV: \${props.teacher}<br/>
                     🚪 Phòng: \${props.room_name}<br/>
                     👥 Sĩ số: \${props.active_students_count}<br/>
-                    📌 Trạng thái điểm danh: \${props.status_attendance_label}
+                    📌 Trạng thái điểm danh: \${props.status_attendance_label}<br/>
+                    📌 Kiểu lịch: \${props.type_label}
                 `.replace(/\\n/g, ' ').trim();
                 el.setAttribute("x-data", "{ tooltip: '" + content.replace(/'/g, "\\'") + "' }");
                 el.setAttribute("x-tooltip.html", "tooltip");
@@ -166,6 +167,9 @@ class AdminCalendarWidget extends FullCalendarWidget
                         </div>
                         <div class="truncate opacity-90 text-[14px]">
                             👨‍🎓 ${props.class}
+                        </div>
+                        <div class="truncate opacity-90 text-[14px]">
+                            📌 ${props.type_label}
                         </div>
                     </div>
                 `;
@@ -232,7 +236,8 @@ class AdminCalendarWidget extends FullCalendarWidget
     {
         return [
             // Xem chi tiết lịch học
-            ViewScheduleInstanceAction::make('view_schedule_detail')->refreshCalendar(),
+            ViewScheduleInstanceAction::make('view_schedule_detail')
+                ->refreshCalendar(),
         ];
     }
 
@@ -261,37 +266,9 @@ class AdminCalendarWidget extends FullCalendarWidget
      */
     public function onEventClick(array $event): void
     {
-        // Lấy lịch học theo ID
-        $resInstance = $this->scheduleService->getDetailInstanceById($event['id']);
-        if ($resInstance->isError()) {
-            Notification::make()
-                ->title('Lỗi')
-                ->body($resInstance->getMessage())
-                ->danger()
-                ->send();
-            return;
-        }
-        $instance = $resInstance->getData();
         $this->mountAction('view_schedule_detail', [
             'record_id' => $event['id']
         ]);
-
-//
-//        // Bắt đầu hoặc lấy Phiên điểm danh hiện tại
-//        $result = $this->attendanceService->startOrGetSession($instance);
-//        if ($result->isError()) {
-//            Notification::make()
-//                ->title('Lỗi')
-//                ->body($result->getMessage())
-//                ->danger()
-//                ->send();
-//            $this->dispatch('close-global-loading');
-//            return;
-//        }
-//        $data = $result->getData();
-//        $this->dispatch('close-global-loading');
-//        // Redirect đến trang chi tiết Phiên điểm danh
-//        $this->redirect(AttendanceSessionResource::getUrl('view', ['record' => $data]));
     }
 
     /**
@@ -305,7 +282,41 @@ class AdminCalendarWidget extends FullCalendarWidget
      */
     public function onEventResize(array $event, array $oldEvent, array $relatedEvents, array $startDelta, array $endDelta): bool
     {
-        dd($event, $oldEvent, $relatedEvents, $startDelta, $endDelta);
+        $newStart = Carbon::parse($event['start']);
+        $newEnd = Carbon::parse($event['end']);
+        // Xử lý góc khuất FullCalendar: Nếu sự kiện kết thúc đúng 00:00:00 hôm sau
+        // (tức là kéo hết ngày hiện tại), ta trừ đi 1 giây để so sánh cho chuẩn.
+        $checkEnd = $newEnd->copy();
+        if ($checkEnd->format('H:i:s') === '00:00:00') {
+            $checkEnd->subSecond();
+        }
+        // Kiểm tra xem có bị lấn sang ngày khác không
+        if (!$newStart->isSameDay($checkEnd)) {
+            Notification::make()
+                ->warning()
+                ->title('Thao tác bị chặn')
+                ->body('Bạn không thể kéo dài buổi học lấn sang ngày khác.')
+                ->send();
+            return true;
+        }
+
+        $result = $this->scheduleService->editTimeInstance($event['id'], $newStart, $newEnd);
+
+        if ($result->isError()) {
+            Notification::make()
+                ->danger()
+                ->title('Lỗi')
+                ->body($result->getMessage())
+                ->send();
+            return true;
+        }
+        Notification::make()
+            ->success()
+            ->title('Đã đổi giờ học thành công!')
+            ->send();
+
+        $this->refreshRecords();
+        return false;
     }
 
     /**
@@ -313,26 +324,30 @@ class AdminCalendarWidget extends FullCalendarWidget
      */
     public function onEventDrop(array $event, array $oldEvent, array $relatedEvents, array $delta, ?array $oldResource, ?array $newResource): bool
     {
-        $instance = ScheduleInstance::find($event['id']);
 
-        if ($instance) {
-            $newStart = Carbon::parse($event['start']);
-            $newEnd = Carbon::parse($event['end']);
-
-            $instance->update([
-                'date' => $newStart->toDateString(),
-                'start_time' => $newStart->toTimeString(),
-                'end_time' => $newEnd->toTimeString(),
-            ]);
-
-            \Filament\Notifications\Notification::make()
-                ->success()
-                ->title('Đã đổi giờ học thành công!')
-                ->send();
+        if ($event['start'] === $oldEvent['start'] && $event['end'] === $oldEvent['end']) {
+            return false; // Kết thúc sớm, không gọi DB, không bắn Notification
         }
 
-        // BẮT BUỘC: Trả về false để FullCalendar giữ nguyên vị trí mới của Block lịch.
-        // Nếu trả về true, Block lịch sẽ tự động giật ngược lại vị trí cũ (rất tiện để check trùng lịch sau này).
+        $newStart = Carbon::parse($event['start']);
+        $newEnd = Carbon::parse($event['end']);
+        $result = $this->scheduleService->moveInstance($event['id'], $newStart, $newEnd);
+
+        if ($result->isError()) {
+            Notification::make()
+                ->danger()
+                ->title('Lỗi')
+                ->body($result->getMessage())
+                ->send();
+            return true;
+        }
+
+        Notification::make()
+            ->success()
+            ->title('Đã đổi giờ học thành công!')
+            ->send();
+
+        $this->refreshRecords();
         return false;
     }
 }

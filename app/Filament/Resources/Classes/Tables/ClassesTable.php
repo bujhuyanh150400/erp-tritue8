@@ -8,7 +8,6 @@ use App\Filament\Components\CommonAction;
 use App\Filament\Components\CustomSelect;
 use App\Filament\Resources\Classes\Actions\AddStudentToClassAction;
 use App\Filament\Resources\Classes\Actions\ChangeClassStatusAction;
-use App\Filament\Resources\Classes\Actions\ChangeTeacherAction;
 use App\Filament\Resources\Classes\Actions\CreateScheduleTemplateAction;
 use App\Models\SchoolClass;
 use App\Repositories\ClassRepository;
@@ -116,8 +115,6 @@ class ClassesTable
                     CreateScheduleTemplateAction::make(),
                     // Thêm học sinh
                     AddStudentToClassAction::make(),
-                    // Thay đổi GV
-                    ChangeTeacherAction::make(),
                     // Thay đổi trạng thái
                     ChangeClassStatusAction::make(),
 

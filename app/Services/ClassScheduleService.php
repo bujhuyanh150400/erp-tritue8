@@ -51,13 +51,13 @@ class ClassScheduleService extends BaseService
      * @throws ServiceException -- Nếu xung đột xảy ra
      */
     protected function checkConflictInstances(
-        int $roomId,
-        int $teacherId,
-        array $dayValues,
-        string $startTime,
-        string $endTime,
-        string $startDate,
-        string $endDate,
+        int      $roomId,
+        int      $teacherId,
+        array    $dayValues,
+        string   $startTime,
+        string   $endTime,
+        string   $startDate,
+        string   $endDate,
         int|null $excludeTemplateId = null,
         int|null $excludeInstanceId = null,
 
@@ -258,7 +258,7 @@ class ClassScheduleService extends BaseService
      * @param array $filters
      * @return ServiceReturn
      */
-    public function getScheduleInstancesCalendar(Carbon $start, Carbon $end,array $filters): ServiceReturn
+    public function getScheduleInstancesCalendar(Carbon $start, Carbon $end, array $filters): ServiceReturn
     {
         return $this->execute(function () use ($start, $end, $filters) {
             $query = $this->instanceRepository->query();
@@ -282,11 +282,11 @@ class ClassScheduleService extends BaseService
                 $attendanceSession = $si->attendanceSession ?? null;
                 if ($attendanceSession) {
                     $labelStatus = $attendanceSession->status->label();
-                }else{
+                } else {
                     $labelStatus = 'Chưa điểm danh';
                 }
                 return EventData::make()
-                    ->id($si->id)
+                    ->id((string)$si->id) // Vì lưu vào js, js ko thể lưu số bigint nên chuyển thành chuỗi
                     ->title("\n{$subject->name}\n {$room->name} - {$class->name}")
                     ->start("{$cleanDate}T{$si->start_time}")
                     ->end("{$cleanDate}T{$si->end_time}")
@@ -303,50 +303,139 @@ class ClassScheduleService extends BaseService
                         'room_name' => $room->name,
                         'active_students_count' => $si->active_students_count,
                         'status_attendance_label' => $labelStatus,
+                        'type_label' => $si->schedule_type->label(),
                     ])
                     ->borderColor('transparent');
             })->toArray();
         });
     }
 
+
     /**
-     * Lấy chi tiết của lịch học theo ID
+     * Cập nhật lại thời gian của lịch học
      * @param int $instanceId
+     * @param Carbon $startTime
+     * @param Carbon $endTime
      * @return ServiceReturn
-     * @throws \Throwable
      */
-    public function getDetailInstanceById(int $instanceId): ServiceReturn
+    public function editTimeInstance(int $instanceId, Carbon $startTime, Carbon $endTime): ServiceReturn
     {
-        return $this->execute(function () use ($instanceId) {
-            $query = $this->instanceRepository->query();
-            $instance = $this->instanceRepository
-                ->getListingQuery($query)
-                ->where('id', $instanceId)
-                ->first();
-            if (!$instance) {
-                throw new ServiceException('Lịch học không tồn tại');
+        return $this->execute(function () use ($instanceId, $startTime, $endTime) {
+            // 1. Ràng buộc thời gian cơ bản
+            if ($startTime->greaterThanOrEqualTo($endTime)) {
+                throw new ServiceException("Giờ kết thúc phải lớn hơn giờ bắt đầu.");
             }
+
+            // 2. Lấy data buổi học
+            $instance = $this->instanceRepository->find($instanceId);
+            if (!$instance) {
+                throw new ServiceException("Không tìm thấy lịch học.");
+            }
+            if (!$instance->canEditingInstance()) {
+                throw new ServiceException("Lịch học này không thể sửa.");
+            }
+
+            $date = $instance->date;
+            $dayValues = [DayOfWeek::from(Carbon::parse($date)->dayOfWeekIso)];
+            $startTimeStr = $startTime->format('H:i:s');
+            $endTimeStr = $endTime->format('H:i:s');
+
+            // Kiểm tra xung đột Phòng & Giáo viên (LOẠI TRỪ buổi học hiện tại)
+            $this->checkConflictInstances(
+                roomId: $instance->room_id,
+                teacherId: $instance->teacher_id,
+                dayValues: $dayValues,
+                startTime: $startTimeStr,
+                endTime: $endTimeStr,
+                startDate: $date,
+                endDate: $date,
+                excludeTemplateId: $instance->template_id,
+                excludeInstanceId: $instance->id,
+            );
+
+            // Cập nhật thời gian
+            $instance->update([
+                'start_time' => $startTimeStr,
+                'end_time' => $endTimeStr,
+            ]);
+
+            Logging::userActivity(
+                action: 'Cập nhật thời gian buổi học',
+                description: "Cập nhật thời gian buổi ngày {$instance->date} lớp {$instance->class_id} thành {$startTime->format('H:i')} - {$endTime->format('H:i')}"
+            );
+
             return $instance;
         });
     }
 
     /**
-     * Cập nhật lịch học
+     * Di chuyển lịch học
+     * @param int $instanceId
+     * @param Carbon $newStart
+     * @param Carbon $newEnd
+     * @return ServiceReturn
+     * @throws \Throwable
+     */
+    public function moveInstance(int $instanceId, Carbon $newStart, Carbon $newEnd): ServiceReturn
+    {
+        return $this->execute(function () use ($instanceId, $newStart, $newEnd) {
+            $instance = $this->instanceRepository->find($instanceId);
+            if (!$instance) {
+                throw new ServiceException("Không tìm thấy lịch học.");
+            }
+            if (!$instance->canEditingInstance()) {
+                throw new ServiceException("Lịch học này không thể sửa.");
+            }
+
+            // 2. Tách Ngày và Giờ từ Carbon object do FullCalendar gửi lên
+            $newDate = $newStart->format('Y-m-d');
+            $startTimeStr = $newStart->format('H:i:s');
+            $endTimeStr = $newEnd->format('H:i:s');
+            $dayValues = [DayOfWeek::from($newStart->dayOfWeekIso)];
+
+            // 3. Kiểm tra xung đột tại vị trí MỚI (Vẫn phải exclude chính nó)
+            $this->checkConflictInstances(
+                roomId: $instance->room_id,
+                teacherId: $instance->teacher_id,
+                dayValues: $dayValues,
+                startTime: $startTimeStr,
+                endTime: $endTimeStr,
+                startDate: $newDate,
+                endDate: $newDate,
+                excludeTemplateId: $instance->template_id,
+                excludeInstanceId: $instance->id,
+            );
+
+            // 4. Lưu dữ liệu dời lịch
+            return $instance->update([
+                'date'       => $newDate,
+                'start_time' => $startTimeStr,
+                'end_time'   => $endTimeStr,
+            ]);
+        });
+    }
+
+
+    /**
+     * Cập nhật lại chi tiết về lịch học
      * @param ScheduleInstance $instance
      * @param array $data
      * @return ServiceReturn
      * @throws \Throwable
      */
-    public function updateInstance(ScheduleInstance $instance, array $data)
+    public function updateInstance(ScheduleInstance $instance, array $data): ServiceReturn
     {
         return $this->execute(function () use ($instance, $data) {
+            if (!$instance->canEditingInstance()){
+                throw new ServiceException('Lịch học này không thể sửa');
+            }
             $roomId = $data['room_id'] ?? $instance->room_id;
-            $teacherId = $data['teacher_id'] ?? $instance->teacher_id;
+            $teacherId = $data['teacher_id'] ?? $instance->original_teacher_id;
             $date = $data['date'] ?? $instance->date;
-            $dayValues =  [DayOfWeek::from(Carbon::parse($date)->dayOfWeekIso)];
+            $dayValues = [DayOfWeek::from(Carbon::parse($date)->dayOfWeekIso)];
             $startTime = $data['start_time'] ?? $instance->start_time;
             $endTime = $data['end_time'] ?? $instance->end_time;
-
+            $feeType = $data['fee_type'] instanceof FeeType ? $data['fee_type'] : FeeType::from($data['fee_type']);
             // Check conflict lịch học
             $this->checkConflictInstances(
                 roomId: $roomId,
@@ -359,34 +448,152 @@ class ClassScheduleService extends BaseService
                 excludeTemplateId: $instance->template_id,
                 excludeInstanceId: $instance->id,
             );
-
-            // Cập nhật lịch học
-            $instance->update([
+            // Dữ liệu cập nhật
+            $dataUpdate = [
                 'room_id' => $roomId,
                 'teacher_id' => $teacherId,
                 'date' => $date,
                 'start_time' => $startTime,
                 'end_time' => $endTime,
-            ]);
+            ];
+            // Nếu thay đổi lương custom, cập nhật lương custom
+            if (!empty($data['custom_salary'])) {
+                $dataUpdate['custom_salary'] = $data['custom_salary'];
+            } else {
+                // Nếu không có lương custom và thay đổi teacher so với teacher gốc, cập nhật lương teacher dựa theo lương của teacher đó
+                if ($teacherId !== $instance->original_teacher_id) {
+                    $salaryTeacher = $this->teacherSalaryConfigRepository->getEffectiveSalaryForPeriod(
+                        teacherId: $teacherId,
+                        classId: $instance->class_id,
+                        startDate: $date,
+                        endDate: $date,
+                        fallbackSalary: (float)($instance->class->teacher_salary_per_session ?? 0)
+                    );
+                    $dataUpdate['custom_salary'] = $salaryTeacher;
+                }
+                // Nếu  thay đổi teacher giống với teacher gốc, cập nhật lương custom = null để sử dụng lương của teacher gốc
+                else if ($teacherId === $instance->original_teacher_id){
+                    $dataUpdate['custom_salary'] = null;
+                }
+            }
 
+            // Nếu thay đổi phí học, cập nhật phí học dựa theo phí học của lớp đó hoặc phí học tùy chỉnh nếu có
+            if ($feeType === FeeType::Free) {
+                $dataUpdate['custom_fee_per_session'] = 0;
+            } elseif ($feeType === FeeType::Custom) {
+                $dataUpdate['custom_fee_per_session'] = $data['custom_fee_per_session'];
+            }
 
+            // Cập nhật lịch học
+            $instance->update($dataUpdate);
+
+            Logging::userActivity(
+                action: 'Cập nhật buổi học',
+                description: "Cập nhật buổi ngày {$instance->date} lớp {$instance->class_id}"
+            );
 
             return $instance;
         });
     }
 
-    public function cancelInstance(ScheduleInstance $instance, string $reason)
+    /**
+     * Hủy lịch học
+     * @param ScheduleInstance $instance
+     * @param string $reason
+     * @return ServiceReturn
+     * @throws \Throwable
+     */
+    public function cancelInstance(ScheduleInstance $instance, string $reason): ServiceReturn
     {
         return $this->execute(function () use ($instance, $reason) {
             if ($instance->attendanceSession()->exists()) {
                 throw new ServiceException("Không thể báo nghỉ: Buổi học này đã có dữ liệu điểm danh.");
             }
             $instance->update([
-                'status'        => ScheduleStatus::Cancelled,
+                'status' => ScheduleStatus::Cancelled,
                 'schedule_type' => ScheduleType::Holiday,
                 'note' => $reason,
             ]);
+            Logging::userActivity(
+                action: 'Hủy buổi học',
+                description: "Hủy buổi ngày {$instance->date} lớp {$instance->class_id} | Lý do: {$reason}"
+            );
             return $instance;
+        });
+    }
+
+    /**
+     * Tạo lịch bù
+     * @param ScheduleInstance $instance
+     * @param array $data
+     * @return ServiceReturn
+     */
+    public function createMakeupInstance(ScheduleInstance $instance, array $data): ServiceReturn
+    {
+        return $this->execute(function () use ($instance, $data) {
+            if (!$instance->canMakeMarkupInstance()) {
+                throw new ServiceException("Không thể tạo lịch bù: Buổi học này không thể tạo lịch bù.");
+            }
+
+            $roomId = $data['room_id'] ?? $instance->room_id;
+            $teacherId = $data['teacher_id'] ?? $instance->original_teacher_id;
+            $date = $data['date'];
+            $dayValues = [DayOfWeek::from(Carbon::parse($date)->dayOfWeekIso)];
+            $feeType = $data['fee_type'] instanceof FeeType ? $data['fee_type'] : FeeType::from($data['fee_type']);
+
+            // Kiểm tra xung đột (makeup instance không được trùng với instance gốc)
+            $this->checkConflictInstances(
+                roomId: $roomId,
+                teacherId: $teacherId,
+                dayValues: $dayValues,
+                startTime: $data['start_time'],
+                endTime: $data['end_time'],
+                startDate: $date,
+                endDate: $date,
+            );
+            // Lấy lớp học
+            $class = $instance->class;
+
+            if ($feeType === FeeType::Free) {
+                $customFee = 0;
+            } elseif ($feeType === FeeType::Custom) {
+                $customFee = $data['custom_fee_per_session'];
+            }
+
+            // Lấy lương hiệu lực của giáo viên trong khoảng thời gian
+            // Nếu có lương custom thì sử dụng lương custom
+            if (!empty($data['custom_salary'])) {
+                $salarySnapshot = (float)$data['custom_salary'];
+            } else {
+                // Nếu không có lương custom thì sử dụng lương mặc định của lớp học hoặc lương của giáo viên nếu có
+                $salarySnapshot = $this->teacherSalaryConfigRepository->getEffectiveSalaryForPeriod(
+                    teacherId: $teacherId,
+                    classId: $class->id,
+                    startDate: $date,
+                    endDate: $date,
+                    fallbackSalary: (float)($class->teacher_salary_per_session ?? 0)
+                );
+            }
+
+
+            // Insert vào Database
+            return $this->instanceRepository->create([
+                'class_id' => $instance->class_id,
+                'date' => $date,
+                'start_time' => $data['start_time'],
+                'end_time' => $data['end_time'],
+                'fee_type' => $data['fee_type'] ?? FeeType::Normal->value,
+                'room_id' => $roomId,
+                'teacher_id' => $teacherId,
+                'original_teacher_id' => $class->teacher_id ?? $teacherId, // Lưu vết GV gốc
+                'schedule_type' => ScheduleType::Makeup,
+                'status' => ScheduleStatus::Upcoming,
+                'teacher_salary_snapshot' => $salarySnapshot,
+                'linked_makeup_for' => $instance->id,
+                'custom_salary' => $data['custom_salary'] ?? null,
+                'custom_fee_per_session' => $customFee,
+                'created_by' => Auth::id(),
+            ]);
         });
     }
 }

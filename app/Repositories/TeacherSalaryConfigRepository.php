@@ -13,15 +13,24 @@ class TeacherSalaryConfigRepository extends BaseRepository
     }
 
 
-    public function getEffectiveSalary(int $teacherId, int $classId, string $date, ?float $fallbackSalary): float
+    /**
+     * Lấy lương hiệu lực của giáo viên trong khoảng thời gian
+     * @param int $teacherId
+     * @param int $classId
+     * @param string $startDate
+     * @param string $endDate
+     * @param float|null $fallbackSalary
+     * @return float
+     */
+    public function getEffectiveSalaryForPeriod(int $teacherId, int $classId, string $startDate, string $endDate, ?float $fallbackSalary = 0):  float
     {
         $config = $this->query()
             ->where('teacher_id', $teacherId)
             ->where('class_id', $classId)
-            ->where('effective_from', '<=', $date)
-            ->where(function ($q) use ($date) {
+            ->where('effective_from', '<=', $endDate)
+            ->where(function ($q) use ($startDate) {
                 $q->whereNull('effective_to')
-                    ->orWhere('effective_to', '>=', $date);
+                    ->orWhere('effective_to', '>=', $startDate);
             })
             ->latest('effective_from')
             ->first();

@@ -148,6 +148,7 @@ class ScheduleInstanceRepository extends BaseRepository implements FilterFilamen
                 'class.subject', // Gộp 'class' và 'class.subject'
                 'teacher',
                 'room',
+                'makeupInstance',
                 'attendanceSession' => function ($q) {
                     $q->withCount([
                         'attendanceRecords as present_count' => function ($recordQuery) {

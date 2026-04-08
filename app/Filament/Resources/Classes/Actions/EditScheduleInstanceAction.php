@@ -3,19 +3,14 @@
 namespace App\Filament\Resources\Classes\Actions;
 
 use App\Constants\FeeType;
-use App\Constants\ScheduleStatus;
-use App\Constants\ScheduleType;
 use App\Filament\Components\CustomSelect;
 use App\Models\ScheduleInstance;
 use App\Services\ClassScheduleService;
 use App\Services\RoomService;
-use App\Services\ScheduleService;
 use App\Services\TeacherService;
 use Filament\Actions\Action;
 use Filament\Forms\Components\DatePicker;
-use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Radio;
-use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\TimePicker;
 use Filament\Notifications\Notification;
@@ -27,20 +22,29 @@ use Filament\Support\Icons\Heroicon;
 use Illuminate\Support\Carbon;
 use Illuminate\Validation\Rule;
 
-class CreateMakeupSessionAction extends Action
+class EditScheduleInstanceAction extends Action
 {
     protected function setUp(): void
     {
         parent::setUp();
 
-        $this->label('Tạo lịch Bù')
-            ->icon(Heroicon::PlusCircle)
-            ->color('blue')
-            ->modalHeading('Tạo Lịch Học Bù')
-            ->modalWidth('3xl')
-            ->slideOver()
+        $this->label('Chỉnh sửa')
+            ->color('warning')
             ->visible(function (ScheduleInstance $record) {
-                return $record->canMakeMarkupInstance();
+                return $record->canEditingInstance();
+            })
+            ->icon(Heroicon::PencilSquare)
+            ->fillForm(function (ScheduleInstance $record) {
+                return [
+                    'date' => $record->date,
+                    'start_time' => $record->start_time,
+                    'end_time' => $record->end_time,
+                    'room_id' => $record->room_id,
+                    'teacher_id' => $record->teacher_id,
+                    'fee_type' => $record->fee_type,
+                    'custom_fee_per_session' => $record->custom_fee_per_session,
+                    'custom_salary' => $record->custom_salary,
+                ];
             })
             ->schema(fn(ScheduleInstance $record) => [
                 Section::make('Thời gian & Địa điểm')
@@ -126,21 +130,17 @@ class CreateMakeupSessionAction extends Action
 
                     ]),
             ])
-            ->action(function (ScheduleInstance $record, array $data, ClassScheduleService $service) {
-                $result = $service->createMakeupInstance($record, $data);
+            ->action(function (array $data, ScheduleInstance $record, ClassScheduleService $scheduleService) {
+                $result = $scheduleService->updateInstance($record, $data);
                 if ($result->isError()) {
                     Notification::make()
-                        ->danger()
-                        ->title('Lỗi')
+                        ->title('Cập nhật lịch học thất bại')
                         ->body($result->getMessage())
+                        ->danger()
                         ->send();
                     throw new Halt();
                 }
-                Notification::make()
-                    ->success()
-                    ->title('Thành công')
-                    ->body('Tạo buổi bù thành công')
-                    ->send();
+                Notification::make()->success()->title('Cập nhật lịch học thành công')->send();
             });
     }
 }

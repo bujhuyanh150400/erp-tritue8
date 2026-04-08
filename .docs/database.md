@@ -260,7 +260,7 @@
     - custom_salary (decimal(10,0)) - Lương giáo viên tùy chỉnh
     - schedule_type (unsigned tinyint) - Loại lịch học, lưu trong ScheduleType
     - status (unsigned tinyint) - Trạng thái lịch học, lưu trong ScheduleStatus
-    - linked_makeup_for (unsigned bigint) - ID lịch học được bù, khóa ngoại tham chiếu đến schedule_instances.id
+    - linked_makeup_for (unsigned bigint nullable) - ID lịch học được bù, khóa ngoại tham chiếu đến schedule_instances.id
     - fee_type (unsigned tinyint) - Loại học phí, lưu trong FeeType
     - custom_fee_per_session (decimal(10,0)) - Học phí tùy chỉnh
     - note (text) - Ghi chú
@@ -275,6 +275,7 @@
     - foreign(teacher_id) references teachers(id)
     - foreign(original_teacher_id) references teachers(id)
     - foreign(linked_makeup_for) references schedule_instances(id)
+    - unique(linked_makeup_for) where linked_makeup_for is not null 
     - foreign(created_by) references users(id)
     - index(class_id, date)
     - index(room_id, date, start_time, end_time)

@@ -3,8 +3,9 @@
 namespace App\Constants;
 
 use App\Core\Traits\EnumHelper;
+use Filament\Support\Contracts\HasLabel;
 
-enum FeeType: int
+enum FeeType: int implements HasLabel
 {
     use EnumHelper;
 

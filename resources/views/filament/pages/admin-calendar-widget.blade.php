@@ -28,12 +28,12 @@
     {{-- 2. NHÚNG LỊCH GỐC CỦA PLUGIN VÀO --}}
     <div wire:ignore
          wire:loading.class="pointer-events-none opacity-70"
-         wire:target="onEventClick">
+         wire:target="onEventClick, onEventResize">
         @include('filament-fullcalendar::fullcalendar')
     </div>
 
     <div wire:loading.flex
-         wire:target="onEventClick"
+         wire:target="onEventClick, onEventResize, onEventDrop"
          class="fixed inset-0 z-9999 flex-col items-center justify-center bg-gray-900/50 backdrop-blur-sm transition-opacity">
 
         {{-- Dùng luôn Icon Loading xoay xoay chuẩn của Filament cho đồng bộ --}}

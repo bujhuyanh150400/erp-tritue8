@@ -45,19 +45,4 @@ enum ScheduleType: int implements HasLabel
             default => 'gray',
         };
     }
-    /**
-     * Lấy tất cả các loại lịch học và màu của chúng
-     * @return array
-     */
-    public static function getLabelsAndColors(): array
-    {
-        return array_reduce(self::cases(), function (array $carry, ScheduleType $item) {
-            $carry[$item->value] = [
-                'label' => $item->label(),
-                'color' => $item->color(),
-            ];
-            return $carry;
-        }, []);
-
-    }
 }

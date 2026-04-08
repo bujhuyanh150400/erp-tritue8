@@ -28,6 +28,7 @@ class ClassInfolist
                 Tabs::make('Tabs')
                     ->columnSpanFull()
                     ->contained(false)
+                    ->persistTabInQueryString()
                     ->tabs([
                         // Tab 1: Thông tin lớp
                         Tab::make('Thông tin lớp')
