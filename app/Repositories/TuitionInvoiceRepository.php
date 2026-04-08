@@ -18,9 +18,9 @@ class TuitionInvoiceRepository extends BaseRepository
     protected function getBaseQuery(): Builder
     {
         return $this->query()
-            ->from('tuition_invoices as ti')
-            ->join('students', 'ti.student_id', '=', 'students.id')
-            ->join('classes', 'ti.class_id', '=', 'classes.id');
+            ->from('tuition_invoices')
+            ->join('students', 'tuition_invoices.student_id', '=', 'students.id')
+            ->join('classes', 'tuition_invoices.class_id', '=', 'classes.id');
     }
 
     public function getListingQuery(): Builder
@@ -28,26 +28,26 @@ class TuitionInvoiceRepository extends BaseRepository
         return $this->getBaseQuery()
             ->leftJoin('teachers', 'classes.teacher_id', '=', 'teachers.id')
             ->select([
-                'ti.*',
+                'tuition_invoices.*',
                 'students.full_name as student_name',
                 'classes.name as class_name',
                 'classes.grade_level as class_grade_level',
                 'teachers.full_name as teacher_name',
-                DB::raw('(ti.total_amount - ti.paid_amount) as remaining_amount'),
+                DB::raw('(tuition_invoices.total_amount - tuition_invoices.paid_amount) as remaining_amount'),
             ]);
     }
 
     public function applyFilters(Builder $query, array $filters = []): Builder
     {
         $month = $filters['month'] ?? now()->format('Y-m');
-        $query->where('ti.month', $month);
+        $query->where('tuition_invoices.month', $month);
 
         if (filled($filters['status'])) {
-            $query->where('ti.status', $filters['status']);
+            $query->where('tuition_invoices.status', $filters['status']);
         }
 
         if (filled($filters['class_id'])) {
-            $query->where('ti.class_id', $filters['class_id']);
+            $query->where('tuition_invoices.class_id', $filters['class_id']);
         }
 
         if (filled($filters['teacher_id'])) {
@@ -62,7 +62,7 @@ class TuitionInvoiceRepository extends BaseRepository
             $query->whereExists(function ($sub) use ($filters) {
                 $sub->selectRaw(1)
                     ->from('tuition_invoice_logs as til')
-                    ->whereColumn('til.invoice_id', 'ti.id')
+                    ->whereColumn('til.invoice_id', 'tuition_invoices.id')
                     ->where('til.is_cancelled', false)
                     ->where('til.payment_method', $filters['payment_method']);
             });
@@ -76,9 +76,9 @@ class TuitionInvoiceRepository extends BaseRepository
         $query = $this->applyFilters($this->getBaseQuery(), $filters);
 
         return $query->selectRaw('
-                COALESCE(SUM(ti.total_study_fee), 0) as total_study_fee,
-                COALESCE(SUM(ti.previous_debt), 0) as total_previous_debt,
-                COALESCE(SUM(ti.total_amount - ti.paid_amount), 0) as total_remaining
+                COALESCE(SUM(tuition_invoices.total_study_fee), 0) as total_study_fee,
+                COALESCE(SUM(tuition_invoices.previous_debt), 0) as total_previous_debt,
+                COALESCE(SUM(tuition_invoices.total_amount - tuition_invoices.paid_amount), 0) as total_remaining
             ')
             ->first();
     }

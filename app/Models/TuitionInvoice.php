@@ -29,7 +29,6 @@ class TuitionInvoice extends Model
         'status',
         'is_locked',
         'note',
-        'export_count',
     ];
 
     protected function casts(): array
@@ -42,7 +41,6 @@ class TuitionInvoice extends Model
             'previous_debt' => 'decimal:0',
             'total_amount' => 'decimal:0',
             'paid_amount' => 'decimal:0',
-            'export_count' => 'integer',
         ];
     }
 

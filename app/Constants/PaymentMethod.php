@@ -10,14 +10,12 @@ enum PaymentMethod: int
 
     case Cash         = 0;
     case BankTransfer = 1;
-    case Other        = 2;
 
     public function label(): string
     {
         return match($this) {
             self::Cash         => 'Tiền mặt',
             self::BankTransfer => 'Chuyển khoản',
-            self::Other        => 'Khác',
         };
     }
 }

@@ -13,18 +13,23 @@ use App\Services\TeacherService;
 use App\Services\TuitionInvoiceService;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
+use Filament\Actions\BulkAction;
+use Filament\Actions\BulkActionGroup;
 use Filament\Forms\Components\DateTimePicker;
+use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Textarea;
 use Filament\Notifications\Notification;
 use Filament\Support\Exceptions\Halt;
 use Filament\Support\Icons\Heroicon;
+use Filament\Support\RawJs;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Enums\FiltersLayout;
 use Filament\Tables\Filters\Filter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 
 class TuitionInvoicesTable
 {
@@ -94,10 +99,6 @@ class TuitionInvoicesTable
                         InvoiceStatus::Paid => 'success',
                         InvoiceStatus::Cancelled => 'gray',
                     }),
-
-                TextColumn::make('export_count')
-                    ->label('Số lần xuất')
-                    ->default(0),
             ])
             ->filters([
                 Filter::make('filters')
@@ -154,12 +155,19 @@ class TuitionInvoicesTable
                         ->label('Thanh toán')
                         ->icon(Heroicon::Banknotes)
                         ->color('success')
+                        ->hidden(fn (TuitionInvoice $record) => $record->getRemainingAmount() <= 0)
                         ->schema([
+                            Placeholder::make('remaining_amount')
+                                ->label('Số tiền còn nợ')
+                                ->content(fn (TuitionInvoice $record) => number_format($record->getRemainingAmount(), 0, ',', '.') . 'đ'),
                             TextInput::make('amount')
                                 ->label('Số tiền thanh toán')
-                                ->numeric()
                                 ->required()
-                                ->minValue(1),
+                                ->minValue(1)
+                                ->suffix('đ')
+                                ->mask(RawJs::make('$money($input, \',\', \'.\', 0)'))
+                                ->stripCharacters(['.'])
+                                ->dehydrateStateUsing(fn ($state) => (int) str_replace('.', '', (string) $state)),
                             Select::make('payment_method')
                                 ->label('Phương thức')
                                 ->options(PaymentMethod::options())
@@ -193,9 +201,12 @@ class TuitionInvoicesTable
                         ->schema([
                             TextInput::make('discount_amount')
                                 ->label('Giảm trừ')
-                                ->numeric()
                                 ->default(0)
-                                ->minValue(0),
+                                ->minValue(0)
+                                ->suffix('đ')
+                                ->mask(RawJs::make('$money($input, \',\', \'.\', 0)'))
+                                ->stripCharacters(['.'])
+                                ->dehydrateStateUsing(fn ($state) => (int) str_replace('.', '', (string) $state)),
                             Textarea::make('note')
                                 ->label('Ghi chú'),
                         ])
@@ -213,6 +224,7 @@ class TuitionInvoicesTable
                     Action::make('remind_payment')
                         ->label('Nhắc đóng học phí')
                         ->icon(Heroicon::BellAlert)
+                        ->hidden(fn (TuitionInvoice $record) => $record->getRemainingAmount() <= 0)
                         ->action(function (TuitionInvoice $record) {
                             $result = app(TuitionInvoiceService::class)->sendReminder($record);
 
@@ -223,18 +235,18 @@ class TuitionInvoicesTable
                                 ->send();
                         }),
 
-                    Action::make('send_receipt')
-                        ->label('Gửi phiếu thu')
-                        ->icon(Heroicon::PaperAirplane)
-                        ->action(function (TuitionInvoice $record) {
-                            $result = app(TuitionInvoiceService::class)->sendReceipt($record);
-
-                            Notification::make()
-                                ->title($result->isSuccess() ? $result->getMessage() : 'Lỗi')
-                                ->body($result->isError() ? $result->getMessage() : null)
-                                ->color($result->isSuccess() ? 'success' : 'danger')
-                                ->send();
-                        }),
+//                    Action::make('send_receipt')
+//                        ->label('Gửi phiếu thu')
+//                        ->icon(Heroicon::PaperAirplane)
+//                        ->action(function (TuitionInvoice $record) {
+//                            $result = app(TuitionInvoiceService::class)->sendReceipt($record);
+//
+//                            Notification::make()
+//                                ->title($result->isSuccess() ? $result->getMessage() : 'Lỗi')
+//                                ->body($result->isError() ? $result->getMessage() : null)
+//                                ->color($result->isSuccess() ? 'success' : 'danger')
+//                                ->send();
+//                        }),
 
                     Action::make('export_pdf')
                         ->label('Xuất PDF')
@@ -244,10 +256,47 @@ class TuitionInvoicesTable
 
                             Notification::make()
                                 ->title($result->isSuccess() ? $result->getMessage() : 'Lỗi')
-                                ->body($result->isError() ? $result->getMessage() : 'PDF chưa tích hợp thư viện xuất file, hệ thống đã ghi nhận lượt xuất.')
+                                ->body($result->isError() ? $result->getMessage() : 'Chức năng xuất file PDF chưa được tích hợp thư viện tạo file.')
                                 ->color($result->isSuccess() ? 'success' : 'danger')
                                 ->send();
                         }),
+                ]),
+            ])
+            ->toolbarActions([
+                BulkActionGroup::make([
+                    BulkAction::make('record_bulk_payment')
+                        ->label('Thanh toán hàng loạt')
+                        ->icon(Heroicon::Banknotes)
+                        ->color('success')
+                        ->modalHeading('Thanh toán nhiều hóa đơn')
+                        ->modalDescription('Hệ thống sẽ thanh toán toàn bộ số tiền còn nợ của các hóa đơn đã chọn.')
+                        ->schema([
+                            Select::make('payment_method')
+                                ->label('Phương thức')
+                                ->options(PaymentMethod::options())
+                                ->required(),
+                            DateTimePicker::make('paid_at')
+                                ->label('Thời gian thanh toán')
+                                ->default(now())
+                                ->required(),
+                            Textarea::make('note')
+                                ->label('Ghi chú'),
+                        ])
+                        ->action(function (Collection $records, array $data) {
+                            $result = app(TuitionInvoiceService::class)->recordBulkPayment($records, $data);
+
+                            if ($result->isError()) {
+                                Notification::make()->danger()->title('Lỗi')->body($result->getMessage())->send();
+                                throw new Halt();
+                            }
+
+                            Notification::make()
+                                ->success()
+                                ->title($result->getMessage())
+                                ->body('Hệ thống đã thanh toán hết số tiền còn nợ của các hóa đơn đã chọn.')
+                                ->send();
+                        })
+                        ->deselectRecordsAfterCompletion(),
                 ]),
             ]);
     }

@@ -14,6 +14,7 @@ use App\Models\TuitionInvoice;
 use App\Repositories\TuitionInvoiceLogRepository;
 use App\Repositories\TuitionInvoiceRepository;
 use App\Repositories\UserLogRepository;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 
 class TuitionInvoiceService extends BaseService
 {
@@ -32,28 +33,41 @@ class TuitionInvoiceService extends BaseService
                 throw new ServiceException('Số tiền thanh toán phải lớn hơn 0.');
             }
 
-            if ($amount > $invoice->getRemainingAmount()) {
-                throw new ServiceException('Số tiền thanh toán không được lớn hơn số tiền còn lại.');
-            }
-
-            $this->tuitionInvoiceLogRepository->create([
-                'invoice_id' => $invoice->id,
-                'amount' => $amount,
-                'paid_at' => $data['paid_at'],
-                'note' => $data['note'] ?? null,
-                'is_cancelled' => false,
-                'payment_method' => $data['payment_method'],
-                'changed_by' => auth()->id(),
-            ]);
-
-            $invoice->update([
-                'paid_amount' => (int) $invoice->paid_amount + $amount,
-            ]);
-
-            $invoice = $this->tuitionInvoiceRepository->syncStatus($invoice->refresh());
+            $invoice = $this->applyPayment($invoice, $amount, $data);
             $this->logAction('record_tuition_payment', "Ghi nhận thanh toán học phí {$invoice->invoice_number}");
 
             return ServiceReturn::success($invoice, 'Ghi nhận thanh toán thành công');
+        }, useTransaction: true);
+    }
+
+    public function recordBulkPayment(EloquentCollection $invoices, array $data): ServiceReturn
+    {
+        return $this->execute(function () use ($invoices, $data) {
+            $payableInvoices = $invoices->filter(fn (TuitionInvoice $invoice) => $invoice->getRemainingAmount() > 0);
+
+            if ($payableInvoices->isEmpty()) {
+                throw new ServiceException('Không có hóa đơn nào còn nợ để thanh toán.');
+            }
+
+            $processedCount = 0;
+            $totalPaid = 0;
+
+            foreach ($payableInvoices as $invoice) {
+                $amount = $invoice->getRemainingAmount();
+                $this->applyPayment($invoice, $amount, $data);
+                $processedCount++;
+                $totalPaid += $amount;
+            }
+
+            $this->logAction(
+                'record_bulk_tuition_payment',
+                "Thanh toán hàng loạt {$processedCount} hóa đơn, tổng tiền " . number_format($totalPaid, 0, ',', '.') . 'đ'
+            );
+
+            return ServiceReturn::success([
+                'processed_count' => $processedCount,
+                'total_paid' => $totalPaid,
+            ], "Đã thanh toán {$processedCount} hóa đơn");
         }, useTransaction: true);
     }
 
@@ -117,10 +131,9 @@ class TuitionInvoiceService extends BaseService
     public function exportInvoice(TuitionInvoice $invoice): ServiceReturn
     {
         return $this->execute(function () use ($invoice) {
-            $invoice->increment('export_count');
             $this->logAction('export_tuition_invoice', "Xuất hóa đơn {$invoice->invoice_number}");
 
-            return ServiceReturn::success($invoice->refresh(), 'Đã ghi nhận lượt xuất hóa đơn');
+            return ServiceReturn::success($invoice->refresh(), 'Đã xử lý yêu cầu xuất PDF');
         }, useTransaction: true);
     }
 
@@ -139,6 +152,29 @@ class TuitionInvoiceService extends BaseService
             'reference_type' => TuitionInvoice::class,
             'reference_id' => $invoice->id,
         ]);
+    }
+
+    protected function applyPayment(TuitionInvoice $invoice, int $amount, array $data): TuitionInvoice
+    {
+        if ($amount > $invoice->getRemainingAmount()) {
+            throw new ServiceException('Số tiền thanh toán không được lớn hơn số tiền còn lại.');
+        }
+
+        $this->tuitionInvoiceLogRepository->create([
+            'invoice_id' => $invoice->id,
+            'amount' => $amount,
+            'paid_at' => $data['paid_at'],
+            'note' => $data['note'] ?? null,
+            'is_cancelled' => false,
+            'payment_method' => $data['payment_method'],
+            'changed_by' => auth()->id(),
+        ]);
+
+        $invoice->update([
+            'paid_amount' => (int) $invoice->paid_amount + $amount,
+        ]);
+
+        return $this->tuitionInvoiceRepository->syncStatus($invoice->refresh());
     }
 
     protected function logAction(string $action, string $description): void
