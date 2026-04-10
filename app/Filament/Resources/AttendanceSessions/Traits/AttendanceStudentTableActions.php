@@ -142,7 +142,11 @@ trait AttendanceStudentTableActions
                 ->icon(Heroicon::CheckCircle)
                 ->color('success')
                 ->when($isBulk, fn($action) => $action->deselectRecordsAfterCompletion())
-                ->action(fn($recordOrRecords, AttendanceService $service) => $this->handleHybridAction($isBulk, $recordOrRecords, $service, AttendanceStatus::Present)),
+                ->action(
+                    $isBulk
+                        ? fn($records, AttendanceService $service) => $this->handleHybridAction(true, $records, $service, AttendanceStatus::Present)
+                        : fn(array $record, AttendanceService $service) => $this->handleHybridAction(false, $record, $service, AttendanceStatus::Present)
+                ),
 
             // 2. ĐI MUỘN
             $actionClass::make('mark_late')
@@ -157,7 +161,11 @@ trait AttendanceStudentTableActions
                         ->default(Carbon::now()->format('H:i')),
                 ])
                 ->when($isBulk, fn($action) => $action->deselectRecordsAfterCompletion())
-                ->action(fn($recordOrRecords, array $data, AttendanceService $service) => $this->handleHybridAction($isBulk, $recordOrRecords, $service, AttendanceStatus::Late, $data)),
+                ->action(
+                    $isBulk
+                        ? fn($records, array $data, AttendanceService $service) => $this->handleHybridAction(true, $records, $service, AttendanceStatus::Late, $data)
+                        : fn(array $record, array $data, AttendanceService $service) => $this->handleHybridAction(false, $record, $service, AttendanceStatus::Late, $data)
+                ),
 
             // 3. VẮNG CÓ PHÉP
             $actionClass::make('mark_excused')
@@ -168,7 +176,11 @@ trait AttendanceStudentTableActions
                     Textarea::make('reason_absent')->label('Lý do')->required(),
                 ])
                 ->when($isBulk, fn($action) => $action->deselectRecordsAfterCompletion())
-                ->action(fn($recordOrRecords, array $data, AttendanceService $service) => $this->handleHybridAction($isBulk, $recordOrRecords, $service, AttendanceStatus::AbsentExcused, $data)),
+                ->action(
+                    $isBulk
+                        ? fn($records, array $data, AttendanceService $service) => $this->handleHybridAction(true, $records, $service, AttendanceStatus::AbsentExcused, $data)
+                        : fn(array $record, array $data, AttendanceService $service) => $this->handleHybridAction(false, $record, $service, AttendanceStatus::AbsentExcused, $data)
+                ),
 
             // 4. VẮNG KHÔNG PHÉP
             $actionClass::make('mark_unexcused')
@@ -176,7 +188,11 @@ trait AttendanceStudentTableActions
                 ->icon(Heroicon::XCircle)
                 ->color('danger')
                 ->when($isBulk, fn($action) => $action->deselectRecordsAfterCompletion())
-                ->action(fn($recordOrRecords, AttendanceService $service) => $this->handleHybridAction($isBulk, $recordOrRecords, $service, AttendanceStatus::Absent)),
+                ->action(
+                    $isBulk
+                        ? fn($records, AttendanceService $service) => $this->handleHybridAction(true, $records, $service, AttendanceStatus::Absent)
+                        : fn(array $record, AttendanceService $service) => $this->handleHybridAction(false, $record, $service, AttendanceStatus::Absent)
+                ),
         ];
 
         // Trả về group tương ứng
@@ -284,8 +300,15 @@ trait AttendanceStudentTableActions
             Notification::make()->title('Đã cập nhật hàng loạt')->success()->send();
         } else {
             // Chế độ đơn lẻ
-            $this->updateAttendanceDataForStudentByStatus($service, $recordOrRecords['student_id'], $status, $data, true);
-            Notification::make()->title('Đã cập nhật điểm danh')->success()->send();
+            if (! $isBulk) {
+                $studentId = $recordOrRecords['student_id'] ?? null;
+                if (! $studentId) {
+                    Notification::make()->danger()->title('Không tìm thấy học sinh để cập nhật điểm danh')->send();
+                    throw new Halt();
+                }
+
+                $this->updateAttendanceDataForStudentByStatus($service, $studentId, $status, $data, true);
+            }
         }
     }
 

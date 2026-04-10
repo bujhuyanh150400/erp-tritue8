@@ -11,6 +11,7 @@ use App\Services\StaffService;
 use App\Services\StudentService;
 use App\Services\SubjectService;
 use App\Services\TeacherService;
+use App\Services\TuitionInvoiceService;
 use Illuminate\Support\ServiceProvider;
 
 class ServiceServiceProvider extends ServiceProvider
@@ -27,6 +28,7 @@ class ServiceServiceProvider extends ServiceProvider
         $this->app->singleton(TeacherService::class, TeacherService::class);
         $this->app->singleton(SubjectService::class, SubjectService::class);
         $this->app->singleton(ClassService::class, ClassService::class);
+        $this->app->singleton(TuitionInvoiceService::class, TuitionInvoiceService::class);
     }
 
     /**

@@ -18,6 +18,7 @@ class RewardRedemption extends Model
         'points_spent',
         'redeemed_at',
         'processed_by',
+        'invoice_id',
     ];
 
     protected function casts(): array
@@ -42,5 +43,10 @@ class RewardRedemption extends Model
     public function processedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'processed_by');
+    }
+
+    public function invoice(): BelongsTo
+    {
+        return $this->belongsTo(TuitionInvoice::class, 'invoice_id');
     }
 }

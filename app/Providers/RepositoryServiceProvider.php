@@ -20,6 +20,8 @@ use App\Repositories\StudentRepository;
 use App\Repositories\SubjectRepository;
 use App\Repositories\TeacherRepository;
 use App\Repositories\TeacherSalaryConfigRepository;
+use App\Repositories\TuitionInvoiceLogRepository;
+use App\Repositories\TuitionInvoiceRepository;
 use App\Repositories\UserLogRepository;
 use App\Repositories\UserRepository;
 use Illuminate\Support\ServiceProvider;
@@ -47,6 +49,8 @@ class RepositoryServiceProvider extends ServiceProvider
         $this->app->singleton(RewardPointRepository::class, RewardPointRepository::class);
         $this->app->singleton(RewardRedemptionRepository::class, RewardRedemptionRepository::class);
         $this->app->singleton(MonthlyReportRepository::class, MonthlyReportRepository::class);
+        $this->app->singleton(TuitionInvoiceRepository::class, TuitionInvoiceRepository::class);
+        $this->app->singleton(TuitionInvoiceLogRepository::class, TuitionInvoiceLogRepository::class);
     }
 
     /**

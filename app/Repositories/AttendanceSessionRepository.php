@@ -7,6 +7,7 @@ use App\Constants\AttendanceStatus;
 use App\Core\Repository\BaseRepository;
 use App\Models\AttendanceSession;
 use Carbon\CarbonInterface;
+use Illuminate\Support\Collection;
 
 class AttendanceSessionRepository extends BaseRepository
 {
@@ -41,5 +42,15 @@ class AttendanceSessionRepository extends BaseRepository
             'total' => (int) ($stats->total ?? 0),
             'present_count' => (int) ($stats->present_count ?? 0),
         ];
+    }
+
+    public function getLockedClassIdsInMonth(CarbonInterface $from, CarbonInterface $to): Collection
+    {
+        return $this->query()
+            ->whereBetween('session_date', [$from->toDateString(), $to->toDateString()])
+            ->where('status', AttendanceSessionStatus::Locked->value)
+            ->distinct()
+            ->orderBy('class_id')
+            ->pluck('class_id');
     }
 }

@@ -368,7 +368,7 @@ Danh sách hiển thị cho GV khi bấm "Đổi thưởng" trong buổi điểm
   - `note`: Textarea (Tùy chọn).
   - `is_active`: Boolean (Mặc định: true).
 - **Service logic:** Thực hiện `INSERT` dữ liệu vào bảng `reward_items`.
-
+    
 ## 3. Sửa phần thưởng (Update)
 - **Service logic:** Thực hiện `UPDATE` bảng `reward_items`.
 - **Ràng buộc bảo vệ dữ liệu (Validation):**

@@ -4,6 +4,7 @@ namespace App\Filament\Resources\RewardItemResource\Schemas;
 
 use App\Constants\RewardType;
 use App\Services\RewardItemService;
+use Filament\Support\RawJs;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
@@ -52,6 +53,26 @@ class RewardItemForm
                         if ($hasRedemptions) {
                             $component->disabled(true);
                             $component->helperText('Không thể đổi loại phần thưởng khi đã có học sinh đổi quà.');
+                        }
+                    }),
+
+                TextInput::make('discount_amount')
+                    ->label('Giá trị giảm học phí')
+                    ->suffix('đ')
+                    ->mask(RawJs::make('$money($input, \',\', \'.\', 0)'))
+                    ->stripCharacters(['.'])
+                    ->dehydrateStateUsing(fn ($state) => blank($state) ? null : (int) str_replace('.', '', (string) $state))
+                    ->visible(fn ($get) => (int) $get('reward_type') === RewardType::Discount->value)
+                    ->required(fn ($get) => (int) $get('reward_type') === RewardType::Discount->value)
+                    ->afterStateHydrated(function ($component, $state, $record) {
+                        if (!$record) return;
+
+                        $service = app(RewardItemService::class);
+                        $hasRedemptions = $service->hasRedemptions($record->id);
+
+                        if ($hasRedemptions) {
+                            $component->disabled(true);
+                            $component->helperText('Không thể đổi giá trị giảm khi đã có học sinh đổi quà.');
                         }
                     }),
 

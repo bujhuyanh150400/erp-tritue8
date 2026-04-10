@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Constants\RewardType;
 use App\Core\Logs\Logging;
 use App\Core\Services\BaseService;
 use App\Core\Services\ServiceException;
@@ -22,11 +23,16 @@ class RewardItemService extends BaseService
     public function createRewardItem(array $data): ServiceReturn
     {
         return $this->execute(function () use ($data) {
+            $discountAmount = ((int) ($data['reward_type'] ?? 0) === RewardType::Discount->value)
+                ? ($data['discount_amount'] ?? null)
+                : null;
+
             $rewardItem = $this->rewardItemRepository->create([
                 'name' => $data['name'],
                 'points_required' => $data['points_required'],
                 'reward_type' => $data['reward_type'],
                 'note' => $data['note'] ?? null,
+                'discount_amount' => $discountAmount,
                 'is_active' => $data['is_active'] ?? true,
             ]);
 
@@ -58,10 +64,19 @@ class RewardItemService extends BaseService
                 throw new ServiceException('Không thể thay đổi loại phần thưởng khi đã có học sinh đổi phần thưởng này.');
             }
 
+            if ($hasRedemptions && (($data['discount_amount'] ?? null) != $rewardItem->discount_amount)) {
+                throw new ServiceException('Không thể thay đổi giá trị giảm khi đã có học sinh đổi phần thưởng này.');
+            }
+
+            $discountAmount = ((int) ($data['reward_type'] ?? $rewardItem->reward_type->value) === RewardType::Discount->value)
+                ? ($data['discount_amount'] ?? null)
+                : null;
+
             $updateData = [
                 'name' => $data['name'],
                 'note' => $data['note'] ?? null,
                 'is_active' => $data['is_active'],
+                'discount_amount' => $discountAmount,
             ];
 
             // Chỉ cho phép cập nhật points_required nếu chưa có redemptions
