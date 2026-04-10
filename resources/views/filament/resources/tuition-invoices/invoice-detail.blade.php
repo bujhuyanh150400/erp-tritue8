@@ -9,7 +9,6 @@
         <div><strong>Tổng buổi:</strong> {{ $record->total_sessions }}</div>
         <div><strong>Buổi có mặt:</strong> {{ $record->attended_sessions }}</div>
         <div><strong>Học phí:</strong> {{ number_format((int) $record->total_study_fee, 0, ',', '.') }}đ</div>
-        <div><strong>Giảm trừ:</strong> {{ number_format((int) $record->discount_amount, 0, ',', '.') }}đ</div>
         <div><strong>Nợ cũ:</strong> {{ number_format((int) $record->previous_debt, 0, ',', '.') }}đ</div>
         <div><strong>Tổng phải thu:</strong> {{ number_format((int) $record->total_amount, 0, ',', '.') }}đ</div>
         <div><strong>Đã thanh toán:</strong> {{ number_format((int) $record->paid_amount, 0, ',', '.') }}đ</div>

@@ -3,6 +3,7 @@
 namespace App\Repositories;
 
 use App\Constants\AttendanceStatus;
+use App\Constants\AttendanceSessionStatus;
 use App\Constants\ClassStatus;
 use App\Constants\DayOfWeek;
 use App\Constants\ScheduleStatus;
@@ -10,8 +11,8 @@ use App\Core\Interfaces\FilterFilament;
 use App\Core\Repository\BaseRepository;
 use App\Models\ClassEnrollment;
 use App\Models\ScheduleInstance;
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -218,5 +219,18 @@ class ScheduleInstanceRepository extends BaseRepository implements FilterFilamen
             });
         }
         return $query;
+    }
+
+    public function countBillableSessionsByClassInMonth(int $classId, CarbonInterface $from, CarbonInterface $to): int
+    {
+        return (int) $this->query()
+            ->from('schedule_instances as si')
+            ->join('attendance_sessions as as_sess', 'as_sess.schedule_instance_id', '=', 'si.id')
+            ->where('si.class_id', $classId)
+            ->whereBetween('si.date', [$from->toDateString(), $to->toDateString()])
+            ->where('as_sess.status', AttendanceSessionStatus::Locked->value)
+            ->where('si.status', '!=', ScheduleStatus::Cancelled->value)
+            ->selectRaw('COUNT(DISTINCT si.id) as total_sessions')
+            ->value('total_sessions');
     }
 }

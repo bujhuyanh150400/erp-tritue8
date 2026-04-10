@@ -99,4 +99,34 @@ class TuitionInvoiceRepository extends BaseRepository
 
         return $invoice->refresh();
     }
+
+    public function existsForMonth(string $month): bool
+    {
+        return $this->query()
+            ->where('month', $month)
+            ->exists();
+    }
+
+    public function findPreviousMonthInvoice(int $studentId, int $classId, string $month): ?TuitionInvoice
+    {
+        return $this->query()
+            ->where('student_id', $studentId)
+            ->where('class_id', $classId)
+            ->where('month', $month)
+            ->first();
+    }
+
+    public function getNextInvoiceNumber(string $month): string
+    {
+        $prefix = 'HP-' . str_replace('-', '', $month) . '-';
+
+        $lastNumber = $this->query()
+            ->where('invoice_number', 'like', $prefix . '%')
+            ->lockForUpdate()
+            ->pluck('invoice_number')
+            ->map(fn (string $invoiceNumber) => (int) substr($invoiceNumber, strlen($prefix)))
+            ->max() ?? 0;
+
+        return $prefix . str_pad((string) ($lastNumber + 1), 4, '0', STR_PAD_LEFT);
+    }
 }

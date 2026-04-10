@@ -36,6 +36,11 @@ class RewardItemsTable
                     ->icon(Heroicon::OutlinedCube)
                     ->formatStateUsing(fn ($state) => $state->label()),
 
+                TextColumn::make('discount_amount')
+                    ->label('Giá trị giảm')
+                    ->money('VND')
+                    ->toggleable(),
+
                 TextColumn::make('is_active')
                     ->label('Trạng thái')
                     ->badge()

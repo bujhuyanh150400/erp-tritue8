@@ -60,7 +60,7 @@ class RewardItemRepository extends BaseRepository implements Paginate
     public function getActiveCatalog(): Collection
     {
         return $this->query()
-            ->select(['id', 'name', 'points_required', 'reward_type'])
+            ->select(['id', 'name', 'points_required', 'reward_type', 'discount_amount'])
             ->where('is_active', true)
             ->orderBy('points_required')
             ->get();

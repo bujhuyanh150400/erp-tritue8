@@ -5,7 +5,9 @@ namespace App\Repositories;
 use App\Constants\AttendanceStatus;
 use App\Core\Repository\BaseRepository;
 use App\Models\ClassEnrollment;
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 class ClassEnrollmentRepository extends BaseRepository
@@ -165,5 +167,46 @@ class ClassEnrollmentRepository extends BaseRepository
                     ->orWhereDate('left_at', '>=', $startDate);
             })
             ->count();
+    }
+
+    public function getEnrollmentsForBillingMonth(int $classId, CarbonInterface $from, CarbonInterface $to): Collection
+    {
+        return $this->query()
+            ->with(['student', 'class'])
+            ->where('class_id', $classId)
+            ->whereDate('enrolled_at', '<=', $to->toDateString())
+            ->where(function ($query) use ($from) {
+                $query->whereNull('left_at')
+                    ->orWhereDate('left_at', '>=', $from->toDateString());
+            })
+            ->orderBy('student_id')
+            ->orderByDesc('fee_effective_from')
+            ->get()
+            ->unique('student_id')
+            ->values();
+    }
+
+    public function findEffectiveEnrollmentForDate(int $classId, int $studentId, CarbonInterface $date): ?ClassEnrollment
+    {
+        return $this->query()
+            ->with('class')
+            ->where('class_id', $classId)
+            ->where('student_id', $studentId)
+            ->whereDate('enrolled_at', '<=', $date->toDateString())
+            ->where(function ($query) use ($date) {
+                $query->whereNull('left_at')
+                    ->orWhereDate('left_at', '>=', $date->toDateString());
+            })
+            ->where(function ($query) use ($date) {
+                $query->whereNull('fee_effective_from')
+                    ->orWhereDate('fee_effective_from', '<=', $date->toDateString());
+            })
+            ->where(function ($query) use ($date) {
+                $query->whereNull('fee_effective_to')
+                    ->orWhereDate('fee_effective_to', '>=', $date->toDateString());
+            })
+            ->orderByDesc('fee_effective_from')
+            ->orderByDesc('enrolled_at')
+            ->first();
     }
 }

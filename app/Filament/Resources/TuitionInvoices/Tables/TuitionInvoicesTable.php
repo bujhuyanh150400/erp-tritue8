@@ -7,6 +7,7 @@ use App\Constants\InvoiceStatus;
 use App\Constants\PaymentMethod;
 use App\Filament\Components\CustomSelect;
 use App\Models\TuitionInvoice;
+use App\Repositories\TuitionInvoiceLogRepository;
 use App\Repositories\TuitionInvoiceRepository;
 use App\Services\ClassService;
 use App\Services\TeacherService;
@@ -15,12 +16,13 @@ use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
-use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Textarea;
 use Filament\Notifications\Notification;
+use Filament\Schemas\Components\Utilities\Get;
+use Filament\Schemas\Components\Grid;
 use Filament\Support\Exceptions\Halt;
 use Filament\Support\Icons\Heroicon;
 use Filament\Support\RawJs;
@@ -66,10 +68,6 @@ class TuitionInvoicesTable
 
                 TextColumn::make('total_study_fee')
                     ->label('Học phí')
-                    ->money('VND'),
-
-                TextColumn::make('discount_amount')
-                    ->label('Giảm trừ')
                     ->money('VND'),
 
                 TextColumn::make('previous_debt')
@@ -155,11 +153,30 @@ class TuitionInvoicesTable
                         ->label('Thanh toán')
                         ->icon(Heroicon::Banknotes)
                         ->color('success')
-                        ->hidden(fn (TuitionInvoice $record) => $record->getRemainingAmount() <= 0)
+                        ->hidden(fn (TuitionInvoice $record) => $record->getRemainingAmount() <= 0 || $record->is_locked)
                         ->schema([
-                            Placeholder::make('remaining_amount')
-                                ->label('Số tiền còn nợ')
-                                ->content(fn (TuitionInvoice $record) => number_format($record->getRemainingAmount(), 0, ',', '.') . 'đ'),
+                            Grid::make(2)
+                                ->schema([
+                                    Placeholder::make('student_info')
+                                        ->label('Học sinh')
+                                        ->content(fn (TuitionInvoice $record) => $record->student_name ?? $record->student?->full_name ?? '-'),
+                                    Placeholder::make('class_info')
+                                        ->label('Lớp')
+                                        ->content(fn (TuitionInvoice $record) => $record->class_name ?? $record->class?->name ?? '-'),
+                                    Placeholder::make('month_info')
+                                        ->label('Tháng')
+                                        ->content(fn (TuitionInvoice $record) => $record->month),
+                                    Placeholder::make('total_amount')
+                                        ->label('Tổng phải thu')
+                                        ->content(fn (TuitionInvoice $record) => number_format((int) $record->total_amount, 0, ',', '.') . 'đ'),
+                                    Placeholder::make('paid_amount')
+                                        ->label('Đã thanh toán')
+                                        ->content(fn (TuitionInvoice $record) => number_format((int) $record->paid_amount, 0, ',', '.') . 'đ'),
+                                    Placeholder::make('remaining_amount')
+                                        ->label('Còn lại')
+                                        ->content(fn (TuitionInvoice $record) => number_format($record->getRemainingAmount(), 0, ',', '.') . 'đ'),
+                                ])
+                                ->columnSpanFull(),
                             TextInput::make('amount')
                                 ->label('Số tiền thanh toán')
                                 ->required()
@@ -167,20 +184,76 @@ class TuitionInvoicesTable
                                 ->suffix('đ')
                                 ->mask(RawJs::make('$money($input, \',\', \'.\', 0)'))
                                 ->stripCharacters(['.'])
-                                ->dehydrateStateUsing(fn ($state) => (int) str_replace('.', '', (string) $state)),
+                                ->dehydrateStateUsing(fn ($state) => (int) str_replace('.', '', (string) $state))
+                                ->columnSpanFull(),
                             Select::make('payment_method')
                                 ->label('Phương thức')
                                 ->options(PaymentMethod::options())
-                                ->required(),
-                            DateTimePicker::make('paid_at')
-                                ->label('Thời gian thanh toán')
-                                ->default(now())
-                                ->required(),
+                                ->required()
+                                ->columnSpanFull(),
                             Textarea::make('note')
-                                ->label('Ghi chú'),
+                                ->label('Ghi chú')
+                                ->columnSpanFull(),
                         ])
                         ->action(function (TuitionInvoice $record, array $data) {
                             $result = app(TuitionInvoiceService::class)->recordPayment($record, $data);
+
+                            if ($result->isError()) {
+                                Notification::make()->danger()->title('Lỗi')->body($result->getMessage())->send();
+                                throw new Halt();
+                            }
+
+                            Notification::make()->success()->title($result->getMessage())->send();
+                        }),
+
+                    Action::make('cancel_payment')
+                        ->label('Hủy thanh toán')
+                        ->icon(Heroicon::ArrowUturnLeft)
+                        ->color('danger')
+                        ->hidden(fn (TuitionInvoice $record) => $record->logs()->where('is_cancelled', false)->count() === 0)
+                        ->schema([
+                            Select::make('log_id')
+                                ->label('Lần thanh toán')
+                                ->options(function (TuitionInvoice $record) {
+                                    return app(TuitionInvoiceLogRepository::class)
+                                        ->getActiveLogsForInvoice($record->id)
+                                        ->mapWithKeys(fn ($log) => [
+                                            $log->id => $log->paid_at?->format('d/m/Y H:i') . ' - ' . number_format((int) $log->amount, 0, ',', '.') . 'đ',
+                                        ]);
+                                })
+                                ->required()
+                                ->live(),
+                            Grid::make(2)
+                                ->schema([
+                                    Placeholder::make('selected_amount')
+                                        ->label('Số tiền')
+                                        ->content(function (Get $get, TuitionInvoice $record) {
+                                            $selectedLog = $record->logs()->find((int) ($get('log_id') ?? 0));
+
+                                            return $selectedLog
+                                                ? number_format((int) $selectedLog->amount, 0, ',', '.') . 'đ'
+                                                : '-';
+                                        }),
+                                    Placeholder::make('selected_paid_at')
+                                        ->label('Ngày thanh toán')
+                                        ->content(function (Get $get, TuitionInvoice $record) {
+                                            $selectedLog = $record->logs()->find((int) ($get('log_id') ?? 0));
+
+                                            return $selectedLog?->paid_at?->format('d/m/Y H:i') ?? '-';
+                                        }),
+                                ])
+                                ->columnSpanFull(),
+                            Textarea::make('cancel_reason')
+                                ->label('Lý do hủy')
+                                ->required()
+                                ->columnSpanFull(),
+                        ])
+                        ->action(function (TuitionInvoice $record, array $data) {
+                            $result = app(TuitionInvoiceService::class)->cancelPaymentLog(
+                                $record,
+                                (int) $data['log_id'],
+                                $data['cancel_reason']
+                            );
 
                             if ($result->isError()) {
                                 Notification::make()->danger()->title('Lỗi')->body($result->getMessage())->send();
@@ -194,13 +267,14 @@ class TuitionInvoicesTable
                         ->label('Chỉnh sửa')
                         ->icon(Heroicon::PencilSquare)
                         ->color('warning')
+                        ->hidden(fn (TuitionInvoice $record) => $record->is_locked)
                         ->fillForm(fn (TuitionInvoice $record) => [
-                            'discount_amount' => (int) $record->discount_amount,
+                            'previous_debt' => (int) $record->previous_debt,
                             'note' => $record->note,
                         ])
                         ->schema([
-                            TextInput::make('discount_amount')
-                                ->label('Giảm trừ')
+                            TextInput::make('previous_debt')
+                                ->label('Nợ cũ')
                                 ->default(0)
                                 ->minValue(0)
                                 ->suffix('đ')
@@ -224,7 +298,7 @@ class TuitionInvoicesTable
                     Action::make('remind_payment')
                         ->label('Nhắc đóng học phí')
                         ->icon(Heroicon::BellAlert)
-                        ->hidden(fn (TuitionInvoice $record) => $record->getRemainingAmount() <= 0)
+                        ->hidden(fn (TuitionInvoice $record) => $record->getRemainingAmount() <= 0 || $record->is_locked)
                         ->action(function (TuitionInvoice $record) {
                             $result = app(TuitionInvoiceService::class)->sendReminder($record);
 
@@ -274,10 +348,6 @@ class TuitionInvoicesTable
                             Select::make('payment_method')
                                 ->label('Phương thức')
                                 ->options(PaymentMethod::options())
-                                ->required(),
-                            DateTimePicker::make('paid_at')
-                                ->label('Thời gian thanh toán')
-                                ->default(now())
                                 ->required(),
                             Textarea::make('note')
                                 ->label('Ghi chú'),
