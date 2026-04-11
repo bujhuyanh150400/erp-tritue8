@@ -4,12 +4,14 @@ namespace App\Repositories;
 
 use App\Constants\AttendanceSessionStatus;
 use App\Constants\AttendanceStatus;
+use App\Core\Interfaces\FilterFilament;
 use App\Core\Repository\BaseRepository;
 use App\Models\AttendanceSession;
 use Carbon\CarbonInterface;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 
-class AttendanceSessionRepository extends BaseRepository
+class AttendanceSessionRepository extends BaseRepository implements FilterFilament
 {
     public function getModel()
     {
@@ -52,5 +54,15 @@ class AttendanceSessionRepository extends BaseRepository
             ->distinct()
             ->orderBy('class_id')
             ->pluck('class_id');
+    }
+
+    public function getListingQuery(Builder $query): Builder
+    {
+        return $query
+            ->with(['class', 'teacher', 'attendanceRecords']);
+    }
+    public function setFilters(Builder $query, array $filters = []): Builder
+    {
+        return $query;
     }
 }

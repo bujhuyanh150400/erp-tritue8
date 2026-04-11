@@ -171,10 +171,16 @@ class AttendanceService extends BaseService
                 }
                 $dataUpdate = collect($data)->only([
                     'lesson_content',
+                    'lesson_content_files',
+
                     'homework',
-                    'next_session_note',
-                    'general_note'
+                    'homework_files',
+
+                    'general_note',
+                    'general_note_files',
+
                 ])->toArray();
+
                 $session->update($dataUpdate);
                 // Ghi Log hệ thống
                 Logging::userActivity(
@@ -289,11 +295,10 @@ class AttendanceService extends BaseService
                 $attendanceRecord = $this->attendanceRecordRepository->query()
                     ->where('session_id', $session->id)
                     ->where('student_id', $studentId)
-                    ->whereIn('status', AttendanceStatus::presentStatus()) // Chỉ lấy các trạng thái có mặt trong buổi học
                     ->first();
 
                 if (!$attendanceRecord) {
-                    throw new ServiceException("Học sinh này chưa được điểm danh hoặc vắng mặt. Vui lòng điểm danh trước khi nhập điểm.");
+                    throw new ServiceException("Học sinh này chưa chốt điểm danh. Vui lòng chốt điểm danh trước khi nhập điểm.");
                 }
 
                 // 2. Thực hiện Upsert (Cập nhật hoặc Tạo mới) dựa trên exam_slot
@@ -311,7 +316,7 @@ class AttendanceService extends BaseService
                         [
                             'exam_name' => $item['exam_name'] ?? "Đầu điểm {$slot}",
                             'score' => $item['score'],
-                            'max_score' => $item['max_score'] ?? 10,
+                            'max_score' => 10, // Mặc định là 10 điểm
                             'note' => $item['note'] ?? null,
                         ]
                     );
@@ -485,7 +490,7 @@ class AttendanceService extends BaseService
                     throw new ServiceException('Chỉ có thể mở lại buổi đang ở trạng thái Hoàn thành.');
                 }
 
-                if (! $session->scheduleInstance) {
+                if (!$session->scheduleInstance) {
                     throw new ServiceException('Không tìm thấy lịch học tương ứng của buổi điểm danh.');
                 }
 
@@ -506,12 +511,107 @@ class AttendanceService extends BaseService
                 Logging::userActivity(
                     action: 'Mở chốt sổ buổi học',
                     description: "Admin {$user->username} đã mở chốt sổ buổi điểm danh ID {$session->id} (ngày {$sessionDate}) vào lúc "
-                        . Carbon::now()->format('Y-m-d H:i:s')
-                        . ". ScheduleInstance ID: {$session->schedule_instance_id}.",
+                    . Carbon::now()->format('Y-m-d H:i:s')
+                    . ". ScheduleInstance ID: {$session->schedule_instance_id}.",
                 );
                 return true;
             },
             useTransaction: true,
+        );
+    }
+
+    /**
+     * Lưu điểm số cho buổi học (dạng bulk)
+     * @param AttendanceSession $session
+     * @param string $examName
+     * @param array $studentsData
+     * @return ServiceReturn
+     * @throws \Throwable
+     */
+    public function bulkSaveScores(AttendanceSession $session, string $examName, array $studentsData): ServiceReturn
+    {
+        return $this->execute(
+            callback: function () use ($session, $examName, $studentsData) {
+                if (!$session->isDraft()) {
+                    throw new ServiceException("Buổi học này không thể cập nhật điểm số vì đã được chốt sổ.");
+                }
+
+                // Lấy tất cả bản ghi điểm danh của buổi học này, index theo student_id cho nhanh
+                $attendanceRecords = $this->attendanceRecordRepository->query()
+                    ->where('session_id', $session->id)
+                    ->get()
+                    ->keyBy('student_id');
+
+                // Lấy danh sách các ID của bản ghi điểm danh
+                $attendanceRecordIds = $attendanceRecords->pluck('id')->toArray();
+
+                // Lấy MAX(exam_slot) của TẤT CẢ học sinh trong 1 câu query duy nhất
+                // Kết quả trả về dạng mảng: [attendance_record_id => max_slot_hiện_tại]
+                $maxSlots = [];
+                if (!empty($attendanceRecordIds)) {
+                    $maxSlots = $this->scoreRepository->query()
+                        ->whereIn('attendance_record_id', $attendanceRecordIds)
+                        ->selectRaw('attendance_record_id, MAX(exam_slot) as max_slot')
+                        ->groupBy('attendance_record_id')
+                        ->pluck('max_slot', 'attendance_record_id')
+                        ->toArray();
+                }
+
+                $inserts = [];
+                $countSaved = 0;
+                $now = now();
+                // Duyệt qua danh sách gửi lên và chuẩn bị mảng dữ liệ
+                foreach ($studentsData as $data) {
+                    $studentId = $data['student_id'] ?? null;
+                    $score = $data['score'] ?? null;
+
+                    if ($score === null || $score === '' || !$studentId || !isset($attendanceRecords[$studentId])) {
+                        continue;
+                    }
+
+                    $record = $attendanceRecords[$studentId];
+                    $recordId = $record->id;
+
+                    // Tính slot tiếp theo dựa vào mảng maxSlots đã query ở trên
+                    // Nếu học sinh chưa có điểm nào (chưa có trong maxSlots), mặc định là 0 -> nextSlot = 1
+                    $currentMax = $maxSlots[$recordId] ?? 0;
+                    $nextSlot = $currentMax + 1;
+
+                    // Cập nhật lại max slot trong mảng bộ nhớ (đề phòng 1 học sinh được gửi 2 lần trong mảng $studentsData)
+                    $maxSlots[$recordId] = $nextSlot;
+
+                    // Đưa vào mảng chờ Insert
+                    $inserts[] = [
+                        'attendance_record_id' => $recordId,
+                        'exam_slot' => $nextSlot,
+                        'exam_name' => $examName,
+                        'score' => $score,
+                        'max_score' => 10,
+                        'note' => $data['note'] ?? null,
+                        'created_at' => $now,
+                        'updated_at' => $now,
+                    ];
+
+                    $countSaved++;
+                }
+                if ($countSaved === 0) {
+                    throw new ServiceException("Vui lòng nhập điểm cho ít nhất một học sinh.");
+                }
+
+                // Bulk Insert tất cả điểm vào Database bằng 1 câu query duy nhất
+                if (!empty($inserts)) {
+                    $this->scoreRepository->query()->insert($inserts);
+                }
+
+                // Ghi Log
+                Logging::userActivity(
+                    action: 'Nhập điểm hàng loạt',
+                    description: "Nhập điểm ({$examName}) cho {$countSaved} học sinh lớp {$session->class->name}",
+                );
+
+                return true;
+            },
+            useTransaction: true
         );
     }
 }

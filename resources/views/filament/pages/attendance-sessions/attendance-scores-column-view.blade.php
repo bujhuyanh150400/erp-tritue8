@@ -1,45 +1,43 @@
 {{-- resources/views/filament/tables/columns/attendance-scores.blade.php --}}
 @php
     $scores = collect($getState() ?? []);
-    $limit = 2;
-    $hasMore = $scores->count() > $limit;
-    $visibleScores = $scores->take($limit);
-
-    // Tạo một Key duy nhất dựa trên ID học sinh và số lượng điểm
-    // Khi số lượng điểm thay đổi, wire:key thay đổi -> Alpine sẽ được khởi tạo lại
+    // Key duy nhất để Livewire không render nhầm trạng thái
     $uniqueKey = 'scores-' . $getRecord()['student_id'] . '-' . $scores->count();
 @endphp
 
 <div
-    x-data="{ open: false, selectedScore: null }"
+    x-data="{
+        open: false,
+        selectedScore: null
+    }"
     wire:key="{{ $uniqueKey }}"
     class="flex flex-wrap gap-1 justify-center px-2 py-1"
 >
     @if($scores->isEmpty())
         <span class="text-gray-400 italic text-xs">Chưa có điểm</span>
     @else
-        {{-- Badge thu gọn --}}
-        @foreach($visibleScores as $score)
+        {{-- Cách 2: Render toàn bộ Badge, tự động xuống hàng --}}
+        @foreach($scores as $score)
             <button
                 type="button"
                 @click="open = true; selectedScore = @js($score)"
-                class="flex items-center gap-1 border border-primary-200 bg-primary-50 dark:bg-primary-900/30 px-2 py-0.5 rounded text-xs hover:border-primary-500 transition-colors cursor-pointer"
+                class="flex items-center gap-1.5 border border-primary-200 bg-primary-50 dark:bg-primary-900/30 px-2 py-1 rounded text-xs hover:border-primary-500 hover:bg-primary-100 transition-all cursor-pointer group"
             >
-                <span class="font-bold text-primary-700 dark:text-primary-400">{{ $score['exam_name'] }}:</span>
-                <span class="font-black text-primary-900 dark:text-white">{{ $score['score'] }}</span>
+                <div class="flex flex-col items-start leading-tight">
+                    <span class="font-bold text-primary-700 dark:text-primary-400 text-[10px] uppercase">{{ $score['exam_name'] }}</span>
+                    <span class="font-black text-primary-900 dark:text-white text-sm">{{ $score['score'] }}</span>
+                </div>
+
+                {{-- Icon Ghi chú nhỏ nếu có --}}
+                @if(!empty($score['note']))
+                    <x-filament::icon
+                        icon="heroicon-m-chat-bubble-left-right"
+                        class="h-3 w-3 text-primary-400 group-hover:text-primary-600"
+                        title="Có ghi chú"
+                    />
+                @endif
             </button>
         @endforeach
-
-        {{-- Nút +N --}}
-        @if($hasMore)
-            <button
-                type="button"
-                @click="open = true; selectedScore = null"
-                class="px-2 py-0.5 rounded bg-gray-100 dark:bg-gray-800 text-[10px] font-bold text-gray-600 dark:text-gray-400 hover:bg-gray-200 transition-colors cursor-pointer"
-            >
-                +{{ $scores->count() - $limit }}
-            </button>
-        @endif
 
         {{-- MODAL CHI TIẾT --}}
         <template x-teleport="body">
@@ -52,45 +50,44 @@
             >
                 <div
                     @click.away="open = false"
-                    class="bg-white dark:bg-gray-900 w-full max-w-lg rounded-xl shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden"
+                    class="bg-white dark:bg-gray-900 w-full max-w-md rounded-xl shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden"
                 >
                     {{-- Header --}}
                     <div class="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/50">
                         <h3 class="text-sm font-bold text-gray-700 dark:text-gray-200 flex items-center gap-2">
-                            <x-filament::icon icon="heroicon-m-academic-cap" class="h-4 w-4 text-primary-500" />
-                            Chi tiết điểm: {{ $getRecord()['student_name'] }}
+                            <x-filament::icon icon="heroicon-m-document-check" class="h-4 w-4 text-primary-500" />
+                            Chi tiết đầu điểm
                         </h3>
                         <button @click="open = false" class="text-gray-400 hover:text-gray-600 dark:hover:text-white">
                             <x-filament::icon icon="heroicon-m-x-mark" class="h-5 w-5" />
                         </button>
                     </div>
 
-                    {{-- Body --}}
-                    <div class="p-4 max-h-[70vh] overflow-y-auto space-y-3">
-                        {{-- Quan trọng: Dùng trực tiếp @js($scores) trong x-for để luôn lấy data mới nhất từ Livewire --}}
-                        <template x-for="(s, index) in @js($scores)" :key="index">
-                            <div
-                                :class="selectedScore && selectedScore.exam_slot === s.exam_slot ? 'ring-2 ring-primary-500 bg-primary-50/30' : 'bg-gray-50 dark:bg-gray-800/40'"
-                                class="p-3 rounded-lg border border-gray-100 dark:border-gray-800 transition-all"
-                            >
-                                <div class="flex justify-between items-center mb-2">
-                                    <span class="text-xs font-bold uppercase tracking-wider text-primary-600 dark:text-primary-400" x-text="s.exam_name"></span>
-                                    <div class="flex items-baseline gap-1">
-                                        <span class="text-xl font-black text-gray-900 dark:text-white" x-text="s.score"></span>
-                                        <span class="text-xs text-gray-500" x-text="'/' + (s.max_score || 10)"></span>
-                                    </div>
-                                </div>
-
-                                <div x-show="s.note" class="flex gap-2 items-start p-2 rounded bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 mt-2">
-                                    <x-filament::icon icon="heroicon-m-chat-bubble-bottom-center-text" class="h-4 w-4 text-gray-400 mt-0.5" />
-                                    <p class="text-xs text-gray-600 dark:text-gray-400 italic" x-text="s.note"></p>
+                    {{-- Body: Chỉ hiển thị chi tiết của selectedScore --}}
+                    <div class="p-6" x-show="selectedScore">
+                        <div class="text-center mb-6">
+                            <p class="text-xs font-bold uppercase tracking-[0.2em] text-gray-500 mb-1" x-text="selectedScore?.exam_name"></p>
+                            <div class="flex items-center justify-center gap-2">
+                                <span class="text-5xl font-black text-primary-600 dark:text-primary-400" x-text="selectedScore?.score"></span>
+                                <div class="text-left leading-none">
+                                    <span class="text-lg font-bold text-gray-400" x-text="'/ ' + (selectedScore?.max_score || 10)"></span>
+                                    <p class="text-[10px] text-gray-400 font-medium">ĐIỂM SỐ</p>
                                 </div>
                             </div>
-                        </template>
+                        </div>
+
+                        {{-- Ghi chú cụ thể --}}
+                        <div class="space-y-2">
+                            <label class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Nhận xét của giáo viên</label>
+                            <div class="p-4 rounded-lg bg-gray-50 dark:bg-gray-800/50 border border-dashed border-gray-200 dark:border-gray-700">
+                                <p class="text-sm text-gray-700 dark:text-gray-300 leading-relaxed"
+                                   x-text="selectedScore?.note ? selectedScore.note : 'Không có ghi chú cho đầu điểm này.'"></p>
+                            </div>
+                        </div>
                     </div>
 
-                    <div class="px-4 py-3 bg-gray-50 dark:bg-gray-800/50 text-right">
-                        <x-filament::button color="gray" size="sm" @click="open = false">
+                    <div class="px-4 py-3 bg-gray-50 dark:bg-gray-800/50 text-center border-t border-gray-100 dark:border-gray-800">
+                        <x-filament::button color="gray" size="sm" @click="open = false" class="w-full">
                             Đóng
                         </x-filament::button>
                     </div>

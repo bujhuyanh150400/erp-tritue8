@@ -6,8 +6,10 @@ use App\Constants\AttendanceSessionStatus;
 use App\Constants\ScheduleType;
 use App\Filament\Components\AppRichEditor;
 use App\Filament\Resources\AttendanceSessions\Components\AttendanceStudentTable;
+use App\Models\AttendanceSession;
 use App\Services\AttendanceService;
 use Filament\Actions\Action;
+use Filament\Forms\Components\FileUpload;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Grid;
@@ -23,6 +25,7 @@ use Filament\Support\Enums\Width;
 use Filament\Support\Exceptions\Halt;
 use Filament\Support\Icons\Heroicon;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\HtmlString;
 
 class AttendanceSessionInfolist
 {
@@ -101,12 +104,11 @@ class AttendanceSessionInfolist
                                 // --- NỘI DUNG BÀI GIẢNG ---
                                 Section::make()
                                     ->compact()
+                                    ->columns(2)
                                     ->schema([
                                         self::getTextEntryContentAtLessonContent('lesson_content', 'Nội dung bài giảng'),
 
                                         self::getTextEntryContentAtLessonContent('homework', 'Nội dung bài tập'),
-
-                                        self::getTextEntryContentAtLessonContent('next_session_note', 'Nội dung buổi sau'),
 
                                         self::getTextEntryContentAtLessonContent('general_note', 'Ghi chú'),
                                     ]),
@@ -123,27 +125,52 @@ class AttendanceSessionInfolist
 
     protected static function getTextEntryContentAtLessonContent(string $make, string $label): TextEntry
     {
+        $filesMake = $make . '_files';
         return TextEntry::make($make)
             ->label($label)
             ->placeholder('Chưa có nội dung')
             ->html()
             ->prose()
-            ->columnSpanFull()
             ->extraAttributes(['class' => 'bg-gray-50 dark:bg-gray-900 p-3 rounded-lg border border-gray-100 dark:border-gray-800'])
+            ->formatStateUsing(function ($state, $record) use ($filesMake) {
+                $files = $record->{$filesMake} ?? [];
+
+                return new HtmlString(
+                    view('filament.pages.attendance-sessions.lesson-content-with-files', [
+                        'state' => $state,
+                        'files' => $files,
+                    ])->render()
+                );
+            })
             ->hintAction(
                 Action::make("edit_action_{$make}")
                     ->label('Sửa')
                     ->icon(Heroicon::PencilSquare)
                     ->color('primary')
+                    ->hidden(fn(AttendanceSession $record) => $record->isLocked())
                     ->modalHeading("Chỉnh sửa Nội dung $label")
                     ->modalWidth(Width::Full)
                     ->schema([
                         AppRichEditor::make($make)
                             ->hiddenLabel()
                             ->required(),
+                        FileUpload::make($filesMake)
+                            ->label('Tài liệu đính kèm')
+                            ->multiple()
+                            ->disk('public')
+                            ->visibility('public')
+                            // Đẩy file vào các thư mục riêng (VD: attendance/lesson_content)
+                            ->directory("attendance/{$make}")
+                            ->preserveFilenames()
+                            ->downloadable()
+                            ->openable()
+                            ->panelLayout('grid')
+                            ->previewable(false)
+                            ->reorderable(),
                     ])
                     ->fillForm(fn($record) => [
                         $make => $record->{$make} ?? '',
+                        $filesMake => $record->{$filesMake} ?? [],
                     ])
                     // Xử lý lưu dữ liệu
                     ->action(function (array $data, $record, AttendanceService $attendanceService) {

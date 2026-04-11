@@ -11,6 +11,7 @@ use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
+use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
@@ -19,6 +20,7 @@ use Filament\Forms\Components\TimePicker;
 use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Utilities\Get;
+use Filament\Support\Enums\Width;
 use Filament\Support\Exceptions\Halt;
 use Filament\Support\Icons\Heroicon;
 use Illuminate\Support\Carbon;
@@ -59,6 +61,16 @@ trait AttendanceStudentTableActions
                 $this->dispatch('refresh-table-ui');
             }
         }
+    }
+
+    /**
+     * Lấy dữ liệu dòng học sinh theo ID
+     * @param int $studentId
+     * @return array
+     */
+    protected function getStudentRow(int $studentId): array
+    {
+        return $this->attendanceList[$studentId] ?? [];
     }
 
     /**
@@ -204,6 +216,7 @@ trait AttendanceStudentTableActions
                 ->visible(fn(): bool => $this->record->isDraft())
                 ->label('Điểm danh')
                 ->icon(Heroicon::CheckCircle)
+                ->button()
                 ->color('success');
     }
 
@@ -219,7 +232,7 @@ trait AttendanceStudentTableActions
             ->icon(Heroicon::OutlinedAcademicCap)
             ->modalHeading("Điểm danh")
             // Chỉ cho phép chấm nếu học sinh CÓ MẶT tại lớp
-            ->visible(fn(array $record) => $record['attendance_status']->statusPresentInAttendance() && $this->record->status === AttendanceSessionStatus::Draft)
+            ->visible(fn(array $record) => $record['attendance_status']->statusPresentInAttendance() && $this->record->isDraft())
             // Nạp dữ liệu từ mảng scores trên RAM vào Form
             ->fillForm(fn(array $record) => [
                 // Nếu scores rỗng, trả về mảng chứa 1 item mặc định để Repeater bắt được
@@ -230,35 +243,30 @@ trait AttendanceStudentTableActions
                     ->hiddenLabel()
                     ->compact()
                     ->schema([
-                        TextInput::make('exam_name')
-                            ->label('Tên bài')
-                            ->required()
-                            ->placeholder('BTVN, Kiểm tra miệng...'),
-                        Grid::make(2)->schema([
+
+                        Grid::make(3)->schema([
+                            TextInput::make('exam_name')
+                                ->label('Tên bài')
+                                ->required()
+                                ->placeholder('BTVN, Kiểm tra miệng...'),
                             TextInput::make('score')
                                 ->label('Điểm')
                                 ->numeric()
                                 ->live(onBlur: true)
+                                ->prefix('Điểm số:')
+                                ->suffix('/10')
                                 ->minValue(0)
                                 ->required()
-                                // Sử dụng closure để lấy giá trị của trường max_score
                                 ->rules([
                                     fn(Get $get): Closure => function (string $attribute, $value, Closure $fail) use ($get) {
-                                        $maxScore = $get('max_score');
-                                        if (is_numeric($value) && is_numeric($maxScore) && $value > $maxScore) {
-                                            $fail("Điểm số không được lớn hơn thang điểm ({$maxScore}).");
+                                        if (is_numeric($value) && $value > 10) {
+                                            $fail("Điểm số không được lớn hơn thang điểm 10.");
                                         }
                                     },
                                 ]),
-                            TextInput::make('max_score')
-                                ->label('Thang điểm')
-                                ->numeric()
-                                ->default(10)
-                                ->required()
-                                ->live()
+                            Textarea::make('note')
+                                ->label('Ghi chú (nếu có)'),
                         ]),
-                        Textarea::make('note')
-                            ->label('Ghi chú (nếu có)'),
                     ])
                     ->minItems(1)
                     ->addActionLabel('Thêm đầu điểm mới')
@@ -313,127 +321,139 @@ trait AttendanceStudentTableActions
     }
 
     /**
-     * Hàm tạo ActionGroup cho điểm thưởng
-     * @return ActionGroup
+     * Hàm cộng 1 sao cho học sinh
+     * @param string $studentId ID học sinh
+     * @throws Halt
      */
-    protected function actionRewards()
+    public function quickPlusPoints(string $studentId)
     {
-        return ActionGroup::make([
-            // CỘNG 1 SAO NHANH
-            Action::make('plus_one')
-                ->label('+1 Sao')
-                ->icon(Heroicon::Star)
-                ->color('warning')
-                ->action(function (array $record, AttendanceService $service) {
-                    $newPoints = $record['total_reward_points'] + 1;
-                    $result = $service->updateStudentRewardPoints(
-                        $this->record, $record['student_id'], 1);
-                    if ($result->isError()) {
-                        Notification::make()->title("Lỗi cập nhật điểm thưởng")
-                            ->body($result->getMessage())->danger()->send();
-                        throw new Halt();
-                    }
-                    Notification::make()->title("Đã cộng 1 sao")->success()->send();
-                    $this->updateStudentRowOnUI($record['student_id'], [
-                        'total_reward_points' => $newPoints
-                    ]);
-                }),
+        $result = $this->attendanceService->updateStudentRewardPoints(
+            session: $this->record,
+            studentId: $studentId,
+            amount: 1
+        );
+        if ($result->isError()) {
+            Notification::make()
+                ->title("Lỗi cập nhật điểm thưởng")
+                ->body($result->getMessage())
+                ->danger()
+                ->send();
+            throw new Halt();
+        }
+        Notification::make()->title("Đã cộng 1 sao")->success()->send();
+        $this->updateStudentRowOnUI($studentId, [
+            'total_reward_points' => $this->getStudentRow($studentId)['total_reward_points'] + 1
+        ]);
+    }
 
-            // TRỪ 1 SAO NHANH
-            Action::make('minus_one')
-                ->label('-1 Sao')
-                ->icon(Heroicon::MinusCircle)
-                ->color('danger')
-                ->requiresConfirmation() // Trừ điểm thì nên hỏi lại cho chắc
-                ->action(function (array $record, AttendanceService $service) {
-                    $newPoints = $record['total_reward_points'] - 1;
-                    $result = $service->updateStudentRewardPoints($this->record, $record['student_id'], -1);
-                    if ($result->isError()) {
-                        Notification::make()->title("Lỗi cập nhật điểm thưởng")
-                            ->body($result->getMessage())->danger()->send();
-                        throw new Halt();
-                    }
-                    Notification::make()->title("Đã trừ 1 sao")->success()->send();
-                    $this->updateStudentRowOnUI($record['student_id'], [
-                        'total_reward_points' => $newPoints
-                    ]);
-                }),
+    /**
+     * Hàm trừ 1 sao cho học sinh
+     * @param string $studentId ID học sinh
+     * @return void
+     * @throws Halt
+     */
+    public function quickMinusPoints(string $studentId)
+    {
+        $result = $this->attendanceService->updateStudentRewardPoints(
+            session: $this->record,
+            studentId: $studentId,
+            amount: -1
+        );
+        if ($result->isError()) {
+            Notification::make()
+                ->title("Lỗi cập nhật điểm thưởng")
+                ->body($result->getMessage())
+                ->danger()
+                ->send();
+            throw new Halt();
+        }
+        Notification::make()->title("Đã trừ 1 sao")->success()->send();
+        $this->updateStudentRowOnUI($studentId, [
+            'total_reward_points' => $this->getStudentRow($studentId)['total_reward_points'] - 1
+        ]);
+    }
 
-            // THƯỞNG TÙY CHỈNH
-            Action::make('custom_reward')
-                ->label('Thưởng tùy chỉnh...')
-                ->icon(Heroicon::Gift)
-                ->schema([
-                    TextInput::make('amount')
-                        ->label('Số lượng sao')
-                        ->numeric()
-                        ->default(5)
-                        ->required(),
-                    TextInput::make('reason')
-                        ->label('Lý do thưởng')
-                        ->placeholder('VD: Phát biểu xuất sắc, Làm bài tập đầy đủ...'),
-                ])
-                ->action(function (array $data, array $record, AttendanceService $service) {
-                    $amount = (int) $data['amount'];
-                    $newPoints = $record['total_reward_points'] + $amount;
+    /**
+     * Hàm tạo ActionGroup cho thưởng tùy chỉnh
+     */
+    protected function actionCustomRewards(): Action
+    {
+        return Action::make('custom_reward')
+            ->label('Thưởng tùy chỉnh...')
+            ->icon(Heroicon::Gift)
+            ->schema([
+                TextInput::make('amount')
+                    ->label('Số lượng sao')
+                    ->numeric()
+                    ->default(5)
+                    ->required(),
+                TextInput::make('reason')
+                    ->label('Lý do thưởng')
+                    ->placeholder('VD: Phát biểu xuất sắc, Làm bài tập đầy đủ...'),
+            ])
+            ->action(function (array $data, array $record, AttendanceService $service) {
+                $amount = (int) $data['amount'];
+                $newPoints = $record['total_reward_points'] + $amount;
 
-                    $result = $service->updateStudentRewardPoints($this->record, $record['student_id'], $amount, $data['reason']);
-                    if ($result->isError()) {
-                        Notification::make()->title("Lỗi cập nhật điểm thưởng")
-                            ->body($result->getMessage())->danger()->send();
-                        throw new Halt();
-                    }
-                    $this->updateStudentRowOnUI($record['student_id'], [
-                        'total_reward_points' => $newPoints
-                    ]);
-                    Notification::make()->title("Đã thưởng {$amount} sao cho học sinh")->success()->send();
-                }),
+                $result = $service->updateStudentRewardPoints($this->record, $record['student_id'], $amount, $data['reason']);
+                if ($result->isError()) {
+                    Notification::make()->title("Lỗi cập nhật điểm thưởng")
+                        ->body($result->getMessage())->danger()->send();
+                    throw new Halt();
+                }
+                $this->updateStudentRowOnUI($record['student_id'], [
+                    'total_reward_points' => $newPoints
+                ]);
+                Notification::make()->title("Đã thưởng {$amount} sao cho học sinh")->success()->send();
+            });
+    }
 
-            Action::make('redeem_reward')
-                ->label('Đổi thưởng')
-                ->icon(Heroicon::Gift)
-                ->color('info')
-                ->modalHeading(fn (array $record) => 'Đổi thưởng cho ' . $record['student_name'])
-                ->modalDescription(fn (array $record) => 'Học sinh hiện có ' . $record['total_reward_points'] . ' sao.')
-                ->schema([
-                    Select::make('reward_item_id')
-                        ->label('Chọn phần thưởng')
-                        ->required()
-                        ->searchable()
-                        ->options(function (array $record) {
-                            $service = app(RewardRedemptionService::class);
-                            $result = $service->getCatalogForRedemption($record['student_id']);
+    /**
+     * Hàm tạo Action cho đổi thưởng
+     * @return Action
+     */
+    protected function actionRedeemRewards(): Action
+    {
+     return  Action::make('redeem_reward')
+         ->label('Đổi thưởng')
+         ->icon(Heroicon::Gift)
+         ->color('info')
+         ->modalHeading(fn (array $record) => 'Đổi thưởng cho ' . $record['student_name'])
+         ->modalDescription(fn (array $record) => 'Học sinh hiện có ' . $record['total_reward_points'] . ' sao.')
+         ->schema([
+             Select::make('reward_item_id')
+                 ->label('Chọn phần thưởng')
+                 ->required()
+                 ->searchable()
+                 ->options(function (array $record) {
+                     $service = app(RewardRedemptionService::class);
+                     $result = $service->getCatalogForRedemption($record['student_id']);
 
-                            if ($result->isError()) {
-                                return [];
-                            }
+                     if ($result->isError()) {
+                         return [];
+                     }
 
-                            return collect($result->getData()['items'] ?? [])
-                                ->mapWithKeys(fn (array $item) => [$item['id'] => $item['label']])
-                                ->all();
-                        }),
-                ])
-                ->action(function (array $data, array $record) {
-                    $service = app(RewardRedemptionService::class);
-                    $result = $service->redeemForStudent($record['student_id'], (int) $data['reward_item_id']);
+                     return collect($result->getData()['items'] ?? [])
+                         ->mapWithKeys(fn (array $item) => [$item['id'] => $item['label']])
+                         ->all();
+                 }),
+         ])
+         ->action(function (array $data, array $record) {
+             $service = app(RewardRedemptionService::class);
+             $result = $service->redeemForStudent($record['student_id'], (int) $data['reward_item_id']);
 
-                    if ($result->isError()) {
-                        Notification::make()->title('Lỗi đổi thưởng')
-                            ->body($result->getMessage())->danger()->send();
-                        throw new Halt();
-                    }
+             if ($result->isError()) {
+                 Notification::make()->title('Lỗi đổi thưởng')
+                     ->body($result->getMessage())->danger()->send();
+                 throw new Halt();
+             }
 
-                    $this->updateStudentRowOnUI($record['student_id'], [
-                        'total_reward_points' => $result->getData()['remaining_points'] ?? $record['total_reward_points'],
-                    ]);
+             $this->updateStudentRowOnUI($record['student_id'], [
+                 'total_reward_points' => $result->getData()['remaining_points'] ?? $record['total_reward_points'],
+             ]);
 
-                    Notification::make()->title('Đổi thưởng thành công')->success()->send();
-                }),
-        ])
-            ->visible(fn(): bool => $this->record->isDraft())
-            ->label('Khen thưởng')
-            ->icon('heroicon-m-sparkles')
-            ->color('warning');
+             Notification::make()->title('Đổi thưởng thành công')->success()->send();
+         });
     }
 
     /**
@@ -460,13 +480,13 @@ trait AttendanceStudentTableActions
             ])
             ->action(function (array $data, array $record, AttendanceService $service) {
                 // Gọi service lưu vào DB
-                $reult = $service->updatePrivateNoteStudent(
+                $result = $service->updatePrivateNoteStudent(
                     session: $this->record,
                     studentId: $record['student_id'],
                     note: $data['private_note']);
-                if ($reult->isError()) {
+                if ($result->isError()) {
                     Notification::make()->title("Lỗi cập nhật ghi chú")
-                        ->body($reult->getMessage())->danger()->send();
+                        ->body($result->getMessage())->danger()->send();
                     throw new Halt();
                 }
                 // Cập nhật RAM
@@ -474,6 +494,130 @@ trait AttendanceStudentTableActions
                     'private_note' => $data['private_note']
                 ]);
                 Notification::make()->title('Đã lưu ghi chú nội bộ')->success()->send();
+            });
+    }
+
+    /**
+     * Hàm tạo Action cho nhập điểm cả lớp
+     * @return Action
+     */
+    public function actionBulkSaveScore(): Action
+    {
+        return Action::make('bulkSaveScore')
+            ->label('Nhập điểm cả lớp')
+            ->icon('heroicon-m-clipboard-document-check')
+            ->color('primary')
+            ->modalHeading('Nhập điểm nhanh cho cả lớp')
+            ->modalWidth(Width::FourExtraLarge) // Form rộng để dễ nhập liệu
+            ->modalDescription('Nhập Tên bài kiểm tra, sau đó điền điểm cho các học sinh. Bỏ trống nếu học sinh đó không có điểm.')
+            ->visible(fn(): bool => $this->record->isDraft())
+            ->schema([
+                TextInput::make('exam_name')
+                    ->label('Tên đầu điểm / Bài kiểm tra')
+                    ->required()
+                    ->placeholder('VD: Bài tập về nhà, Kiểm tra 15 phút...')
+                    ->columnSpanFull(),
+
+                Repeater::make('students')
+                    ->label('Danh sách học sinh')
+                    ->hiddenLabel()
+                    ->compact()
+                    ->schema([
+                        Grid::make(12)->schema([
+                            Hidden::make('student_id'),
+                            Hidden::make('disabled'),
+                            TextInput::make('student_name')
+                                ->label('Học sinh')
+                                ->disabled() // Không cho sửa tên
+                                ->columnSpan(4),
+
+                            TextInput::make('score')
+                                ->label('Điểm')
+                                ->numeric()
+                                ->minValue(0)
+                                ->maxValue(10)
+                                ->placeholder('--')
+                                ->columnSpan(3)
+                                ->disabled(fn (Get $get): bool => (bool) $get('disabled'))
+                                ->hintIcon(fn (Get $get) => $get('disabled') ? 'heroicon-m-lock-closed' : null)
+                                ->hintColor('danger')
+                                ->helperText(fn (Get $get) => $get('disabled') ? 'Học sinh này chưa điểm danh, không thể nhập điểm.' : "Bỏ trống nếu học sinh này không có điểm"),
+
+                            TextInput::make('note')
+                                ->label('Ghi chú')
+                                ->placeholder('Nhận xét (không bắt buộc)')
+                                ->columnSpan(5)
+                                ->disabled(fn (Get $get): bool => (bool) $get('disabled'))
+                                ->hintIcon(fn (Get $get) => $get('disabled') ? 'heroicon-m-lock-closed' : null)
+                                ->hintColor('danger'),
+                        ])
+                    ])
+                    ->addable(false)
+                    ->deletable(false)
+                    ->reorderable(false)
+                    ->columnSpanFull()
+                    ->extraAttributes(['class' => 'border-none shadow-none bg-transparent']),
+            ])
+            // ẢO THUẬT Ở ĐÂY: Tự động fill danh sách học sinh vào Repeater khi mở Modal
+            ->fillForm(function () {
+                $studentsData = [];
+
+                // Giả sử $this->attendanceList là mảng chứa danh sách học sinh đang hiển thị
+                foreach ($this->attendanceList as $student) {
+                    $studentsData[] = [
+                        'student_id'   => $student['student_id'],
+                        'student_name' => $student['student_name'],
+                        'score'        => null,
+                        'note'         => null,
+                        'disabled'     => $student['attendance_status'] === AttendanceStatus::Draft,
+                    ];
+                }
+
+                return [
+                    'exam_name' => null,
+                    'students'  => $studentsData,
+                ];
+            })
+            ->action(function (array $data, AttendanceService $service) {
+                $result = $service->bulkSaveScores(
+                    session: $this->record,
+                    examName: $data['exam_name'],
+                    studentsData: $data['students'],
+                );
+
+                if ($result->isSuccess()) {
+                    Notification::make()
+                        ->success()
+                        ->title('Thành công')
+                        ->body('Đã lưu điểm cho cả lớp.')
+                        ->send();
+
+//                    // Cập nhật lại UI
+//                    foreach ($data['students'] as $studentData) {
+//                        if (!$studentData['disabled']) {
+//                            $this->updateStudentRowOnUI($studentData['student_id'], [
+//                                'attendance_scores' => array_merge(
+//                                    $this->getStudentRow($studentData['student_id'])['attendance_scores'] ?? [],
+//                                    [[
+//                                        'exam_name' => $data['exam_name'],
+//                                        'score' => $studentData['score'],
+//                                        'note' => $studentData['note'],
+//                                    ]]
+//                                )
+//                            ]);
+//                        }
+//                    }
+
+                    $this->mount();
+                } else {
+                    Notification::make()
+                        ->danger()
+                        ->title('Lỗi')
+                        ->body($result->getMessage())
+                        ->send();
+
+                    throw new \Filament\Support\Exceptions\Halt();
+                }
             });
     }
 }

@@ -56,6 +56,12 @@ class AdminCalendarWidget extends FullCalendarWidget
             'editable' => $user->isAdmin(),
             'selectable' => $user->isAdmin(),
             'eventResizableFromStart' => $user->isAdmin(),
+            'handleWindowResize' => true,
+            'views' => [
+                'listWeek' => [
+                    'buttonText' => 'Danh sách tuần',
+                ],
+            ],
         ];
     }
 

@@ -320,9 +320,11 @@
     - teacher_id (unsigned bigint) - ID giáo viên, khóa ngoại tham chiếu đến teachers.id
     - session_date (date) - Ngày học
     - lesson_content (text, nullable) - Nội dung bài học
+    - lesson_content_files (jsonb nullable) - File đính kèm nội dung bài học, lưu dưới dạng JSON array [{file_name: '', file_url: ''}]
     - homework (text, nullable) - BTVN (chỉ mang tính chất note)
-    - next_session_note (text, nullable) - Nhắc buổi sau
+    - homework_files (jsonb nullable) - File đính kèm BTVN, lưu dưới dạng JSON array [{file_name: '', file_url: ''}]
     - general_note (text, nullable) - Ghi chú chung
+    - general_note_files (jsonb nullable) - File đính kèm ghi chú chung, lưu dưới dạng JSON array [{file_name: '', file_url: ''}]
     - status (unsigned tinyint default 0) - Trạng thái, lưu trong AttendanceSessionStatus
     - completed_at (datetime, nullable) - Thời gian hoàn thành
     - locked_at (datetime, nullable) - Thời gian chốt tháng

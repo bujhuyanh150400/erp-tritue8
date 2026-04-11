@@ -18,11 +18,12 @@ class AttendanceSession extends Model
         'schedule_instance_id',
         'class_id',
         'teacher_id',
-        'session_date',
         'lesson_content',
+        'lesson_content_files',
         'homework',
-        'next_session_note',
+        'homework_files',
         'general_note',
+        'general_note_files',
         'status',
         'completed_at',
         'locked_at',
@@ -31,6 +32,9 @@ class AttendanceSession extends Model
     protected function casts(): array
     {
         return [
+            'lesson_content_files' => 'array',
+            'homework_files' => 'array',
+            'general_note_files' => 'array',
             'session_date' => 'date',
             'status' => AttendanceSessionStatus::class,
             'completed_at' => 'datetime',
@@ -65,6 +69,11 @@ class AttendanceSession extends Model
         return $this->hasMany(RewardPoint::class, 'session_id');
     }
 
+    public function attendanceSession()
+    {
+        return $this->hasOne(AttendanceSession::class, 'schedule_instance_id');
+    }
+
     // ─── Helpers ─────────────────────────────────────────────────
 
     public function isDraft(): bool
@@ -80,15 +89,5 @@ class AttendanceSession extends Model
     public function isLocked(): bool
     {
         return $this->status === AttendanceSessionStatus::Locked;
-    }
-
-    public function canEdit(): bool
-    {
-        return ! $this->isLocked();
-    }
-
-    public function attendanceSession()
-    {
-        return $this->hasOne(AttendanceSession::class, 'schedule_instance_id');
     }
 }

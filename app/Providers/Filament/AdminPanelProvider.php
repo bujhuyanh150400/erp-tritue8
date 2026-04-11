@@ -90,8 +90,6 @@ class AdminPanelProvider extends PanelProvider
             ->authMiddleware([
                 Authenticate::class,
             ])
-            ->unsavedChangesAlerts()
-            ->topNavigation()
             ->plugins([
                 FilamentFullCalendarPlugin::make()
                     ->selectable()

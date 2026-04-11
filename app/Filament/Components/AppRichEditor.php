@@ -19,7 +19,7 @@ class AppRichEditor extends RichEditor
                 [ToolbarButtonGroup::make('Heading', ['h1', 'h2', 'h3'])->icon('fi-o-heading')],
                 [ToolbarButtonGroup::make('Alignment', ['alignStart', 'alignCenter', 'alignEnd', 'alignJustify'])],
                 ['blockquote', 'codeBlock', 'bulletList', 'orderedList'],
-                ['table', 'attachFiles'],
+                ['table'],
                 ['undo', 'redo'],
             ])
             ->floatingToolbars([
@@ -37,10 +37,6 @@ class AppRichEditor extends RichEditor
                     'tableDelete',
                 ],
             ])
-            // 2. Cấu hình Upload Ảnh
-            ->fileAttachmentsDisk('public') // Lưu vào disk public (storage/app/public)
-            ->fileAttachmentsDirectory('rich-editor/images') // Thư mục lưu ảnh
-            ->fileAttachmentsVisibility('public') // Đảm bảo ảnh có thể xem được trên web
             ->extraInputAttributes([
                 'style' => 'min-height: 300px;',
             ])

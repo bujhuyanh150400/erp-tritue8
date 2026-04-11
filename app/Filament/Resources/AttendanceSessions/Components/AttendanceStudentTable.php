@@ -17,6 +17,7 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Columns\ViewColumn;
 use Filament\Tables\Concerns\InteractsWithTable;
 use Filament\Tables\Contracts\HasTable;
+use Filament\Tables\Grouping\Group;
 use Filament\Tables\Table;
 use Illuminate\Support\Carbon;
 use Livewire\Component;
@@ -28,11 +29,18 @@ class AttendanceStudentTable extends Component implements HasActions, HasSchemas
     use InteractsWithTable;
     use AttendanceStudentTableActions;
 
+    protected AttendanceService $attendanceService;
+
     public AttendanceSession $record;
 
-    public function mount(AttendanceService $service): void
+    public function boot(AttendanceService $service): void
     {
-        $result = $service->getStudentListForAttendance($this->record);
+        $this->attendanceService = $service;
+    }
+
+    public function mount(): void
+    {
+        $result = $this->attendanceService->getStudentListForAttendance($this->record);
 
         if ($result->isSuccess()) {
             $studentsData = $result->getData();
@@ -60,6 +68,14 @@ class AttendanceStudentTable extends Component implements HasActions, HasSchemas
                 // Trả về mảng tuần tự (values) cho Filament render
                 return $collection->values()->toArray();
             })
+            ->groups([
+                Group::make('status')
+                    ->label('Trạng thái điểm danh')
+                    ->getTitleFromRecordUsing(fn (array $record): string => $record['attendance_status']->label() ?? '--')
+            ])
+            ->defaultGroup('status')
+            ->groupingSettingsHidden()
+            ->stackedOnMobile()
             ->columns([
                 TextColumn::make('student_name')
                     ->label('Họ và tên học sinh')
@@ -80,12 +96,9 @@ class AttendanceStudentTable extends Component implements HasActions, HasSchemas
                     ->html()
                     ->searchable(),
 
-                TextColumn::make('total_reward_points')
+                ViewColumn::make('total_reward_points')
                     ->label('⭐ Sao')
-                    ->badge()
-                    ->color('warning')
-                    ->default(0)
-                    ->formatStateUsing(fn(int $state): string => $state . ' sao'),
+                    ->view('filament.pages.attendance-sessions.reward-points-column-view'),
 
                 TextColumn::make('attendance_status')
                     ->label('Trạng thái')
@@ -107,22 +120,27 @@ class AttendanceStudentTable extends Component implements HasActions, HasSchemas
             ->toolbarActions([
                 // Action điểm danh hàng loạt
                 $this->actionAttendance(isBulk: true),
+                // Action nhập điểm cả lớp
+                $this->actionBulkSaveScore(),
             ])
             ->recordActions([
+                $this->actionAttendance(isBulk: false),
                 ActionGroup::make([
-                    // Action điểm danh
-                    $this->actionAttendance(isBulk: false),
                     // Action điểm thưởng
-                    $this->actionRewards(),
+                    $this->actionCustomRewards(),
+                    // Action đổi thưởng
+                    $this->actionRedeemRewards(),
                     // Nhập điểm
                     $this->actionSaveScore(),
                     // Action ghi chú riêng
                     $this->actionPrivateNote(),
                 ])
                     ->visible(fn(): bool => $this->record->isDraft())
+                    ->button()
                     ->label("Tác vụ")
             ]);
     }
+
 
     public function render()
     {
