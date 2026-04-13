@@ -10,6 +10,7 @@ use App\Core\Logs\Logging;
 use App\Core\Services\BaseService;
 use App\Core\Services\ServiceException;
 use App\Core\Services\ServiceReturn;
+use Barryvdh\DomPDF\Facade\Pdf;
 use App\Models\Notification;
 use App\Models\TuitionInvoice;
 use App\Repositories\AttendanceRecordRepository;
@@ -21,6 +22,7 @@ use App\Repositories\TuitionInvoiceRepository;
 use App\Repositories\UserLogRepository;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
+use Symfony\Component\HttpFoundation\Response;
 
 class TuitionInvoiceService extends BaseService
 {
@@ -305,6 +307,23 @@ class TuitionInvoiceService extends BaseService
 
             return ServiceReturn::success($invoice->refresh(), 'Đã xử lý yêu cầu xuất PDF');
         }, useTransaction: true);
+    }
+
+    public function downloadInvoicePdf(TuitionInvoice $invoice): Response
+    {
+        $invoice->loadMissing([
+            'student.user',
+            'class.teacher',
+            'logs.changedBy',
+        ]);
+
+        $this->logAction('export_tuition_invoice', "Xuất PDF hóa đơn {$invoice->invoice_number}");
+
+        return Pdf::loadView('pdfs.tuition-invoice', [
+            'invoice' => $invoice,
+        ])
+            ->setPaper('a4')
+            ->download($invoice->invoice_number . '.pdf');
     }
 
     protected function createInvoiceNotification(TuitionInvoice $invoice, string $title, string $content): void
