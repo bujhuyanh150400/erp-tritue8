@@ -97,7 +97,7 @@ class AttendanceService extends BaseService
             },
             useTransaction: true,
             catchCallback: function ($e) {
-                dd($e);
+//                dd($e);
             }
         );
     }

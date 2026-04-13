@@ -325,15 +325,8 @@ class TuitionInvoicesTable
                     Action::make('export_pdf')
                         ->label('Xuất PDF')
                         ->icon(Heroicon::DocumentArrowDown)
-                        ->action(function (TuitionInvoice $record) {
-                            $result = app(TuitionInvoiceService::class)->exportInvoice($record);
-
-                            Notification::make()
-                                ->title($result->isSuccess() ? $result->getMessage() : 'Lỗi')
-                                ->body($result->isError() ? $result->getMessage() : 'Chức năng xuất file PDF chưa được tích hợp thư viện tạo file.')
-                                ->color($result->isSuccess() ? 'success' : 'danger')
-                                ->send();
-                        }),
+                        ->url(fn (TuitionInvoice $record) => route('tuition-invoices.pdf', ['invoice' => $record]))
+                        ->openUrlInNewTab(),
                 ]),
             ])
             ->toolbarActions([
