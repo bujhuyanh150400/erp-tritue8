@@ -2,15 +2,18 @@
 
 namespace App\Filament\Pages\ScheduleCalendar\Widgets;
 
+use App\Filament\Pages\ScheduleCalendar\Actions\DragDropScheduleAction;
 use App\Filament\Pages\ScheduleCalendar\Actions\ViewScheduleInstanceAction;
 use App\Models\ScheduleInstance;
 use App\Services\AttendanceService;
 use App\Services\ClassScheduleService;
 use Filament\Actions\Action;
 use Filament\Forms\Components\DatePicker;
+use Filament\Forms\Components\Radio;
 use Filament\Forms\Components\TimePicker;
 use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Grid;
+use Filament\Support\Enums\Width;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\On;
@@ -28,7 +31,6 @@ class AdminCalendarWidget extends FullCalendarWidget
 
     // Danh sách giáo viên đang có lịch
     public array $activeTeachers = [];
-
 
     public function boot(ClassScheduleService $scheduleService, AttendanceService $attendanceService): void
     {
@@ -133,7 +135,7 @@ class AdminCalendarWidget extends FullCalendarWidget
                     🚪 Phòng: \${props.room_name}<br/>
                     👥 Sĩ số: \${props.active_students_count}<br/>
                     📌 Trạng thái điểm danh: \${props.status_attendance_label}<br/>
-                    📌 Kiểu lịch: \${props.type_label}
+                    📌 Kiểu lịch: \${props.schedule_type_label}
                 `.replace(/\\n/g, ' ').trim();
                 el.setAttribute("x-data", "{ tooltip: '" + content.replace(/'/g, "\\'") + "' }");
                 el.setAttribute("x-tooltip.html", "tooltip");
@@ -175,7 +177,7 @@ class AdminCalendarWidget extends FullCalendarWidget
                             👨‍🎓 ${props.class}
                         </div>
                         <div class="truncate opacity-90 text-[14px]">
-                            📌 ${props.type_label}
+                            📌 ${props.schedule_type_label}
                         </div>
                     </div>
                 `;
@@ -244,6 +246,10 @@ class AdminCalendarWidget extends FullCalendarWidget
             // Xem chi tiết lịch học
             ViewScheduleInstanceAction::make('view_schedule_detail')
                 ->refreshCalendar(),
+
+            DragDropScheduleAction::make('change_schedule_action')
+                ->refreshCalendar(),
+
         ];
     }
 
@@ -278,13 +284,7 @@ class AdminCalendarWidget extends FullCalendarWidget
     }
 
     /**
-     * XỬ LÝ THỔI GIỜ HỌC
-     * @param array $event
-     * @param array $oldEvent
-     * @param array $relatedEvents
-     * @param array $startDelta
-     * @param array $endDelta
-     * @return bool
+     * XỬ LÝ Resize GIỜ HỌC
      */
     public function onEventResize(array $event, array $oldEvent, array $relatedEvents, array $startDelta, array $endDelta): bool
     {
@@ -330,30 +330,16 @@ class AdminCalendarWidget extends FullCalendarWidget
      */
     public function onEventDrop(array $event, array $oldEvent, array $relatedEvents, array $delta, ?array $oldResource, ?array $newResource): bool
     {
-
-        if ($event['start'] === $oldEvent['start'] && $event['end'] === $oldEvent['end']) {
-            return false; // Kết thúc sớm, không gọi DB, không bắn Notification
-        }
-
         $newStart = Carbon::parse($event['start']);
         $newEnd = Carbon::parse($event['end']);
-        $result = $this->scheduleService->moveInstance($event['id'], $newStart, $newEnd);
 
-        if ($result->isError()) {
-            Notification::make()
-                ->danger()
-                ->title('Lỗi')
-                ->body($result->getMessage())
-                ->send();
-            return true;
-        }
-
-        Notification::make()
-            ->success()
-            ->title('Đã đổi giờ học thành công!')
-            ->send();
-
-        $this->refreshRecords();
-        return false;
+        $this->mountAction('change_schedule_action',[
+            'instance_id' => $event['id'],
+            'new_date' => $newStart->copy()->format('d-m-Y'),
+            'new_start'   => $newStart,
+            'new_end'     => $newEnd,
+        ]);
+        // Trả về true để ngăn chặn FullCalendar from updating the event in the DOM
+        return true;
     }
 }

@@ -48,7 +48,6 @@ class AttendanceService extends BaseService
                 if ($si->attendanceSession) {
                     return ServiceReturn::success(data: $si->attendanceSession);
                 }
-
                 $user = Auth::user();
 
                 // ==========================================
@@ -75,8 +74,7 @@ class AttendanceService extends BaseService
                 if (!$user->isAdmin() && $si->teacher_id !== $user->teacher?->id) {
                     throw new ServiceException("Bạn không phải giáo viên phụ trách của buổi học này.");
                 }
-
-                // 3. THỰC THI TẠO MỚI (Atomic)
+                // THỰC THI TẠO MỚI (Atomic)
                 $session = $this->attendanceSessionRepository->query()->firstOrCreate(
                     [
                         'schedule_instance_id' => $si->id,
@@ -85,7 +83,7 @@ class AttendanceService extends BaseService
                         'class_id' => $si->class_id,
                         'teacher_id' => $si->teacher_id,
                         'session_date' => $si->date,
-                        'status' => AttendanceSessionStatus::Draft->value // Hoặc dùng Enum AttendanceSessionStatus::Draft->value
+                        'status' => AttendanceSessionStatus::Draft->value
                     ]
                 );
 
@@ -97,7 +95,10 @@ class AttendanceService extends BaseService
 
                 return ServiceReturn::success(data: $session);
             },
-            useTransaction: true // Bảo toàn tính nguyên tử
+            useTransaction: true,
+            catchCallback: function ($e) {
+                dd($e);
+            }
         );
     }
 
@@ -260,10 +261,6 @@ class AttendanceService extends BaseService
                     'student_id' => $studentId,
                 ], $recordData);
 
-                //Ràng buộc: Xóa sạch điểm số nếu Vắng mặt (Có phép / Không phép)
-                if (!$status->statusPresentInAttendance()) {
-                    $this->scoreRepository->deleteScoresByAttendanceRecord($record->id);
-                }
                 // Ghi Log hệ thống
                 Logging::userActivity(
                     action: 'Đánh dấu điểm danh',
@@ -535,7 +532,6 @@ class AttendanceService extends BaseService
                 if (!$session->isDraft()) {
                     throw new ServiceException("Buổi học này không thể cập nhật điểm số vì đã được chốt sổ.");
                 }
-
                 // Lấy tất cả bản ghi điểm danh của buổi học này, index theo student_id cho nhanh
                 $attendanceRecords = $this->attendanceRecordRepository->query()
                     ->where('session_id', $session->id)

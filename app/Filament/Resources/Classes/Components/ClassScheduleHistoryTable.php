@@ -4,19 +4,18 @@ namespace App\Filament\Resources\Classes\Components;
 
 use App\Constants\ScheduleStatus;
 use App\Constants\ScheduleType;
-use App\Filament\Resources\AttendanceSessions\AttendanceSessionResource;
 use App\Filament\Resources\Classes\Actions\CancelScheduleInstanceAction;
 use App\Filament\Resources\Classes\Actions\CreateMakeupSessionAction;
 use App\Filament\Resources\Classes\Actions\EditScheduleInstanceAction;
+use App\Filament\Resources\ScheduleInstance\Actions\ViewOrCreateAttendanceAction;
 use App\Models\ScheduleInstance;
 use App\Models\SchoolClass;
 use App\Repositories\ScheduleInstanceRepository;
-use App\Services\AttendanceService;
 use Filament\Actions\Action;
 use Filament\Actions\Concerns\InteractsWithActions;
 use Filament\Actions\Contracts\HasActions;
 use Filament\Forms\Components\DatePicker;
-use Filament\Notifications\Notification;
+use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Concerns\InteractsWithSchemas;
 use Filament\Schemas\Contracts\HasSchemas;
 use Filament\Support\Icons\Heroicon;
@@ -63,7 +62,7 @@ class ClassScheduleHistoryTable extends Component implements HasActions, HasSche
                         $date = \Illuminate\Support\Carbon::parse($record->date)->locale('vi');
                         $state = "{$date->translatedFormat('l')}, {$date->format('d/m/Y')}";
                         return $record->isOverdueWithoutAttendance()
-                            ? "{$state} - (Cảnh báo: Chưa mở lớp)"
+                            ? "{$state} - (Cảnh báo: Chưa điểm danh)"
                             : $state;
                     })
                     ->color(fn(ScheduleInstance $record) => $record->isOverdueWithoutAttendance() ? 'danger' : null),
@@ -115,13 +114,29 @@ class ClassScheduleHistoryTable extends Component implements HasActions, HasSche
                         ->schema([
                             DatePicker::make('start_date')
                                 ->label('Từ ngày')
-                                ->default(now())
                                 ->displayFormat('d/m/Y')
-                                ->format('Y-m-d'),
+                                ->format('Y-m-d')
+                                ->live()
+                                ->hintAction(
+                                    Action::make('set_today')
+                                        ->label('Hôm nay')
+                                        ->icon('heroicon-m-calendar')
+                                        ->color('primary')
+                                        ->action(function ($set) {
+                                            $today = now()->format('Y-m-d');
+                                            $set('start_date', $today);
+                                        })
+                                ),
+
                             DatePicker::make('end_date')
                                 ->label('Đến ngày')
                                 ->displayFormat('d/m/Y')
+                                ->live()
                                 ->format('Y-m-d'),
+
+                            Toggle::make('missing_attendance_only')
+                                ->label('Buổi quá hạn chưa điểm danh')
+                                ->inline(false),
                         ])
                         ->query(function (Builder $query, array $data, ScheduleInstanceRepository $repository): Builder {
                             return $repository->setFilters($query, $data);
@@ -132,35 +147,16 @@ class ClassScheduleHistoryTable extends Component implements HasActions, HasSche
             ->recordActions([
                 // badge học bù vào ngày
                 Action::make('makeup_badge')
-                    ->label(fn (ScheduleInstance $record) => "Bù ngày: " . \Carbon\Carbon::parse($record->makeupInstance->date)->format('d/m/Y'))
+                    ->label(fn(ScheduleInstance $record) => "Bù ngày: " . \Carbon\Carbon::parse($record->makeupInstance->date)->format('d/m/Y'))
                     ->color('red')
                     ->badge()
                     ->icon(Heroicon::CalendarDays)
-                    ->visible(fn (ScheduleInstance $record) => $record->makeupInstance !== null)
+                    ->visible(fn(ScheduleInstance $record) => $record->makeupInstance !== null)
                     ->disabled(),
 
                 // 1. Xem điểm danh / Bắt đầu điểm danh
-                Action::make('view_attendance')
-                    ->label(fn(ScheduleInstance $record) => $record->hasAttendance() ? 'Xem điểm danh' : 'Bắt đầu điểm danh')
-                    ->icon(Heroicon::ClipboardDocumentCheck)
-                    ->hidden(fn(ScheduleInstance $record) => $record->isDayOff())
-                    ->color(fn(ScheduleInstance $record) => $record->attendanceSession ? 'info' : 'success')
-                    ->action(function (ScheduleInstance $record, AttendanceService $attendanceService) {
-                        $result = $attendanceService->startOrGetSession($record);
-                        if ($result->isSuccess()) {
-                            $data = $result->getData();
-                            $this->redirect(AttendanceSessionResource::getUrl('view', ['record' => $data]));
-                        } else {
-                            // Bắt lỗi Validation và hiện Notification góc phải
-                            Notification::make()
-                                ->title('Lỗi')
-                                ->body($result->getMessage())
-                                ->danger()
-                                ->send();
-                        }
-                    }),
-
-
+                ViewOrCreateAttendanceAction::make('view_attendance')
+                    ->button(),
 
                 // 2. Tạo buổi bù
                 CreateMakeupSessionAction::make('create_makeup'),

@@ -38,25 +38,15 @@ class ClassesTable
                     ->weight('bold'),
 
                 TextColumn::make('subject.name')
+                    ->description(fn(SchoolClass $record) => "Khối: {$record->grade_level->label()}")
                     ->label('Môn học'),
 
-                TextColumn::make('grade_level')
-                    ->label('Khối')
-                    ->badge()
-                    ->formatStateUsing(fn(GradeLevel $state): string => $state->label()),
-
                 TextColumn::make('teacher.full_name')
+                    ->description(fn(SchoolClass $record) => "Sĩ số: {$record->active_students_count}")
                     ->label('Giáo viên'),
-
-                TextColumn::make('active_students_count')
-                    ->label('Sĩ số')
-                    ->formatStateUsing(fn(int $state): string => "{$state} học sinh")
-                    ->badge()
-                    ->color('info'),
 
                 TextColumn::make('start_at')
                     ->label('Thời gian')
-                    ->alignCenter()
                     ->formatStateUsing(function (SchoolClass $record) {
                         $startDate = $record->start_at ? Carbon::parse($record->start_at)->format('d/m/Y') : 'Chưa bắt đầu';
                         $endDate = $record->end_at ? Carbon::parse($record->end_at)->format('d/m/Y') : 'Chưa kết thúc';
@@ -104,7 +94,7 @@ class ClassesTable
                     })
                     ->columnSpanFull()
                     ->columns(5),
-            ], layout: FiltersLayout::AboveContent)
+            ])
             ->recordActions([
                 ActionGroup::make([
                     // Xem chi tiết
@@ -112,13 +102,15 @@ class ClassesTable
                     // Edit action
                     CommonAction::editAction(),
                     // Tạo lịch học cố định
-                    CreateScheduleTemplateAction::make(),
+                    CreateScheduleTemplateAction::make('create_schedule_template'),
                     // Thêm học sinh
                     AddStudentToClassAction::make(),
                     // Thay đổi trạng thái
                     ChangeClassStatusAction::make(),
-
                 ])
+                    ->color("gray")
+                    ->label("Thao tác")
+                    ->button()
             ]);
     }
 }

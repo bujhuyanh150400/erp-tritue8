@@ -39,17 +39,6 @@ enum AttendanceStatus: int implements HasLabel
         };
     }
 
-    /**
-     * Kiểm tra nếu có mặt trong buổi học hay không
-     * @return bool
-     */
-    public function statusPresentInAttendance(): bool
-    {
-        return match ($this) {
-            self::Present, self::Late => true,
-            default => false,
-        };
-    }
 
     /**
      * Lấy danh sách các trạng thái có mặt trong buổi học

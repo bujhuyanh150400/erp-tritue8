@@ -9,7 +9,7 @@ use Carbon\Carbon;
 
 class RollingScheduleGenerate extends Command
 {
-    protected $signature = 'schedule:rolling-generate';
+    protected $signature = 'app:rolling-generate';
 
     protected $description = 'Sinh lịch cuốn chiếu cho tuần thứ 5 trong tương lai';
 

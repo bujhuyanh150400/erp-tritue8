@@ -43,13 +43,6 @@ class ClassResource extends Resource
         return ClassInfolist::configure($schema);
     }
 
-//    public static function getRelations(): array
-//    {
-//        return [
-//            ScheduleInstancesRelationManager::class,
-//        ];
-//    }
-
     public static function getPages(): array
     {
         return [

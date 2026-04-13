@@ -4,7 +4,6 @@ namespace App\Filament\Resources\Classes\Pages;
 
 use App\Filament\Components\CommonAction;
 use App\Filament\Resources\Classes\Actions\ChangeClassStatusAction;
-use App\Filament\Resources\Classes\Actions\CreateScheduleTemplateAction;
 use App\Filament\Resources\Classes\ClassResource;
 use Filament\Actions\ActionGroup;
 use Filament\Resources\Pages\ViewRecord;
@@ -19,16 +18,10 @@ class ViewClass extends ViewRecord
         return [
             // Back action
             CommonAction::backAction(self::getResource()),
-            // Action group
-            ActionGroup::make([
-                // Edit action
-                CommonAction::editAction(),
-                // Đổi trạng thái lớp
-                ChangeClassStatusAction::make(),
-                // Tạo lịch cố định
-                CreateScheduleTemplateAction::make(),
-            ]),
-
+            // Edit action
+            CommonAction::editAction(),
+            // Đổi trạng thái lớp
+            ChangeClassStatusAction::make(),
         ];
     }
 }

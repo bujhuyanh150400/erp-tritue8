@@ -3,12 +3,14 @@
 namespace App\Filament\Resources\Classes\Actions;
 
 use App\Constants\DayOfWeek;
+use App\Filament\Components\CommonNotification;
 use App\Filament\Components\CustomSelect;
 use App\Models\SchoolClass;
 use App\Services\ClassScheduleService;
 use App\Services\RoomService;
 use App\Services\TeacherService;
 use Filament\Actions\Action;
+use Filament\Forms\Components\CheckboxList;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TimePicker;
@@ -18,32 +20,35 @@ use Filament\Support\Enums\Size;
 use Filament\Support\Exceptions\Halt;
 use Filament\Support\Icons\Heroicon;
 
-class CreateScheduleTemplateAction
+class CreateScheduleTemplateAction extends Action
 {
-    public static function make(): Action
+    protected function setUp(): void
     {
-        return Action::make('create_schedule_template')
-            ->label('Tạo lịch học cố định')
+        parent::setUp();
+
+        $this->label('Tạo lịch học cố định')
             ->icon(Heroicon::CalendarDays)
             ->color('primary')
-            ->size(Size::ExtraLarge)
             ->modalHeading('Tạo mới lịch học cố định cho lớp')
             ->modalDescription('Hệ thống sẽ tự động kiểm tra xung đột phòng học và giáo viên. Sau khi tạo, lịch học trong 4 tuần tới sẽ được sinh ra tự động. Các tuần tiếp theo sẽ được hệ thống tự động cập nhật vào mỗi Chủ Nhật hàng tuần')
             ->schema([
                Grid::make()->schema([
-                   Select::make('days_of_week')
+                   CheckboxList::make('days_of_week')
                        ->label('Thứ trong tuần')
-                       ->multiple()
                        ->options(DayOfWeek::class)
                        ->required()
-                       ->columnSpanFull()
-                       ->native(false),
+                       ->columns(3)
+                       ->columnSpanFull(),
 
                    TimePicker::make('start_time')
+                       ->format("H:i")
+                       ->displayFormat("H:i")
                        ->label('Giờ bắt đầu')
                        ->required(),
 
                    TimePicker::make('end_time')
+                       ->format("H:i")
+                       ->displayFormat("H:i")
                        ->label('Giờ kết thúc')
                        ->required(),
 
@@ -54,9 +59,6 @@ class CreateScheduleTemplateAction
 
                    CustomSelect::make('teacher_id')
                        ->label('Giáo viên')
-                       ->serviceFilters(function (SchoolClass $record) {
-                           return ['exclude_id' => $record->teacher_id];
-                       })
                        ->getOptionSelectService(TeacherService::class)
                        ->helperText("(Bỏ trống để dùng GV mặc định của lớp)"),
 
@@ -81,22 +83,17 @@ class CreateScheduleTemplateAction
                ])
             ])
             ->action(function (SchoolClass $record, array $data, ClassScheduleService $scheduleService) {
-                // Determine teacher
-                $data['teacher_id'] = $data['teacher_id'] ?? $record->teacher_id;
-
                 $result = $scheduleService->createTemplate($record, $data);
 
                 if ($result->isError()) {
-                    Notification::make()
-                        ->danger()
+                    CommonNotification::error()
                         ->title('Lỗi hệ thống')
                         ->body($result->getMessage())
                         ->send();
                     throw new Halt();
                 }
 
-                Notification::make()
-                    ->success()
+                CommonNotification::success()
                     ->title('Thành công')
                     ->body('Đã thêm lịch cố định và sinh các buổi học tương ứng.')
                     ->send();

@@ -232,7 +232,7 @@ trait AttendanceStudentTableActions
             ->icon(Heroicon::OutlinedAcademicCap)
             ->modalHeading("Điểm danh")
             // Chỉ cho phép chấm nếu học sinh CÓ MẶT tại lớp
-            ->visible(fn(array $record) => $record['attendance_status']->statusPresentInAttendance() && $this->record->isDraft())
+            ->visible(fn(array $record) => $record['attendance_status'] !== AttendanceStatus::Draft && $this->record->isDraft())
             // Nạp dữ liệu từ mảng scores trên RAM vào Form
             ->fillForm(fn(array $record) => [
                 // Nếu scores rỗng, trả về mảng chứa 1 item mặc định để Repeater bắt được
@@ -565,7 +565,7 @@ trait AttendanceStudentTableActions
                 // Giả sử $this->attendanceList là mảng chứa danh sách học sinh đang hiển thị
                 foreach ($this->attendanceList as $student) {
                     $studentsData[] = [
-                        'student_id'   => $student['student_id'],
+                        'student_id'   => (string)$student['student_id'],
                         'student_name' => $student['student_name'],
                         'score'        => null,
                         'note'         => null,

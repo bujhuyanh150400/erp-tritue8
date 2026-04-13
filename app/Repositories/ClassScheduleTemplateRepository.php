@@ -4,16 +4,44 @@ namespace App\Repositories;
 
 use App\Constants\ClassStatus;
 use App\Constants\DayOfWeek;
+use App\Core\Interfaces\FilterFilament;
 use App\Core\Repository\BaseRepository;
 use App\Models\ClassScheduleTemplate;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 
-class ClassScheduleTemplateRepository extends BaseRepository
+class ClassScheduleTemplateRepository extends BaseRepository implements FilterFilament
 {
     public function getModel()
     {
         return ClassScheduleTemplate::class;
+    }
+
+    public function getListingQuery(Builder $query): Builder
+    {
+        return $query->with([
+            'class',
+            'teacher:id,full_name',
+            'room:id,name',
+        ])
+            // 1. Đếm tổng số buổi học đã được sinh ra từ Template này
+            // Eloquent sẽ tự động tạo ra một thuộc tính ảo tên là: schedule_instances_count
+            ->withCount('scheduleInstances')
+
+            // 2. Lấy ra Ngày học xa nhất (max date)
+            // Thuộc tính ảo: schedule_instances_max_date
+            ->withMax('scheduleInstances', 'date')
+
+            // 3. Lấy ra thời điểm Tool/Job chạy sinh lịch lần cuối cùng (max created_at)
+            // Thuộc tính ảo: schedule_instances_max_created_at
+            ->withMax('scheduleInstances', 'created_at')
+
+            ->latest('id');
+    }
+
+    public function setFilters(Builder $query, array $filters = []): Builder
+    {
+        return $query;
     }
 
     /**
@@ -91,7 +119,7 @@ class ClassScheduleTemplateRepository extends BaseRepository
         return $this->query()
             ->whereHas('class', function ($q) {
                 // Lưu ý: Đổi 'active' thành Enum ClassStatus::Active->value nếu dự án bạn dùng Enum
-                $q->where('status', 'active');
+                $q->where('status', ClassStatus::Active);
             })
             ->where(function ($q) use ($targetWeekStart) {
                 $q->whereNull('end_date')
@@ -99,4 +127,6 @@ class ClassScheduleTemplateRepository extends BaseRepository
             })
             ->get();
     }
+
+
 }

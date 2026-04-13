@@ -6,6 +6,8 @@ use Carbon\CarbonImmutable;
 use Filament\Notifications\Livewire\Notifications;
 use Filament\Support\Enums\Alignment;
 use Filament\Support\Enums\VerticalAlignment;
+use Filament\Tables\Enums\FiltersLayout;
+use Filament\Tables\Table;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\ServiceProvider;
@@ -26,8 +28,9 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->configureDefaults();
-        Notifications::alignment(Alignment::Center);
-        Notifications::verticalAlignment(VerticalAlignment::Start);
+
+        $this->bootFilament();
+
     }
 
     /**
@@ -50,5 +53,19 @@ class AppServiceProvider extends ServiceProvider
                 ->uncompromised()
             : null,
         );
+    }
+
+    protected function bootFilament()
+    {
+        // Filament notifications
+        Notifications::alignment(Alignment::Center);
+        Notifications::verticalAlignment(VerticalAlignment::Start);
+
+        Table::configureUsing(function (Table $table): void {
+            $table
+                ->stackedOnMobile()
+                ->filtersLayout(FiltersLayout::AboveContent)
+                ->paginationPageOptions([10, 25, 50]);
+        });
     }
 }

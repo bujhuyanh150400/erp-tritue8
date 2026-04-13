@@ -103,32 +103,35 @@ class ScheduleInstanceRepository extends BaseRepository implements FilterFilamen
         string $endTime,
         string $startDate,
         ?string $endDate = null,
-        int|null $excludeInstanceId = null
+        int|null $excludeInstanceId = null,
+        int|null $excludeTemplateId = null,
     ) {
         $placeholders = implode(',', array_fill(0, count($daysOfWeek), '?'));
 
         return $this->query()
-            // 1. Nhóm điều kiện OR: Trùng phòng HOẶC trùng giáo viên
+            // Nhóm điều kiện OR: Trùng phòng HOẶC trùng giáo viên
             ->where(function ($query) use ($roomId, $teacherId) {
                 $query->where('room_id', $roomId)
                     ->orWhere('teacher_id', $teacherId);
             })
 
-            // 2. Loại trừ ID hiện tại (khi chỉnh sửa)
+            // Loại trừ ID hiện tại (khi chỉnh sửa)
             ->when($excludeInstanceId, fn ($query) => $query->where('id', '!=', $excludeInstanceId))
+            // Loại trừ ID template hiện tại (khi chỉnh sửa)
+            ->when($excludeTemplateId, fn ($query) => $query->where('template_id', '!=', $excludeTemplateId))
 
-            // 3. Lọc theo Thứ (Postgres ISODOW: 1=Mon, 7=Sun)
+            // Lọc theo Thứ (Postgres ISODOW: 1=Mon, 7=Sun)
             ->whereRaw("EXTRACT(ISODOW FROM date) IN ($placeholders)", $daysOfWeek)
 
-            // 4. Nằm trong khoảng ngày xét duyệt
+            // Nằm trong khoảng ngày xét duyệt
             ->where('date', '>=', $startDate)
             ->when($endDate, fn ($query) => $query->where('date', '<=', $endDate))
 
-            // 5. Giao thoa thời gian (Time Overlap logic)
+            // Giao thoa thời gian (Time Overlap logic)
             ->where('start_time', '<', $endTime)
             ->where('end_time', '>', $startTime)
 
-            // 6. Chỉ xét các buổi có hiệu lực
+            // Chỉ xét các buổi có hiệu lực
             ->whereIn('status', [
                 ScheduleStatus::Upcoming->value,
                 ScheduleStatus::Completed->value
@@ -214,9 +217,26 @@ class ScheduleInstanceRepository extends BaseRepository implements FilterFilamen
                 $classQuery->where('grade_level', $filters['grade_level']);
             });
         }
+
         if ($filters['active_classes_only'] ?? false) {
             $query->whereHas('class', function ($classQuery) use ($filters) {
                 $classQuery->where('status', ClassStatus::Active);
+            });
+        }
+
+        // Lọc các buổi học quá hạn chưa điểm danh
+        if ($filters['missing_attendance_only'] ?? false) {
+            $today = now()->toDateString();
+            $query->where(function (Builder $subQuery) use ($today) {
+                $subQuery
+                    // 1. Ngày đã qua (nhỏ hơn hôm nay)
+                    ->where('date', '<', $today)
+                    // 2. Trạng thái vẫn là Upcoming (Chưa chuyển sang Completed/Canceled)
+                    ->where('status', ScheduleStatus::Upcoming->value)
+                    // 3. Chưa có phiên điểm danh (AttendanceSession) hoặc phiên đó chưa hoàn thành
+                    ->where(function ($q) {
+                        $q->whereDoesntHave('attendanceSession');
+                    });
             });
         }
         return $query;

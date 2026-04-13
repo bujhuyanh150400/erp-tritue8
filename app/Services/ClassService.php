@@ -142,27 +142,6 @@ class ClassService extends BaseService implements SelectableServiceInterface
     }
 
     /**
-     * Lấy lớp học theo ID
-     * @param int $id
-     * @return ServiceReturn
-     * @throws \Throwable
-     */
-    public function findClassById(int $id): ServiceReturn
-    {
-       return $this->execute(
-            callback: function () use ($id) {
-                $class = $this->classRepository->query()
-                    ->where('id', $id)
-                    ->first();
-                if (!$class) {
-                    throw new ServiceException("Lớp học không tồn tại.");
-                }
-                return $class;
-            }
-        );
-    }
-
-    /**
      * Thêm nhiều học sinh vào lớp học
      * @param SchoolClass $schoolClass
      * @param Collection $students - Danh sách học sinh cần thêm

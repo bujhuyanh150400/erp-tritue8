@@ -18,6 +18,7 @@ class AttendanceSession extends Model
         'schedule_instance_id',
         'class_id',
         'teacher_id',
+        'session_date',
         'lesson_content',
         'lesson_content_files',
         'homework',

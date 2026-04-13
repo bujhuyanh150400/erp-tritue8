@@ -248,7 +248,8 @@
 
     # cấu trúc
     - id (unsigned bigint auto increment)
-    - class_id (unsigned bigint) - ID lớp học, khóa ngoại tham chiếu đến classes.id
+    - class_id (unsigned bigint, nullable) - ID lớp học, khóa ngoại tham chiếu đến classes.id
+        + null nếu là lịch bù ghép, lịch tăng cường không thuộc lớp nào
     - template_id (unsigned bigint) - ID mẫu lịch học, khóa ngoại tham chiếu đến class_schedule_templates.id
     - date (date) - Ngày học
     - start_time (time) - Giờ bắt đầu
@@ -280,7 +281,26 @@
     - index(class_id, date)
     - index(room_id, date, start_time, end_time)
     - index(teacher_id, date, start_time, end_time)
-    - index(schedule_type, date)  
+    - index(schedule_type, date)
+
+## schedule_instance_participants
+
+    # note
+    - Bảng pivot lưu danh sách học sinh tham gia các buổi học đặc biệt 
+      (lịch tăng cường, lịch bù ghép lớp...) mà không thuộc danh sách lớp học cố định.
+
+    # cấu trúc
+    - id (unsigned bigint auto increment)
+    - schedule_instance_id (unsigned bigint) - ID buổi học, khóa ngoại tham chiếu schedule_instances.id
+    - student_id (unsigned bigint) - ID học sinh, khóa ngoại tham chiếu students.id
+    - is_fee_counted (boolean default false) - Đánh dấu buổi học này có tính học phí cho học sinh này không
+    - created_at (timestamp)
+    - updated_at (timestamp)
+
+    # index
+    - foreign(schedule_instance_id) references schedule_instances.id
+    - foreign(student_id) references students.id
+    - unique(schedule_instance_id, student_id) - Đảm bảo 1 học sinh không bị thêm 2 lần vào cùng 1 buổi học
 
 ## schedule_change_requests
 

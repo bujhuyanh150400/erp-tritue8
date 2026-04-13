@@ -6,6 +6,7 @@ use App\Constants\ClassStatus;
 use App\Constants\GradeLevel;
 use App\Filament\Resources\Classes\Components\ClassScheduleHistoryTable;
 use App\Filament\Resources\Classes\Components\ClassStudentListTable;
+use App\Filament\Resources\Classes\Components\ClassTemplateScheduleTable;
 use App\Filament\Resources\Teachers\TeacherResource;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Grid;
@@ -30,7 +31,7 @@ class ClassInfolist
                     ->contained(false)
                     ->persistTabInQueryString()
                     ->tabs([
-                        // Tab 1: Thông tin lớp
+                        //  Thông tin lớp
                         Tab::make('Thông tin lớp')
                             ->icon(Heroicon::InformationCircle)
                             ->iconPosition(IconPosition::Before)
@@ -120,14 +121,20 @@ class ClassInfolist
                                         ]),
                                     ]),
                             ]),
-                        // Tab 2: Danh sách học sinh
+                        // Danh sách học sinh
                         Tab::make('Danh sách học sinh')
                             ->icon(Heroicon::UserGroup)
                             ->iconPosition(IconPosition::Before)
                             ->schema([
                                 Livewire::make(ClassStudentListTable::class)->lazy()
                             ]),
-                        // Tab 3: Lịch sử buổi học
+                        Tab::make('Lịch học cố định')
+                            ->icon(Heroicon::CalendarDateRange)
+                            ->iconPosition(IconPosition::Before)
+                            ->schema([
+                                Livewire::make(ClassTemplateScheduleTable::class)->lazy()
+                            ]),
+                        // Lịch sử buổi học
                         Tab::make('Lịch sử buổi học')
                             ->icon(Heroicon::Calendar)
                             ->iconPosition(IconPosition::Before)

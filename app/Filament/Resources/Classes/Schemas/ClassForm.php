@@ -83,7 +83,7 @@ class ClassForm
                                 ->required()
                                 ->disabled(fn($livewire) => $livewire instanceof EditRecord)
                                 ->helperText(fn($livewire) => $livewire instanceof EditRecord ?
-                                    'Bạn không thể chỉnh sửa giáo viên khi đang chỉnh sửa.'
+                                    'Không thể chỉnh sửa giáo viên'
                                     : 'Chọn giáo viên phụ trách lớp.')
                                 ->getOptionSelectService(TeacherService::class),
 
@@ -116,6 +116,7 @@ class ClassForm
 
                             TextInput::make('teacher_salary_per_session')
                                 ->label('Lương GV/buổi')
+                                ->helperText("Lương GV/buổi là tiền mà giáo viên được trả mỗi khi tham gia buổi học.")
                                 ->required()
                                 ->numeric()
                                 ->minValue(0)
@@ -127,7 +128,7 @@ class ClassForm
                                 ->native(false)
                                 ->disabled(fn($livewire) => $livewire instanceof EditRecord)
                                 ->helperText(fn($livewire) => $livewire instanceof EditRecord ?
-                                    'Bạn không thể chỉnh sửa ngày khai giảng khi đang chỉnh sửa.'
+                                    'Bạn không thể chỉnh sửa ngày khai giảng.'
                                     : null)
                                 ->displayFormat('d/m/Y'),
 
@@ -135,7 +136,7 @@ class ClassForm
                                 ->label('Ngày kết thúc (Dự kiến)')
                                 ->native(false)
                                 ->displayFormat('d/m/Y')
-                                ->afterOrEqual('start_at'), // Ngày kết thúc phải sau ngày khai giảng
+                                ->afterOrEqual('start_at'),
                         ]),
                     ]),
             ]);
