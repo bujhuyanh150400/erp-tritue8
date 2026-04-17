@@ -144,6 +144,6 @@ class AttendanceStudentTable extends Component implements HasActions, HasSchemas
 
     public function render()
     {
-        return view('filament.pages.attendance-sessions.attendance-student-table');
+        return view('filament.common.view-table');
     }
 }

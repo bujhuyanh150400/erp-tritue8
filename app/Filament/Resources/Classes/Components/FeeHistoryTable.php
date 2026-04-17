@@ -69,6 +69,6 @@ class FeeHistoryTable extends Component implements HasActions, HasSchemas, HasTa
 
     public function render(): View
     {
-        return view('filament.pages.classes.fee-history-table');
+        return view('filament.common.view-table');
     }
 }

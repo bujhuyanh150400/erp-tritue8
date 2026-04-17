@@ -172,6 +172,6 @@ class ClassScheduleHistoryTable extends Component implements HasActions, HasSche
 
     public function render(): View
     {
-        return view('filament.pages.classes.class-schedule-history-table');
+        return view('filament.common.view-table');
     }
 }

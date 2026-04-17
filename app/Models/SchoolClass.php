@@ -27,7 +27,6 @@ class SchoolClass extends Model
         'teacher_id',
         'grade_level',
         'base_fee_per_session',
-        'teacher_salary_per_session',
         'max_students',
         'status',
         'start_at',
@@ -40,7 +39,6 @@ class SchoolClass extends Model
             'grade_level' => GradeLevel::class,
             'status' => ClassStatus::class,
             'base_fee_per_session' => 'decimal:0',
-            'teacher_salary_per_session' => 'decimal:0',
             'start_at' => 'date',
             'end_at' => 'date',
         ];

@@ -5,6 +5,7 @@ namespace App\Filament\Resources\Teachers\Schemas;
 use App\Constants\EmployeeStatus;
 use App\Constants\Gender;
 use App\Constants\GradeLevel;
+use App\Constants\SalaryType;
 use App\Core\Helpers\BankInfo;
 use App\Filament\Components\CommonForm;
 use Filament\Actions\Action;
@@ -15,6 +16,7 @@ use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Resources\Pages\CreateRecord;
 use Filament\Resources\Pages\EditRecord;
+use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Tabs;
 use Filament\Schemas\Components\Tabs\Tab;
@@ -120,7 +122,7 @@ class TeacherForm
                                     ]),
                             ]),
 
-                        Tab::make('Thông tin ngân hàng')
+                        Tab::make('Thông tin lương')
                             ->icon(Heroicon::Banknotes)
                             ->iconPosition(IconPosition::After)
                             ->schema([
@@ -132,22 +134,41 @@ class TeacherForm
                                     ->validationMessages([
                                         'required' => 'Vui lòng chọn ngân hàng.',
                                     ]),
+                                Grid::make(2)->schema([
+                                    TextInput::make('bank_account_number')
+                                        ->label('Số tài khoản')
+                                        ->required()
+                                        ->validationMessages([
+                                            'required' => 'Vui lòng nhập số tài khoản.',
+                                        ]),
 
-                                TextInput::make('bank_account_number')
-                                    ->label('Số tài khoản')
-                                    ->required()
-                                    ->validationMessages([
-                                        'required' => 'Vui lòng nhập số tài khoản.',
-                                    ]),
+                                    TextInput::make('bank_account_holder')
+                                        ->label('Chủ tài khoản')
+                                        ->required()
+                                        ->validationMessages([
+                                            'required' => 'Vui lòng nhập chủ tài khoản.',
+                                        ]),
+                                    Select::make('salary_type')
+                                        ->label('Loại lương')
+                                        ->required()
+                                        ->native(false)
+                                        ->options(SalaryType::class)
+                                        ->validationMessages([
+                                            'required' => 'Vui lòng chọn loại lương.',
+                                        ]),
+                                    TextInput::make('salary_per_session')
+                                        ->label('Lương cố định')
+                                        ->suffix('VND')
+                                        ->helperText('Nếu chọn lương cố định, lương sẽ được chốt cố định theo tháng, còn không mỗi buổi dạy sẽ được tính theo buổi học (Nếu ca học đó không chọn lương tùy chỉnh).')
+                                        ->required()
+                                        ->validationMessages([
+                                            'required' => 'Vui lòng nhập lương cố định.',
+                                        ]),
+                                ]),
 
-                                TextInput::make('bank_account_holder')
-                                    ->label('Chủ tài khoản')
-                                    ->required()
-                                    ->validationMessages([
-                                        'required' => 'Vui lòng nhập chủ tài khoản.',
-                                    ]),
                             ]),
                     ]),
+
 
                 // THÔNG TIN TÀI KHOẢN
                 Section::make('Thông tin tài khoản')

@@ -7,6 +7,7 @@ use App\Core\Traits\HasBigIntId;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Teacher extends Model
 {
@@ -64,9 +65,9 @@ class Teacher extends Model
         return $this->hasMany(AttendanceSession::class);
     }
 
-    public function salaryConfigs(): HasMany
+    public function salaryConfig(): HasOne
     {
-        return $this->hasMany(TeacherSalaryConfig::class);
+        return $this->hasOne(TeacherSalaryConfig::class);
     }
 
     public function salaryInvoices(): HasMany

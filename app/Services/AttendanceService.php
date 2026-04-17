@@ -96,9 +96,6 @@ class AttendanceService extends BaseService
                 return ServiceReturn::success(data: $session);
             },
             useTransaction: true,
-            catchCallback: function ($e) {
-//                dd($e);
-            }
         );
     }
 

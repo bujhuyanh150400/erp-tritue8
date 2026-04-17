@@ -79,6 +79,6 @@ class ClassStudentListTable extends Component implements HasActions, HasSchemas,
 
     public function render(): View
     {
-        return view('filament.pages.classes.class-student-list-table');
+        return view('filament.common.view-table');
     }
 }

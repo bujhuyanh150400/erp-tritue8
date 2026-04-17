@@ -150,6 +150,6 @@ class AddStudentToClassTable extends Component implements HasActions, HasSchemas
 
     public function render(): View
     {
-        return view('filament.pages.classes.add-student-to-class');
+        return view('filament.common.view-table');
     }
 }

@@ -28,10 +28,6 @@ class ClassTemplateScheduleTable extends Component implements HasActions, HasSch
 
     public SchoolClass $record;
 
-    public function render(): View
-    {
-        return view('filament.pages.classes.class-template-schedule-table');
-    }
 
     public function table(Table $table): Table
     {
@@ -116,4 +112,9 @@ class ClassTemplateScheduleTable extends Component implements HasActions, HasSch
                 EditScheduleTemplateAction::make('edit_schedule_template'),
             ]);
        }
+
+    public function render(): View
+    {
+        return view('filament.common.view-table');
+    }
 }

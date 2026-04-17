@@ -5,6 +5,7 @@ namespace App\Filament\Resources\Teachers\Schemas;
 use App\Constants\ClassStatus;
 use App\Core\Helpers\BankInfo;
 use App\Filament\Resources\Teachers\Components\TeacherKpiOverview;
+use App\Helpers\FormatHelper;
 use Filament\Infolists\Components\ColorEntry;
 use Filament\Infolists\Components\IconEntry;
 use Filament\Infolists\Components\RepeatableEntry;
@@ -51,7 +52,7 @@ class TeacherInfolist
                                     Section::make('Hồ sơ giáo viên')
                                         ->columnSpan(2)
                                         ->compact()
-                                        ->columns(2) // Chia đôi thông tin cá nhân bên trên
+                                        ->columns(2)
                                         ->schema([
                                             TextEntry::make('full_name')
                                                 ->label('Họ và tên')
@@ -78,13 +79,13 @@ class TeacherInfolist
                                             TextEntry::make('status')
                                                 ->label('Trạng thái')
                                                 ->badge()
-                                                ->color(fn ($state) => match ($state) {
+                                                ->color(fn($state) => match ($state) {
                                                     EmployeeStatus::Active => 'success',   // xanh
                                                     EmployeeStatus::Inactive => 'danger',     // đỏ
                                                     default => 'success',
                                                 })
                                                 ->icon(Heroicon::CheckCircle)
-                                                ->formatStateUsing(fn ($state) => $state->label()),
+                                                ->formatStateUsing(fn($state) => $state->label()),
 
                                             TextEntry::make('address')
                                                 ->label('Địa chỉ')
@@ -95,22 +96,31 @@ class TeacherInfolist
                                                 ->icon(Heroicon::Banknotes)
                                                 ->badge()
                                                 ->color('warning')
-                                                ->formatStateUsing(fn ($state) => BankInfo::getBankByBin($state)['short_name'] ?? '-'),
+                                                ->formatStateUsing(fn($state) => BankInfo::getBankByBin($state)['short_name'] ?? '-'),
 
                                             TextEntry::make('bank_account_holder')
                                                 ->label('Chủ tài khoản')
                                                 ->weight('bold')
                                                 ->icon(Heroicon::User)
-                                                ->formatStateUsing(fn ($state) => strtoupper($state)),
+                                                ->formatStateUsing(fn($state) => strtoupper($state)),
 
                                             TextEntry::make('bank_account_number')
                                                 ->label('Số tài khoản')
                                                 ->copyable()
                                                 ->fontFamily('mono')
-                                                ->columnSpanFull()
                                                 ->icon(Heroicon::CreditCard)
                                                 ->badge()
-                                                ->formatStateUsing(fn ($state) => chunk_split($state, 4, ' ')),
+                                                ->formatStateUsing(fn($state) => chunk_split($state, 4, ' ')),
+
+                                            TextEntry::make('salaryConfig.salary_type')
+                                                ->label('Loại lương theo')
+                                                ->badge(),
+
+                                            TextEntry::make('salaryConfig.salary_per_session')
+                                                ->label('Lương mỗi buổi')
+                                                ->suffix('VNĐ')
+                                                ->formatStateUsing(fn($state) => FormatHelper::formatPrice($state ?? 0)),
+
                                         ]),
                                 ]),
                             ]),
@@ -122,7 +132,7 @@ class TeacherInfolist
                             ->schema([
                                 RepeatableEntry::make('classes')
                                     ->hiddenLabel()
-                                    ->state(fn ($record) => $record->classes()
+                                    ->state(fn($record) => $record->classes()
                                         ->with('subject')
                                         ->where('status', ClassStatus::Active->value)
                                         ->get()
@@ -146,13 +156,13 @@ class TeacherInfolist
                                                 TextEntry::make('status')
                                                     ->label('Trạng thái')
                                                     ->badge()
-                                                    ->color(fn ($state) => match ($state) {
+                                                    ->color(fn($state) => match ($state) {
                                                         ClassStatus::Active => 'success',
                                                         ClassStatus::Suspended => 'warning',
                                                         ClassStatus::Ended => 'gray',
                                                         default => 'gray',
                                                     })
-                                                    ->formatStateUsing(fn ($state) => $state->label()),
+                                                    ->formatStateUsing(fn($state) => $state->label()),
                                             ]),
                                     ])
                                     ->columnSpanFull(),

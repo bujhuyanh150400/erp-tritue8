@@ -21,6 +21,7 @@ use App\Repositories\TeacherSalaryConfigRepository;
 use App\Repositories\ScheduleInstanceRepository;
 use Carbon\CarbonPeriod;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Saade\FilamentFullCalendar\Data\EventData;
 
@@ -312,15 +313,9 @@ class ClassScheduleService extends BaseService
                 // Lấy người tạo Template
                 $createdBy = $template->created_by;
 
-                // Lấy cấu hình lương của giáo viên trong khoảng thời gian
-                $fallbackSalary = (float)($class->teacher_salary_per_session ?? 0);
-
-                // Lấy cấu hình lương của giáo viên trong khoảng thời gian
-                $salaryConfigs = $this->teacherSalaryConfigRepository->getConfigsForPeriod(
+                // Lấy cấu hình lương của giáo viên theo ca
+                $salarySnapshot = $this->teacherSalaryConfigRepository->getSalarySession(
                     teacherId: $template->teacher_id,
-                    classId: $class->id,
-                    startDate: $startDate,
-                    endDate: $endDate
                 );
                 // (CHỐNG TRÙNG LẶP):
                 // Lấy danh sách các ngày đã được sinh lịch của Template này
@@ -345,15 +340,6 @@ class ClassScheduleService extends BaseService
                         if (isset($existingDatesLookup[$dateString])) {
                             continue;
                         }
-                        // Kiểm tra xem ngày học có nằm trong hiệu lực của cấu hình này không
-                        $configSalary = $salaryConfigs->first(function ($item) use ($date) {
-                            $effectiveFrom = Carbon::make($item->effective_from);
-                            $effectiveTo = $item->effective_to ? Carbon::make($item->effective_to) : null;
-                            return $effectiveFrom->lte($date) && ($effectiveTo === null || $effectiveTo->gte($date));
-                        });
-
-                        // Nếu không có cấu hình lương nào phù hợp, sử dụng lương mặc định
-                        $salarySnapshot = $configSalary ? (float)$configSalary->salary_per_session : $fallbackSalary;
 
                         $instancesToInsert[] = [
                             'class_id' => $class->id,
@@ -364,7 +350,7 @@ class ClassScheduleService extends BaseService
                             'room_id' => $template->room_id,
                             'teacher_id' => $template->teacher_id,
                             'original_teacher_id' => $template->teacher_id,
-                            'teacher_salary_snapshot' => $salarySnapshot,
+                            'teacher_salary_snapshot' => $salarySnapshot, // Lương = 0 => Sử dụng lương theo tháng
                             'schedule_type' => ScheduleType::Main->value,
                             'fee_type' => FeeType::Normal->value,
                             'status' => ScheduleStatus::Upcoming->value,
@@ -447,7 +433,6 @@ class ClassScheduleService extends BaseService
             })->toArray();
         });
     }
-
 
     /**
      * Cập nhật lại thời gian của lịch học
@@ -582,8 +567,8 @@ class ClassScheduleService extends BaseService
                     template: $template,
                     data: [
                         'day_of_week' => DayOfWeek::from($newStart->dayOfWeekIso),
-                        'start_time'  => $newStart->format('H:i:s'),
-                        'end_time'    => $newEnd->format('H:i:s'),
+                        'start_time' => $newStart->format('H:i:s'),
+                        'end_time' => $newEnd->format('H:i:s'),
                     ],
                     excludeInstanceId: $instance->id,
                 );
@@ -594,7 +579,6 @@ class ClassScheduleService extends BaseService
             },
             useTransaction: true);
     }
-
 
     /**
      * Hủy lịch học và tạo lịch bù
@@ -620,14 +604,14 @@ class ClassScheduleService extends BaseService
                 // CHUẨN BỊ DỮ LIỆU TẠO LỊCH BÙ
                 // Lấy từ chính buổi học cũ truyền sang
                 $makeupData = [
-                    'date'                   => $newStart->format('Y-m-d'),
-                    'start_time'             => $newStart->format('H:i:s'),
-                    'end_time'               => $newEnd->format('H:i:s'),
-                    'room_id'                => $instance->room_id,
-                    'teacher_id'             => $instance->teacher_id,
-                    'fee_type'               => $instance->fee_type,
+                    'date' => $newStart->format('Y-m-d'),
+                    'start_time' => $newStart->format('H:i:s'),
+                    'end_time' => $newEnd->format('H:i:s'),
+                    'room_id' => $instance->room_id,
+                    'teacher_id' => $instance->teacher_id,
+                    'fee_type' => $instance->fee_type,
                     'custom_fee_per_session' => $instance->custom_fee_per_session,
-                    'custom_salary'          => $instance->custom_salary,
+                    'custom_salary' => $instance->custom_salary,
                 ];
 
                 // HỦY BUỔI HỌC HIỆN TẠI (Báo nghỉ)
@@ -700,14 +684,12 @@ class ClassScheduleService extends BaseService
             } else {
                 // Nếu không có lương custom và thay đổi teacher so với teacher gốc, cập nhật lương teacher dựa theo lương của teacher đó
                 if ($teacherId !== $instance->original_teacher_id) {
-                    $salaryTeacher = $this->teacherSalaryConfigRepository->getEffectiveSalaryForPeriod(
+                    $salaryTeacher = $this->teacherSalaryConfigRepository->getSalarySession(
                         teacherId: $teacherId,
-                        classId: $instance->class_id,
-                        startDate: $date,
-                        endDate: $date,
-                        fallbackSalary: (float)($instance->class->teacher_salary_per_session ?? 0)
                     );
-                    $dataUpdate['custom_salary'] = $salaryTeacher;
+                    if (!empty($salaryTeacher)) {
+                        $dataUpdate['custom_salary'] = $salaryTeacher;
+                    }
                 } // Nếu  thay đổi teacher giống với teacher gốc, cập nhật lương custom = null để sử dụng lương của teacher gốc
                 else if ($teacherId === $instance->original_teacher_id) {
                     $dataUpdate['custom_salary'] = null;
@@ -765,15 +747,15 @@ class ClassScheduleService extends BaseService
      * @param array $data
      * @return ServiceReturn
      */
-    public function createMakeupInstance(ScheduleInstance $instance, array $data): ServiceReturn
+    public function createMakeupInstance(ScheduleInstance $oldInstance, array $data): ServiceReturn
     {
-        return $this->execute(function () use ($instance, $data) {
-            if (!$instance->canMakeMarkupInstance()) {
+        return $this->execute(function () use ($oldInstance, $data) {
+            if (!$oldInstance->canMakeMarkupInstance()) {
                 throw new ServiceException("Không thể tạo lịch bù: Buổi học này không thể tạo lịch bù.");
             }
 
-            $roomId = $data['room_id'] ?? $instance->room_id;
-            $teacherId = $data['teacher_id'] ?? $instance->original_teacher_id;
+            $roomId = $data['room_id'] ?? $oldInstance->room_id;
+            $teacherId = $data['teacher_id'] ?? $oldInstance->original_teacher_id;
             $date = $data['date'];
             $dayValues = [DayOfWeek::from(Carbon::parse($date)->dayOfWeekIso)];
             $feeType = $data['fee_type'] instanceof FeeType ? $data['fee_type'] : FeeType::from($data['fee_type']);
@@ -789,13 +771,13 @@ class ClassScheduleService extends BaseService
                 endDate: $date,
             );
             // Lấy lớp học
-            $class = $instance->class;
+            $class = $oldInstance->class;
 
             if ($feeType === FeeType::Free) {
                 $customFee = 0;
             } elseif ($feeType === FeeType::Custom) {
                 $customFee = $data['custom_fee_per_session'];
-            }else {
+            } else {
                 $customFee = null;
             }
 
@@ -805,19 +787,15 @@ class ClassScheduleService extends BaseService
                 $salarySnapshot = (float)$data['custom_salary'];
             } else {
                 // Nếu không có lương custom thì sử dụng lương mặc định của lớp học hoặc lương của giáo viên nếu có
-                $salarySnapshot = $this->teacherSalaryConfigRepository->getEffectiveSalaryForPeriod(
+                $salarySnapshot = $this->teacherSalaryConfigRepository->getSalarySession(
                     teacherId: $teacherId,
-                    classId: $class->id,
-                    startDate: $date,
-                    endDate: $date,
-                    fallbackSalary: (float)($class->teacher_salary_per_session ?? 0)
                 );
             }
 
 
             // Insert vào Database
             return $this->instanceRepository->create([
-                'class_id' => $instance->class_id,
+                'class_id' => $oldInstance->class_id,
                 'date' => $date,
                 'start_time' => $data['start_time'],
                 'end_time' => $data['end_time'],
@@ -828,11 +806,91 @@ class ClassScheduleService extends BaseService
                 'schedule_type' => ScheduleType::Makeup,
                 'status' => ScheduleStatus::Upcoming,
                 'teacher_salary_snapshot' => $salarySnapshot,
-                'linked_makeup_for' => $instance->id,
+                'linked_makeup_for' => $oldInstance->id,
                 'custom_salary' => $data['custom_salary'] ?? null,
                 'custom_fee_per_session' => $customFee,
                 'created_by' => Auth::id(),
             ]);
         });
+    }
+
+    /**
+     * Tạo lịch học bù
+     * @param array $data
+     * @param Collection $records
+     * @return ServiceReturn
+     * @throws \Throwable
+     */
+    public function createExtraSchedule(array $data, Collection $records): ServiceReturn
+    {
+        return $this->execute(
+            callback: function () use ($data, $records) {
+                if ($records->isEmpty()) {
+                    throw new ServiceException("Danh sách học sinh không thể rỗng.");
+                }
+                $roomId = $data['room_id'];
+                $teacherId = $data['teacher_id'];
+                $date = $data['date'];
+                $dayValues = [DayOfWeek::from(Carbon::parse($date)->dayOfWeekIso)];
+                $feeType = $data['fee_type'] instanceof FeeType ? $data['fee_type'] : FeeType::from($data['fee_type']);
+                $startTime = $data['start_time'];
+                $endTime = $data['end_time'];
+
+                // Kiểm tra xung đột (makeup instance không được trùng với instance gốc)
+                $this->checkConflictInstances(
+                    roomId: $roomId,
+                    teacherId: $teacherId,
+                    dayValues: $dayValues,
+                    startTime: $startTime,
+                    endTime: $endTime,
+                    startDate: $date,
+                    endDate: $date,
+                );
+
+
+                if ($feeType === FeeType::Free) {
+                    $fee = 0;
+                } else {
+                    $fee = $data['custom_fee_per_session'] ?? null;
+                }
+                if ($fee === null) {
+                    throw new ServiceException("Học phí tăng cường chỉ có thể miễn phí hoặc phải có phí.");
+                }
+
+                // Lấy lương hiệu lực của giáo viên trong khoảng thời gian
+                // Nếu có lương custom thì sử dụng lương custom
+                if (!empty($data['salary'])) {
+                    $salarySnapshot = (float)$data['salary'];
+                } else {
+                    // Nếu không có lương custom thì sử dụng lương mặc định của lớp học hoặc lương của giáo viên nếu có
+                    $salarySnapshot = $this->teacherSalaryConfigRepository->getSalarySession(
+                        teacherId: $teacherId,
+                    );
+                }
+
+
+                // 1. Tạo bản ghi schedule_instances (class_id = null)
+                $instance = $this->instanceRepository->create([
+                    'class_id' => null,
+                    'date' => $date,
+                    'start_time' => $startTime,
+                    'end_time' => $endTime,
+                    'teacher_id' => $teacherId,
+                    'original_teacher_id' => $teacherId, // Lưu vết GV gốc
+                    'room_id' => $roomId,
+                    'schedule_type' => ScheduleType::Extra->value,
+                    'status' => ScheduleStatus::Upcoming->value,
+                    'fee_type' => $feeType->value,
+                    'teacher_salary_snapshot' => $salarySnapshot,
+                    'custom_salary' => $salarySnapshot,
+                    'custom_fee_per_session' => $fee,
+                    'created_by' => Auth::id(),
+                ]);
+                $studentIds = $records->pluck('id')->toArray();
+                // Dùng sync() để lưu vào bảng schedule_instance_participants
+                $instance->participants()->sync($studentIds);
+
+                return $instance;
+            }, useTransaction: true);
     }
 }

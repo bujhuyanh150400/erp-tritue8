@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Constants\SalaryType;
 use App\Core\Traits\HasBigIntId;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -14,18 +15,15 @@ class TeacherSalaryConfig extends Model
 
     protected $fillable = [
         'teacher_id',
-        'class_id',
         'salary_per_session',
-        'effective_from',
-        'effective_to',
+        'salary_type',
     ];
 
     protected function casts(): array
     {
         return [
             'salary_per_session' => 'decimal:0',
-            'effective_from'     => 'date',
-            'effective_to'       => 'date',
+            'salary_type' => SalaryType::class,
         ];
     }
 
@@ -34,10 +32,6 @@ class TeacherSalaryConfig extends Model
         return $this->belongsTo(Teacher::class);
     }
 
-    public function class(): BelongsTo
-    {
-        return $this->belongsTo(SchoolClass::class, 'class_id');
-    }
 
     public function isActive(): bool
     {

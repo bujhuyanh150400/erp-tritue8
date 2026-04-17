@@ -37,9 +37,6 @@ class StaffService extends BaseService
 
                 return ServiceReturn::success($staff);
             },
-            catchCallback: function (\Throwable $e) {
-                dd($e);
-            },
             returnCatchCallback: function () use ($dto) {
                 return ServiceReturn::success(
                     data: new LengthAwarePaginator(

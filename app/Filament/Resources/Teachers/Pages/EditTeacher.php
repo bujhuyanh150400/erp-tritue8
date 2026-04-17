@@ -37,7 +37,12 @@ class EditTeacher extends EditRecord
 
     protected function mutateFormDataBeforeFill(array $data): array
     {
-        $data['user_name'] = $this->record->user?->username;
+        $salaryConfig = $this->record->salaryConfig;
+        $user = $this->record->user;
+        $data['user_name'] = $user?->username;
+        $data['salary_per_session'] = $salaryConfig?->salary_per_session;
+        $data['salary_type'] = $salaryConfig?->salary_type;
+
         return $data;
     }
 
