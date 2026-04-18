@@ -17,7 +17,7 @@ class TuitionInvoiceResource extends Resource
     protected static ?string $model = TuitionInvoice::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::Banknotes;
-    protected static string|UnitEnum|null $navigationGroup = NavigationGroup::FINANCE;
+    protected static string|UnitEnum|null $navigationGroup = NavigationGroup::REPORT;
     protected static ?string $navigationLabel = 'Hóa đơn học phí';
     protected static ?string $modelLabel = 'Hóa đơn học phí';
     protected static ?int $navigationSort = 1;

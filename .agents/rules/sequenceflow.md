@@ -202,7 +202,7 @@ Moi action nhay cam phai check 3 lop:
 Khong duoc chi dua vao visibility o UI.
 
 ## 6) Logging va traceability
-Moi action quan trong phai ghi `user_logs`:
+Moi action  phai ghi, su dung  `Logging::userActivity`:
 - action key (vd: create_student, update_class, approve_schedule_change)
 - actor (user_id)
 - target (model/id)
@@ -235,6 +235,14 @@ Khuyen nghi bo sung correlation_id cho cac flow dai (optional).
   - CRUD
   - reusable data access methods
 - Khong chua business state machine.
+
+### 7.4 Method comment convention (bat buoc)
+- Moi method moi/duoc sua phai co comment mo ta ro:
+  - method dung de lam gi
+  - input/ngu canh chinh (neu co)
+  - output/ket qua tra ve
+- Uu tien dung PHPDoc ngay tren method de de doc va de maintain.
+- Khong viet comment chung chung kieu "xu ly du lieu", phai mo ta du nghiep vu.
 
 ## 8) Template pseudo-code chuan
 

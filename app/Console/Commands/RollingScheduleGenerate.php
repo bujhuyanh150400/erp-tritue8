@@ -16,7 +16,7 @@ class RollingScheduleGenerate extends Command
     public function handle(ClassScheduleTemplateRepository $classScheduleTemplateRepository)
     {
         // Nhắm đến tuần thứ 5 tính từ hiện tại (Giữ vùng đệm 4 tuần)
-        $targetWeekStart = Carbon::now()->addWeeks(4)->startOfWeek()->toDateString();
+        $targetWeekStart = Carbon::now()->startOfWeek()->toDateString();
         $targetWeekEnd = Carbon::now()->addWeeks(4)->endOfWeek()->toDateString();
 
         // Tìm các lớp vẫn đang Active và chưa hết hạn
