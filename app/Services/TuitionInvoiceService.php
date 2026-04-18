@@ -22,7 +22,11 @@ use App\Repositories\TuitionInvoiceRepository;
 use App\Repositories\UserLogRepository;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
+use Illuminate\Support\Str;
+use RuntimeException;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\Response;
+use ZipArchive;
 
 class TuitionInvoiceService extends BaseService
 {
@@ -319,11 +323,87 @@ class TuitionInvoiceService extends BaseService
 
         $this->logAction('export_tuition_invoice', "Xuất PDF hóa đơn {$invoice->invoice_number}");
 
-        return Pdf::loadView('pdfs.tuition-invoice', [
-            'invoice' => $invoice,
-        ])
-            ->setPaper('a4')
-            ->download($invoice->invoice_number . '.pdf');
+        return response()->streamDownload(
+            fn () => print($this->renderInvoicePdfContent($invoice)),
+            $invoice->invoice_number . '.pdf',
+            ['Content-Type' => 'application/pdf']
+        );
+    }
+
+    public function prepareBulkInvoiceZip(EloquentCollection $invoices): ServiceReturn
+    {
+        return $this->execute(function () use ($invoices) {
+            $exportableInvoices = $invoices
+                ->filter(fn (TuitionInvoice $invoice) => filled($invoice->id))
+                ->values();
+
+            if ($exportableInvoices->isEmpty()) {
+                throw new ServiceException('Không có hóa đơn nào hợp lệ để xuất.');
+            }
+
+            if (! class_exists(ZipArchive::class)) {
+                throw new ServiceException('Máy chủ chưa hỗ trợ ZipArchive để xuất file ZIP.');
+            }
+
+            $exportableInvoices->loadMissing([
+                'student.user',
+                'class.teacher',
+                'logs.changedBy',
+            ]);
+
+            $directory = storage_path('app/temp/tuition-invoice-exports');
+
+            if (! is_dir($directory) && ! mkdir($directory, 0777, true) && ! is_dir($directory)) {
+                throw new RuntimeException("Không thể tạo thư mục tạm tại {$directory}.");
+            }
+
+            $fileName = 'hoa-don-hoc-phi-' . now()->format('Ymd-His') . '-' . Str::random(6) . '.zip';
+            $filePath = $directory . DIRECTORY_SEPARATOR . $fileName;
+            $zip = new ZipArchive();
+
+            if ($zip->open($filePath, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) {
+                throw new RuntimeException('Không thể khởi tạo file ZIP để xuất hóa đơn.');
+            }
+
+            try {
+                foreach ($exportableInvoices as $invoice) {
+                    $zip->addFromString(
+                        $invoice->invoice_number . '.pdf',
+                        $this->renderInvoicePdfContent($invoice)
+                    );
+                }
+            } catch (\Throwable $e) {
+                $zip->close();
+
+                if (file_exists($filePath)) {
+                    @unlink($filePath);
+                }
+
+                throw $e;
+            }
+
+            $zip->close();
+
+            $this->logAction(
+                'export_bulk_tuition_invoice',
+                'Xuất ZIP ' . $exportableInvoices->count() . ' hóa đơn học phí lúc ' . now()->format('d/m/Y H:i:s')
+            );
+
+            return ServiceReturn::success([
+                'file_name' => $fileName,
+                'file_path' => $filePath,
+                'count' => $exportableInvoices->count(),
+            ], "Đã chuẩn bị {$exportableInvoices->count()} hóa đơn để tải về");
+        });
+    }
+
+    public function downloadPreparedZip(array $payload): BinaryFileResponse
+    {
+        return response()->download(
+            $payload['file_path'],
+            $payload['file_name'],
+            ['Content-Type' => 'application/zip']
+        )->deleteFileAfterSend(true);
     }
 
     protected function createInvoiceNotification(TuitionInvoice $invoice, string $title, string $content): void
@@ -400,5 +480,14 @@ class TuitionInvoiceService extends BaseService
 
         $this->userLogRepository->log(auth()->id(), $action, $description);
         Logging::userActivity($action, $description, auth()->id());
+    }
+
+    protected function renderInvoicePdfContent(TuitionInvoice $invoice): string
+    {
+        return Pdf::loadView('pdfs.tuition-invoice', [
+            'invoice' => $invoice,
+        ])
+            ->setPaper('a4')
+            ->output();
     }
 }

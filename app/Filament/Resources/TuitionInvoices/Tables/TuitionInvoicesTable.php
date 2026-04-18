@@ -42,53 +42,32 @@ class TuitionInvoicesTable
                 return $repository->getListingQuery();
             })
             ->columns([
-                TextColumn::make('invoice_number')
-                    ->label('Số HĐ')
-                    ->searchable()
-                    ->weight('bold'),
-
                 TextColumn::make('student_name')
-                    ->label('Học sinh')
-                    ->searchable(),
-
-                TextColumn::make('class_name')
-                    ->label('Lớp')
+                    ->label('Danh sách học sinh cần thanh toán tháng này')
                     ->searchable()
-                    ->description(fn (TuitionInvoice $record) => $record->teacher_name ?: null),
+                    ->weight('bold')
+                    ->description(fn (TuitionInvoice $record) => ($record->class_name ?? $record->class?->name ?? '-') . (($record->teacher_name ?? null) ? ' • ' . $record->teacher_name : '')),
 
-                TextColumn::make('month')
-                    ->label('Tháng')
-                    ->badge(),
-
-                TextColumn::make('total_sessions')
-                    ->label('Tổng buổi'),
-
-                TextColumn::make('attended_sessions')
-                    ->label('Buổi có mặt'),
+                TextColumn::make('session_summary')
+                    ->label('Tổng số buổi / Buổi có mặt')
+                    ->state(fn (TuitionInvoice $record) => (int) $record->total_sessions . ' / ' . (int) $record->attended_sessions)
+                    ->badge()
+                    ->color('gray'),
 
                 TextColumn::make('total_study_fee')
-                    ->label('Học phí')
+                    ->label('Tổng học phí')
                     ->money('VND'),
 
                 TextColumn::make('previous_debt')
-                    ->label('Nợ cũ')
+                    ->label('Nợ cũ chưa đóng')
                     ->money('VND'),
 
                 TextColumn::make('total_amount')
                     ->label('Tổng phải thu')
                     ->money('VND'),
 
-                TextColumn::make('paid_amount')
-                    ->label('Đã thanh toán')
-                    ->money('VND'),
-
-                TextColumn::make('remaining_amount')
-                    ->label('Còn lại')
-                    ->money('VND')
-                    ->color(fn ($state) => ((int) $state > 0) ? 'danger' : 'success'),
-
                 TextColumn::make('status')
-                    ->label('Trạng thái')
+                    ->label('Trạng thái thanh toán')
                     ->badge()
                     ->formatStateUsing(fn (InvoiceStatus $state) => $state->label())
                     ->color(fn (InvoiceStatus $state) => match ($state) {
@@ -96,6 +75,26 @@ class TuitionInvoicesTable
                         InvoiceStatus::PartiallyPaid => 'warning',
                         InvoiceStatus::Paid => 'success',
                         InvoiceStatus::Cancelled => 'gray',
+                    }),
+
+                TextColumn::make('latest_payment_method')
+                    ->label('Hình thức thanh toán')
+                    ->formatStateUsing(function ($state, TuitionInvoice $record) {
+                        if (blank($state)) {
+                            return (int) $record->paid_amount > 0 ? 'Đã thanh toán, chưa có log phương thức' : 'Chưa thanh toán';
+                        }
+
+                        return PaymentMethod::tryFrom((int) $state)?->label() ?? '-';
+                    })
+                    ->badge()
+                    ->color(function ($state) {
+                        $paymentMethod = filled($state) ? PaymentMethod::tryFrom((int) $state) : null;
+
+                        return match ($paymentMethod) {
+                            PaymentMethod::Cash => 'warning',
+                            PaymentMethod::BankTransfer => 'info',
+                            default => 'gray',
+                        };
                     }),
             ])
             ->filters([
@@ -358,6 +357,25 @@ class TuitionInvoicesTable
                                 ->title($result->getMessage())
                                 ->body('Hệ thống đã thanh toán hết số tiền còn nợ của các hóa đơn đã chọn.')
                                 ->send();
+                        })
+                        ->deselectRecordsAfterCompletion(),
+                    BulkAction::make('export_bulk_pdf')
+                        ->label('Xuất hóa đơn hàng loạt')
+                        ->icon(Heroicon::ArchiveBoxArrowDown)
+                        ->color('info')
+                        ->requiresConfirmation()
+                        ->modalHeading('Xuất hóa đơn học phí hàng loạt')
+                        ->modalDescription('Hệ thống sẽ tạo một file ZIP chứa PDF của tất cả hóa đơn đã chọn.')
+                        ->action(function (Collection $records) {
+                            $service = app(TuitionInvoiceService::class);
+                            $result = $service->prepareBulkInvoiceZip($records);
+
+                            if ($result->isError()) {
+                                Notification::make()->danger()->title('Lỗi')->body($result->getMessage())->send();
+                                throw new Halt();
+                            }
+
+                            return $service->downloadPreparedZip($result->getData());
                         })
                         ->deselectRecordsAfterCompletion(),
                 ]),

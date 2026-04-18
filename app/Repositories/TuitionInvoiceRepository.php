@@ -3,6 +3,7 @@
 namespace App\Repositories;
 
 use App\Constants\InvoiceStatus;
+use App\Constants\PaymentMethod;
 use App\Core\Repository\BaseRepository;
 use App\Models\TuitionInvoice;
 use Illuminate\Database\Eloquent\Builder;
@@ -34,6 +35,14 @@ class TuitionInvoiceRepository extends BaseRepository
                 'classes.grade_level as class_grade_level',
                 'teachers.full_name as teacher_name',
                 DB::raw('(tuition_invoices.total_amount - tuition_invoices.paid_amount) as remaining_amount'),
+                DB::raw("(
+                    SELECT til.payment_method
+                    FROM tuition_invoice_logs as til
+                    WHERE til.invoice_id = tuition_invoices.id
+                        AND til.is_cancelled = false
+                    ORDER BY til.paid_at DESC, til.id DESC
+                    LIMIT 1
+                ) as latest_payment_method"),
             ]);
     }
 
@@ -73,14 +82,41 @@ class TuitionInvoiceRepository extends BaseRepository
 
     public function getSummaryStats(array $filters = []): object
     {
-        $query = $this->applyFilters($this->getBaseQuery(), $filters);
-
-        return $query->selectRaw('
-                COALESCE(SUM(tuition_invoices.total_study_fee), 0) as total_study_fee,
-                COALESCE(SUM(tuition_invoices.previous_debt), 0) as total_previous_debt,
-                COALESCE(SUM(tuition_invoices.total_amount - tuition_invoices.paid_amount), 0) as total_remaining
+        $invoiceSummary = $this->applyFilters($this->getBaseQuery(), $filters)
+            ->selectRaw('
+                COUNT(DISTINCT CASE WHEN (tuition_invoices.total_amount - tuition_invoices.paid_amount) <= 0 THEN tuition_invoices.student_id END) as paid_student_count,
+                COUNT(DISTINCT CASE WHEN (tuition_invoices.total_amount - tuition_invoices.paid_amount) > 0 THEN tuition_invoices.student_id END) as unpaid_student_count,
+                COALESCE(SUM(tuition_invoices.paid_amount), 0) as total_paid_amount,
+                COALESCE(SUM(tuition_invoices.total_amount - tuition_invoices.paid_amount), 0) as total_unpaid_amount
             ')
             ->first();
+
+        $filteredInvoiceIds = $this->applyFilters($this->getBaseQuery(), $filters)
+            ->select('tuition_invoices.id');
+
+        $paymentSummary = DB::table('tuition_invoice_logs')
+            ->where('is_cancelled', false)
+            ->whereIn('invoice_id', $filteredInvoiceIds)
+            ->selectRaw(
+                '
+                COALESCE(SUM(CASE WHEN payment_method = ? THEN amount ELSE 0 END), 0) as total_cash_amount,
+                COALESCE(SUM(CASE WHEN payment_method = ? THEN amount ELSE 0 END), 0) as total_bank_transfer_amount
+                ',
+                [
+                    PaymentMethod::Cash->value,
+                    PaymentMethod::BankTransfer->value,
+                ]
+            )
+            ->first();
+
+        return (object) [
+            'paid_student_count' => (int) ($invoiceSummary->paid_student_count ?? 0),
+            'unpaid_student_count' => (int) ($invoiceSummary->unpaid_student_count ?? 0),
+            'total_paid_amount' => (int) ($invoiceSummary->total_paid_amount ?? 0),
+            'total_unpaid_amount' => (int) ($invoiceSummary->total_unpaid_amount ?? 0),
+            'total_cash_amount' => (int) ($paymentSummary->total_cash_amount ?? 0),
+            'total_bank_transfer_amount' => (int) ($paymentSummary->total_bank_transfer_amount ?? 0),
+        ];
     }
 
     public function syncStatus(TuitionInvoice $invoice): TuitionInvoice
