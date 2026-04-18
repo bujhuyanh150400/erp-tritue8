@@ -152,7 +152,6 @@
     - teacher_id (unsigned bigint) - ID giáo viên, khóa ngoại tham chiếu đến teachers.id
     - grade_level (unsigned tinyint) - Học kỳ, lưu trong GradeLevel
     - base_fee_per_session decimal(10,0) - Học phí cơ bản/buổi của lớp. HS có thể có giá riêng
-    - teacher_salary_per_session decimal(10,0) - Lương GV cơ bản/buổi cho lớp này
     - max_students (unsigned tinyint default 0) - Số HS tối đa (để cảnh báo khi đầy)
     - status (unsigned tinyint default 0) - Trạng thái, lưu trong ClassStatus
     - start_at (date) - Ngày khai giảng
@@ -293,7 +292,7 @@
     - id (unsigned bigint auto increment)
     - schedule_instance_id (unsigned bigint) - ID buổi học, khóa ngoại tham chiếu schedule_instances.id
     - student_id (unsigned bigint) - ID học sinh, khóa ngoại tham chiếu students.id
-    - is_fee_counted (boolean default false) - Đánh dấu buổi học này có tính học phí cho học sinh này không
+    - fee_amount (decimal(10,0) nullable) - Học phí cho học sinh này trong buổi học này. Cho phép tùy chỉnh theo từng học sinh nếu cần.
     - created_at (timestamp)
     - updated_at (timestamp)
 
@@ -475,17 +474,13 @@
     # cấu trúc
     - id (unsigned bigint auto increment)
     - teacher_id (unsigned bigint) - ID giáo viên, khóa ngoại tham chiếu đến teachers.id
-    - class_id (unsigned bigint) - ID lớp học, khóa ngoại tham chiếu đến classes.id
-    - salary_per_session decimal(10,0) - Lương mỗi buổi
-    - effective_from (date) - Ngày bắt đầu áp dụng
-    - effective_to (date nullable) - Ngày kết thúc áp dụng
+    - salary_per_session decimal(10,0) - Lương mỗi buổi / tháng tùy theo loại lương
+    - salary_type (unsigned tinyint) - Loại lương, lưu trong SalaryType
     - created_at (timestamp) - Thời gian tạo
     - updated_at (timestamp) - Thời gian cập nhật
 
     # index
     - foreign(teacher_id) references teachers(id)
-    - foreign(class_id) references classes(id)
-    - index(teacher_id, class_id)
 
 ## staff_shifts
 

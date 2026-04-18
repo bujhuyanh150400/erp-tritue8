@@ -7,6 +7,7 @@ use App\Constants\AttendanceSessionStatus;
 use App\Constants\ClassStatus;
 use App\Constants\DayOfWeek;
 use App\Constants\ScheduleStatus;
+use App\Constants\ScheduleType;
 use App\Core\Interfaces\FilterFilament;
 use App\Core\Repository\BaseRepository;
 use App\Models\ClassEnrollment;
@@ -253,5 +254,25 @@ class ScheduleInstanceRepository extends BaseRepository implements FilterFilamen
             ->where('si.status', '!=', ScheduleStatus::Cancelled->value)
             ->selectRaw('COUNT(DISTINCT si.id) as total_sessions')
             ->value('total_sessions');
+    }
+
+    /**
+     * Query danh sach buoi nghi co the tao lich bu.
+     * Buoi hop le khi:
+     * - Da la buoi nghi (Holiday + Cancelled)
+     * - Chua co attendance
+     * - Chua co buoi makeup tro toi
+     * - Khong phai chinh no dang la buoi makeup cua buoi khac
+     */
+    public function getMakeupCandidateQuery(): Builder
+    {
+        return $this->query()
+            ->with(['class', 'teacher', 'room'])
+            ->whereNotNull('class_id')
+            ->where('schedule_type', ScheduleType::Holiday->value)
+            ->where('status', ScheduleStatus::Cancelled->value)
+            ->whereNull('linked_makeup_for')
+            ->whereDoesntHave('attendanceSession')
+            ->whereDoesntHave('makeupInstance');
     }
 }

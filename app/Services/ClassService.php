@@ -76,7 +76,6 @@ class ClassService extends BaseService implements SelectableServiceInterface
                     'teacher_id' => $data['teacher_id'],
                     'grade_level' => $data['grade_level'],
                     'base_fee_per_session' => $data['base_fee_per_session'],
-                    'teacher_salary_per_session' => $data['teacher_salary_per_session'],
                     'max_students' => $data['max_students'],
                     'start_at' => $data['start_at'],
                     'end_at' => $data['end_at'] ?? null,

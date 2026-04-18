@@ -15,6 +15,7 @@ use App\Repositories\ClassRepository;
 use App\Repositories\MonthlyReportRepository;
 use App\Repositories\ScoreRepository;
 use App\Repositories\TeacherRepository;
+use App\Repositories\TeacherSalaryConfigRepository;
 use App\Repositories\UserRepository;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Hash;
@@ -24,6 +25,7 @@ class TeacherService extends BaseService implements SelectableServiceInterface
     public function __construct(
         protected TeacherRepository $teacherRepository,
         protected UserRepository $userRepository,
+        protected TeacherSalaryConfigRepository $teacherSalaryConfigRepository,
         protected ClassRepository $classRepository,
         protected AttendanceSessionRepository $attendanceSessionRepository,
         protected MonthlyReportRepository $monthlyReportRepository,
@@ -63,6 +65,13 @@ class TeacherService extends BaseService implements SelectableServiceInterface
                     'color' => $data['color'] ?? null,
                     'joined_at' => Carbon::parse($data['joined_at']),
                 ]);
+
+                $this->teacherSalaryConfigRepository->create([
+                    'teacher_id' => $teacher->id,
+                    'salary_per_session' => $data['salary_per_session'],
+                    'salary_type' => $data['salary_type'],
+                ]);
+
                 return ServiceReturn::success(
                     data: $teacher,
                     message: 'Tạo hồ sơ giáo viên thành công'
@@ -98,11 +107,33 @@ class TeacherService extends BaseService implements SelectableServiceInterface
                     'updated_at' => now(),
                 ];
 
-                $updated = $this->teacherRepository->updateById($teacher->id, $teacherData);
+                $this->teacherRepository->updateById($teacher->id, $teacherData);
 
-                if (!$updated) {
-                    throw new ServiceException('Cập nhật giáo viên thất bại.');
+                $configSalary = $this->teacherSalaryConfigRepository
+                    ->query()
+                    ->where('teacher_id', $teacher->id)
+                    ->first();
+
+                if ($configSalary) {
+                    $configSalary->update([
+                        'salary_per_session' => $data['salary_per_session'],
+                        'salary_type' => $data['salary_type'],
+                    ]);
+                }else{
+                    $this->teacherSalaryConfigRepository->create([
+                        'teacher_id' => $teacher->id,
+                        'salary_per_session' => $data['salary_per_session'],
+                        'salary_type' => $data['salary_type'],
+                    ]);
                 }
+
+                if (!empty($data['password'])) {
+                    $this->userRepository->updateById($teacher->user_id, [
+                        'password' => Hash::make($data['password']),
+                    ]);
+                }
+
+
 
                 Logging::userActivity(
                     action: 'Cập nhật giáo viên',

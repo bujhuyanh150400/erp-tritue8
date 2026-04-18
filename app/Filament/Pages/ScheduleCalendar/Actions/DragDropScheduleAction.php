@@ -58,19 +58,29 @@ class DragDropScheduleAction extends Action
                 ");
             })
             ->modalWidth(Width::Large)
-            ->schema([
+            ->schema(fn (array $arguments) => [
                 Radio::make('update_type')
                     ->hiddenLabel()
-                    ->options([
-                        'one_time'  => '🕒 Thay đổi tạm thời (Chỉ đổi giờ/ngày của buổi học này)',
-                        'permanent' => '🔄 Thay đổi lịch cố định (Đổi buổi này và ÁP DỤNG cho các tuần sau)',
-                        'makeup'    => '➕ Tạo lịch bù (Báo nghỉ buổi hiện tại, tạo buổi học bù vào giờ mới)',
-                    ])
-                    ->descriptions([
-                        'one_time'  => 'Lịch các tuần sau vẫn giữ nguyên theo thời khóa biểu cũ.',
-                        'permanent' => 'Sẽ cập nhật lại thời khóa biểu gốc của lớp học bắt đầu từ ' . now()->toDateString(),
-                        'makeup'    => 'Buổi học cũ sẽ chuyển trạng thái "Nghỉ", và tạo buổi học bù vào giờ mới.',
-                    ])
+                    ->options(function () use ($arguments) {
+                        $options = [
+                            'one_time'  => '🕒 Thay đổi tạm thời (Chỉ đổi giờ/ngày của buổi học này)',
+                            'permanent' => '🔄 Thay đổi lịch cố định (Đổi buổi này và ÁP DỤNG cho các tuần sau)',
+                        ];
+                        if (!isset($arguments['disable_makeup'])) {
+                            $options['makeup'] = '➕ Tạo lịch bù (Báo nghỉ buổi hiện tại, tạo buổi học bù vào giờ mới)';
+                        }
+                        return $options;
+                    })
+                    ->descriptions(function () use ($arguments) {
+                        $options = [
+                            'one_time'  => 'Lịch các tuần sau vẫn giữ nguyên theo thời khóa biểu cũ.',
+                            'permanent' => 'Sẽ cập nhật lại thời khóa biểu gốc của lớp học bắt đầu từ ' . now()->toDateString(),
+                        ];
+                        if (!isset($arguments['disable_makeup'])) {
+                            $options['makeup'] = 'Buổi học cũ sẽ chuyển trạng thái "Nghỉ", và tạo buổi học bù vào giờ mới.';
+                        }
+                        return $options;
+                    })
                     ->default('one_time')
                     ->live()
                     ->required(),
@@ -99,6 +109,12 @@ class DragDropScheduleAction extends Action
                         );
                         break;
                     case 'makeup':
+                        if (isset($arguments['disable_makeup'])) {
+                            CommonNotification::warning()
+                                ->body('Bạn không thể tạo lịch bù".')
+                                ->send();
+                            throw new Halt();
+                        }
                         if (empty(trim($data['reason']))) {
                             CommonNotification::warning()
                                 ->body('Vui lòng cung cấp lý do báo nghỉ để tạo lịch bù.')

@@ -138,9 +138,4 @@ Theo hien trang code va docs, uu tien tiep theo nen la:
 ---
 Nguon tong hop:
 - `.docs/database.md`
-- `.docs/operations/g1_user_authenticate.md`
-- `.docs/operations/g2_hoc_vu.md`
-- `.docs/operations/g3_lich_hoc.md`
-- `.docs/operations/g4_diem_danh.md`
-- `.docs/operations/g5_tai_chinh.md`
 - Cau truc source hien tai trong `app/`, `database/migrations/`, `routes/`.

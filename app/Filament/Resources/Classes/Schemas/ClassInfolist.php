@@ -102,11 +102,6 @@ class ClassInfolist
                                             ->money('VND')
                                             ->badge()
                                             ->color('success'),
-                                        TextEntry::make('teacher_salary_per_session')
-                                            ->label('Lương GV cơ bản / buổi')
-                                            ->money('VND')
-                                            ->badge()
-                                            ->color('warning'),
                                         Grid::make(2)->schema([
                                             TextEntry::make('start_at')
                                                 ->label('Khai giảng')

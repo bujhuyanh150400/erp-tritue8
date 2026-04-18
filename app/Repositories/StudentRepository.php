@@ -24,23 +24,12 @@ class StudentRepository extends BaseRepository implements FilterFilament
     public function getListingQuery(Builder $query): Builder
     {
         return $this->query()
-            ->with(['user'])
-            ->addSelect([
-                'students.*',
-                // Môn đang học
-                'subject_names' => DB::table('class_enrollments')
-                    ->join('classes', 'class_enrollments.class_id', '=', 'classes.id')
-                    ->join('subjects', 'classes.subject_id', '=', 'subjects.id')
-                    ->whereColumn('class_enrollments.student_id', 'students.id')
-                    ->whereNull('class_enrollments.left_at')
-                    ->select(DB::raw("string_agg(subjects.name, ',')")),
-
-                // Tổng số sao (Reward Points)
-                'total_stars' => DB::table('reward_points')
-                    ->whereColumn('student_id', 'students.id')
-                    ->selectRaw('COALESCE(SUM(amount), 0)'),
-
-            ]);
+            ->with([
+                'user',
+                'activeClassEnrollments.class' // Eager load luôn danh sách lớp đang học
+            ])
+            // Hàm này tự động sinh ra cột 'total_stars' tính tổng cột 'amount'
+            ->withSum('rewardPoints as total_stars', 'amount');
     }
 
     /**
@@ -71,6 +60,12 @@ class StudentRepository extends BaseRepository implements FilterFilament
 
         if (! empty($filters['grade_level'])) {
             $query->where('grade_level', $filters['grade_level']);
+        }
+
+        if (! empty($filters['class_id'])) {
+            $query->whereHas('activeClassEnrollments', function ($query) use ($filters) {
+                $query->where('class_id', $filters['class_id']);
+            });
         }
 
 

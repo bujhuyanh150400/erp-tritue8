@@ -3,18 +3,19 @@
 namespace App\Constants;
 
 use App\Core\Traits\EnumHelper;
+use Filament\Support\Contracts\HasLabel;
 
-enum SalaryType: int
+enum SalaryType: int implements HasLabel
 {
     use EnumHelper;
-    case Hourly = 0; // Theo giờ
-    case Fixed  = 1; // Cố định tháng
+    case Session = 1; // Theo ca
+    case Fixed  = 2; // Cố định tháng
 
     public function label(): string
     {
         return match($this) {
-            self::Hourly => 'Theo giờ',
-            self::Fixed  => 'Cố định',
+            self::Session => 'Theo ca',
+            self::Fixed  => 'Cố định tháng',
         };
     }
 }

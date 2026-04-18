@@ -2,18 +2,14 @@
 
 namespace App\Filament\Pages\ScheduleCalendar\Widgets;
 
+use App\Filament\Components\CommonNotification;
+use App\Filament\Pages\ScheduleCalendar\Actions\CreateExtraScheduleAction;
+use App\Filament\Pages\ScheduleCalendar\Actions\CreateHolidayScheduleAction;
+use App\Filament\Pages\ScheduleCalendar\Actions\CreateMakeupScheduleAction;
 use App\Filament\Pages\ScheduleCalendar\Actions\DragDropScheduleAction;
 use App\Filament\Pages\ScheduleCalendar\Actions\ViewScheduleInstanceAction;
-use App\Models\ScheduleInstance;
 use App\Services\AttendanceService;
 use App\Services\ClassScheduleService;
-use Filament\Actions\Action;
-use Filament\Forms\Components\DatePicker;
-use Filament\Forms\Components\Radio;
-use Filament\Forms\Components\TimePicker;
-use Filament\Notifications\Notification;
-use Filament\Schemas\Components\Grid;
-use Filament\Support\Enums\Width;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\On;
@@ -107,7 +103,7 @@ class AdminCalendarWidget extends FullCalendarWidget
             $this->dispatch('update-teachers', data: array_values($teachersMap));
             return $events;
         } else {
-            Notification::make()
+            CommonNotification::error()
                 ->title('Lỗi')
                 ->body($result->getMessage())
                 ->send();
@@ -189,54 +185,11 @@ class AdminCalendarWidget extends FullCalendarWidget
     protected function headerActions(): array
     {
         return [
-            Action::make('create_schedule_quick')
-                ->modalHeading('Tạo lịch học mới')
-                ->modalWidth('md')
-
-                // TỰ ĐỘNG ĐIỀN DATA VÀO FORM DỰA TRÊN KHOẢNG GIỜ VỪA KÉO
-                ->mountUsing(function ($form, array $arguments) {
-                    if (isset($arguments['start']) && isset($arguments['end'])) {
-                        $start = Carbon::parse($arguments['start']);
-                        $end = Carbon::parse($arguments['end']);
-                        $form->fill([
-                            'date' => $start->format('Y-m-d'),
-                            'start_time' => $start->format('H:i'),
-                            'end_time' => $end->format('H:i'),
-                        ]);
-                    }
-                })
-
-                // ĐỊNH NGHĨA CÁC TRƯỜNG NHẬP LIỆU
-                ->form([
-                    DatePicker::make('date')
-                        ->label('Ngày học')
-                        ->required(),
-
-                    Grid::make(2)->schema([
-                        TimePicker::make('start_time')
-                            ->label('Giờ bắt đầu')
-                            ->required(),
-                        TimePicker::make('end_time')
-                            ->label('Giờ kết thúc')
-                            ->required(),
-                    ]),
-                    // Bác tự thêm các trường khác (teacher_id, room_id,...) vào đây nhé
-                ])
-
-                // XỬ LÝ LƯU DATABASE
-                ->action(function (array $data) {
-                    // Lưu vào database
-                    // \App\Models\ScheduleInstance::create($data);
-
-                    \Filament\Notifications\Notification::make()
-                        ->success()
-                        ->title('Thành công')
-                        ->body('Đã tạo lịch học thành công!')
-                        ->send();
-
-                    // Load lại lịch ngay lập tức
-                    $this->refreshRecords();
-                })
+            CreateMakeupScheduleAction::make('create_makeup_schedule')
+                ->refreshCalendar(),
+            CreateHolidayScheduleAction::make('holiday_schedule_multi')
+                ->refreshCalendar(),
+            CreateExtraScheduleAction::make('extra_schedule'),
         ];
     }
 
@@ -247,6 +200,7 @@ class AdminCalendarWidget extends FullCalendarWidget
             ViewScheduleInstanceAction::make('view_schedule_detail')
                 ->refreshCalendar(),
 
+            // Thay đổi lịch học
             DragDropScheduleAction::make('change_schedule_action')
                 ->refreshCalendar(),
 
@@ -264,10 +218,28 @@ class AdminCalendarWidget extends FullCalendarWidget
      */
     public function onDateSelect(string $start, ?string $end, bool $allDay, ?array $view, ?array $resource): void
     {
-        // Gọi Action 'create_schedule_quick' và truyền thời gian qua
-        $this->mountAction('create_schedule_quick', [
-            'start' => $start,
-            'end' => $end,
+        $newStart = Carbon::parse($start);
+        $newEnd = $end ? Carbon::parse($end) : $newStart->copy()->addHour();
+
+        if ($newEnd->format('H:i:s') === '00:00:00') {
+            $newEnd->subSecond();
+        }
+
+        if (!$newStart->isSameDay($newEnd)) {
+            CommonNotification::warning()
+                ->title('Thao tác bị chặn')
+                ->body('Chỉ có thể tạo lịch học bù trong 1 ngày. Vui lòng chọn lại ô lịch.')
+                ->send();
+            return;
+        }
+
+        if ($newEnd->lessThanOrEqualTo($newStart)) {
+            $newEnd = $newStart->copy()->addHour();
+        }
+
+        $this->mountAction('create_makeup_schedule', [
+            'selected_start' => $newStart->toDateTimeString(),
+            'selected_end' => $newEnd->toDateTimeString(),
         ]);
     }
 
@@ -298,31 +270,22 @@ class AdminCalendarWidget extends FullCalendarWidget
         }
         // Kiểm tra xem có bị lấn sang ngày khác không
         if (!$newStart->isSameDay($checkEnd)) {
-            Notification::make()
-                ->warning()
+            CommonNotification::warning()
                 ->title('Thao tác bị chặn')
                 ->body('Bạn không thể kéo dài buổi học lấn sang ngày khác.')
                 ->send();
             return true;
         }
 
-        $result = $this->scheduleService->editTimeInstance($event['id'], $newStart, $newEnd);
-
-        if ($result->isError()) {
-            Notification::make()
-                ->danger()
-                ->title('Lỗi')
-                ->body($result->getMessage())
-                ->send();
-            return true;
-        }
-        Notification::make()
-            ->success()
-            ->title('Đã đổi giờ học thành công!')
-            ->send();
-
-        $this->refreshRecords();
-        return false;
+        $this->mountAction('change_schedule_action',[
+            'instance_id' => $event['id'],
+            'new_date' => $newStart->copy()->format('d-m-Y'),
+            'new_start'   => $newStart,
+            'new_end'     => $newEnd,
+            'disable_makeup' => true,
+        ]);
+        // Trả về true để ngăn chặn FullCalendar from updating the event in the DOM
+        return true;
     }
 
     /**
@@ -342,4 +305,7 @@ class AdminCalendarWidget extends FullCalendarWidget
         // Trả về true để ngăn chặn FullCalendar from updating the event in the DOM
         return true;
     }
+
+
+
 }

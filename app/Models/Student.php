@@ -42,12 +42,12 @@ class Student extends Model
         return $this->belongsTo(User::class);
     }
 
-    public function enrollments()
+    public function classEnrollments()
     {
         return $this->hasMany(ClassEnrollment::class);
     }
 
-    public function activeEnrollments()
+    public function activeClassEnrollments()
     {
         return $this->hasMany(ClassEnrollment::class)
             ->whereNull('left_at');

@@ -8,6 +8,8 @@ use App\Filament\Components\CommonAction;
 use App\Filament\Components\CustomSelect;
 use App\Models\Student;
 use App\Repositories\StudentRepository;
+use App\Services\ClassService;
+use App\Services\RoomService;
 use App\Services\SubjectService;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
@@ -57,18 +59,15 @@ class StudentsTable
                     ->iconColor('gray')
                     ->description(fn(Student $record) => "SĐT: {$record->parent_phone}"),
 
-                TextColumn::make('subject_names')
-                    ->label('Môn đang học')
+                TextColumn::make('activeClassEnrollments.class.name')
+                    ->label('Lớp đang học')
                     ->badge()
-                    ->separator(',')
-                    ->color('info')
-                    ->placeholder('Chưa vào lớp'),
+                    ->separator(','),
 
                 TextColumn::make('total_stars')
                     ->label('Số sao')
                     ->icon(Heroicon::Star)
                     ->iconColor('warning')
-                    ->sortable()
                     ->alignCenter(),
 
                 IconColumn::make('user.is_active')
@@ -92,21 +91,9 @@ class StudentsTable
                                 ->label('Khối')
                                 ->searchable()
                                 ->options(GradeLevel::options()),
-                            CustomSelect::make('subject_id')
-                                ->label('Môn học')
-                                ->placeholder("Chọn môn học")
-                                ->noOptionsMessage("Không tìm thấy môn học nào.")
-                                ->getOptionSelectService(SubjectService::class),
-//                SelectFilter::make('class_id')
-//                    ->label('Lớp')
-//                    ->searchable()
-//                    ->preload(),
-
-
-//                SelectFilter::make('teacher_id')
-//                    ->label('Giáo viên')
-//                    ->options(fn () => User::where('role', 'teacher')->pluck('username', 'id'))
-//                    ->searchable(),
+                            CustomSelect::make('class_id')
+                                ->label('Lớp học')
+                                ->getOptionSelectService(ClassService::class),
                         ])
                         ->query(function (Builder $query, array $data, StudentRepository $studentRepo): Builder {
                             return $studentRepo->setFilters($query, $data);
@@ -124,11 +111,6 @@ class StudentsTable
                         ->color(fn($record) => $record->user->is_active ? 'danger' : 'success')
                         ->requiresConfirmation()
                         ->action(fn($record) => $record->user->update(['is_active' => !$record->user->is_active])),
-                ]),
-            ])
-            ->toolbarActions([
-                BulkActionGroup::make([
-                    DeleteBulkAction::make(),
                 ]),
             ]);
     }

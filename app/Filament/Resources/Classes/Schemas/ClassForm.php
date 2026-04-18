@@ -114,14 +114,6 @@ class ClassForm
                                 ->minValue(0)
                                 ->suffix('VND'),
 
-                            TextInput::make('teacher_salary_per_session')
-                                ->label('Lương GV/buổi')
-                                ->helperText("Lương GV/buổi là tiền mà giáo viên được trả mỗi khi tham gia buổi học.")
-                                ->required()
-                                ->numeric()
-                                ->minValue(0)
-                                ->suffix('VND'),
-
                             DatePicker::make('start_at')
                                 ->label('Ngày khai giảng')
                                 ->required()

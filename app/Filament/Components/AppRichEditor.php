@@ -19,7 +19,7 @@ class AppRichEditor extends RichEditor
                 [ToolbarButtonGroup::make('Heading', ['h1', 'h2', 'h3'])->icon('fi-o-heading')],
                 [ToolbarButtonGroup::make('Alignment', ['alignStart', 'alignCenter', 'alignEnd', 'alignJustify'])],
                 ['blockquote', 'codeBlock', 'bulletList', 'orderedList'],
-                ['table'],
+                ['table', 'attachFiles'],
                 ['undo', 'redo'],
             ])
             ->floatingToolbars([
@@ -40,7 +40,9 @@ class AppRichEditor extends RichEditor
             ->extraInputAttributes([
                 'style' => 'min-height: 300px;',
             ])
-            // 3. Tối ưu trải nghiệm
+            ->fileAttachmentsDisk('public') // Lưu vào disk public (storage/app/public)
+            ->fileAttachmentsDirectory('rich-editor/images') // Thư mục lưu ảnh
+            ->fileAttachmentsVisibility('public') // Ảnh có thể truy cập công khai
             ->placeholder('Nhập nội dung tại đây...')
             ->columnSpanFull(); // Thường rich editor sẽ chiếm toàn bộ chiều ngang
     }

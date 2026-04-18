@@ -24,7 +24,7 @@ class CommonNotification
     {
         return Notification::make()
             ->warning()
-            ->color('yellow');
+            ->color('primary');
     }
 
     public static function info(): Notification

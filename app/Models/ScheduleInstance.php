@@ -9,6 +9,7 @@ use App\Core\Traits\HasBigIntId;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Carbon;
 
@@ -112,6 +113,15 @@ class ScheduleInstance extends Model
     public function changeRequests()
     {
         return $this->hasMany(ScheduleChangeRequest::class, 'schedule_instance_id');
+    }
+
+    // Danh sách học sinh tham gia các  Lịch tăng cường/Học bù
+    public function extraParticipants(): BelongsToMany
+    {
+        return $this->belongsToMany(Student::class, 'schedule_instance_participants')
+            ->where('schedule_instances.schedule_type', ScheduleType::Extra->value)
+            ->withPivot('id', 'fee_amount')
+            ->withTimestamps();
     }
 
     // ─── Helpers ─────────────────────────────────────────────────
