@@ -86,6 +86,10 @@
             <td><span class="label">Trạng thái:</span> {{ $invoice->status->label() }}</td>
             <td><span class="label">Ngày xuất:</span> {{ now()->format('d/m/Y H:i') }}</td>
         </tr>
+        <tr>
+            <td><span class="label">Phương thức xuất:</span> {{ $exportPaymentMethod?->label() ?? ($invoice->payment_method?->label() ?? '-') }}</td>
+            <td></td>
+        </tr>
     </table>
 
     <div class="section">

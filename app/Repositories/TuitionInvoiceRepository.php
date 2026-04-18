@@ -2,10 +2,12 @@
 
 namespace App\Repositories;
 
+use App\Constants\GradeLevel;
 use App\Constants\InvoiceStatus;
 use App\Constants\PaymentMethod;
 use App\Core\Repository\BaseRepository;
 use App\Models\TuitionInvoice;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 
@@ -28,21 +30,40 @@ class TuitionInvoiceRepository extends BaseRepository
     {
         return $this->getBaseQuery()
             ->leftJoin('teachers', 'classes.teacher_id', '=', 'teachers.id')
+            ->groupBy('tuition_invoices.student_id', 'students.full_name', 'tuition_invoices.month')
             ->select([
-                'tuition_invoices.*',
+                DB::raw('MIN(tuition_invoices.id) as id'),
+                'tuition_invoices.student_id',
                 'students.full_name as student_name',
-                'classes.name as class_name',
-                'classes.grade_level as class_grade_level',
-                'teachers.full_name as teacher_name',
-                DB::raw('(tuition_invoices.total_amount - tuition_invoices.paid_amount) as remaining_amount'),
-                DB::raw("(
-                    SELECT til.payment_method
-                    FROM tuition_invoice_logs as til
-                    WHERE til.invoice_id = tuition_invoices.id
-                        AND til.is_cancelled = false
-                    ORDER BY til.paid_at DESC, til.id DESC
-                    LIMIT 1
-                ) as latest_payment_method"),
+                'tuition_invoices.month',
+                DB::raw('MAX(tuition_invoices.class_id) as class_id'),
+                DB::raw('MAX(classes.name) as class_name'),
+                DB::raw('MAX(classes.grade_level) as class_grade_level'),
+                DB::raw('MAX(teachers.full_name) as teacher_name'),
+                DB::raw('COUNT(tuition_invoices.id) as invoice_count'),
+                DB::raw('SUM(tuition_invoices.total_sessions) as total_sessions'),
+                DB::raw('SUM(tuition_invoices.attended_sessions) as attended_sessions'),
+                DB::raw('SUM(tuition_invoices.total_study_fee) as total_study_fee'),
+                DB::raw('SUM(tuition_invoices.previous_debt) as previous_debt'),
+                DB::raw('SUM(tuition_invoices.total_amount) as total_amount'),
+                DB::raw('SUM(tuition_invoices.paid_amount) as paid_amount'),
+                DB::raw('MAX(CASE WHEN tuition_invoices.is_locked THEN 1 ELSE 0 END) as is_locked'),
+                DB::raw('
+                    CASE
+                        WHEN COUNT(DISTINCT CASE WHEN tuition_invoices.payment_method IS NOT NULL THEN tuition_invoices.payment_method END) = 1
+                            THEN MAX(tuition_invoices.payment_method)
+                        ELSE NULL
+                    END as payment_method
+                '),
+                DB::raw('COUNT(DISTINCT CASE WHEN tuition_invoices.payment_method IS NOT NULL THEN tuition_invoices.payment_method END) as payment_method_count'),
+                DB::raw('
+                    CASE
+                        WHEN COALESCE(SUM(tuition_invoices.paid_amount), 0) <= 0 THEN 0
+                        WHEN COALESCE(SUM(tuition_invoices.total_amount - tuition_invoices.paid_amount), 0) <= 0 THEN 2
+                        ELSE 1
+                    END as status
+                '),
+                DB::raw('SUM(tuition_invoices.total_amount - tuition_invoices.paid_amount) as remaining_amount'),
             ]);
     }
 
@@ -68,13 +89,7 @@ class TuitionInvoiceRepository extends BaseRepository
         }
 
         if (filled($filters['payment_method'])) {
-            $query->whereExists(function ($sub) use ($filters) {
-                $sub->selectRaw(1)
-                    ->from('tuition_invoice_logs as til')
-                    ->whereColumn('til.invoice_id', 'tuition_invoices.id')
-                    ->where('til.is_cancelled', false)
-                    ->where('til.payment_method', $filters['payment_method']);
-            });
+            $query->where('tuition_invoices.payment_method', $filters['payment_method']);
         }
 
         return $query;
@@ -143,6 +158,15 @@ class TuitionInvoiceRepository extends BaseRepository
             ->exists();
     }
 
+    public function existsForStudentClassMonth(int $studentId, int $classId, string $month): bool
+    {
+        return $this->query()
+            ->where('student_id', $studentId)
+            ->where('class_id', $classId)
+            ->where('month', $month)
+            ->exists();
+    }
+
     public function findPreviousMonthInvoice(int $studentId, int $classId, string $month): ?TuitionInvoice
     {
         return $this->query()
@@ -164,5 +188,44 @@ class TuitionInvoiceRepository extends BaseRepository
             ->max() ?? 0;
 
         return $prefix . str_pad((string) ($lastNumber + 1), 4, '0', STR_PAD_LEFT);
+    }
+
+    public function getStudentInvoicesForMonth(int $studentId, string $month): Collection
+    {
+        return $this->query()
+            ->from('tuition_invoices')
+            ->join('classes', 'tuition_invoices.class_id', '=', 'classes.id')
+            ->leftJoin('subjects', 'classes.subject_id', '=', 'subjects.id')
+            ->leftJoin('teachers', 'classes.teacher_id', '=', 'teachers.id')
+            ->where('tuition_invoices.student_id', $studentId)
+            ->where('tuition_invoices.month', $month)
+            ->orderBy('subjects.name')
+            ->orderBy('classes.name')
+            ->select([
+                'tuition_invoices.*',
+                'classes.name as class_name',
+                'classes.grade_level as class_grade_level',
+                'subjects.name as subject_name',
+                'teachers.full_name as teacher_name',
+            ])
+            ->get();
+    }
+
+    public function getInvoicesForStudentMonthPairs(array $pairs): Collection
+    {
+        if ($pairs === []) {
+            return new Collection();
+        }
+
+        return $this->query()
+            ->where(function (Builder $query) use ($pairs) {
+                foreach ($pairs as $pair) {
+                    $query->orWhere(function (Builder $subQuery) use ($pair) {
+                        $subQuery->where('student_id', $pair['student_id'])
+                            ->where('month', $pair['month']);
+                    });
+                }
+            })
+            ->get();
     }
 }

@@ -5,7 +5,11 @@ namespace App\Services;
 use App\Constants\NotificationChannel;
 use App\Constants\NotificationSendStatus;
 use App\Constants\NotificationType;
+use App\Constants\AttendanceStatus;
+use App\Constants\FeeType;
+use App\Constants\GradeLevel;
 use App\Constants\InvoiceStatus;
+use App\Constants\PaymentMethod;
 use App\Core\Logs\Logging;
 use App\Core\Services\BaseService;
 use App\Core\Services\ServiceException;
@@ -46,10 +50,6 @@ class TuitionInvoiceService extends BaseService
             $monthDate = Carbon::createFromFormat('Y-m', $month)->startOfMonth();
             $monthEnd = $monthDate->copy()->endOfMonth();
 
-            if ($this->tuitionInvoiceRepository->existsForMonth($month)) {
-                throw new ServiceException("Tháng {$month} đã có hóa đơn học phí, không thể tạo lại.");
-            }
-
             $classIds = $this->attendanceSessionRepository->getLockedClassIdsInMonth($monthDate, $monthEnd);
 
             if ($classIds->isEmpty()) {
@@ -57,14 +57,9 @@ class TuitionInvoiceService extends BaseService
             }
 
             $createdCount = 0;
+            $skippedCount = 0;
 
             foreach ($classIds as $classId) {
-                $totalSessions = $this->scheduleInstanceRepository->countBillableSessionsByClassInMonth(
-                    (int) $classId,
-                    $monthDate,
-                    $monthEnd
-                );
-
                 $enrollments = $this->classEnrollmentRepository->getEnrollmentsForBillingMonth(
                     (int) $classId,
                     $monthDate,
@@ -73,6 +68,13 @@ class TuitionInvoiceService extends BaseService
 
                 foreach ($enrollments as $enrollment) {
                     $studentId = (int) $enrollment->student_id;
+
+                    if ($this->tuitionInvoiceRepository->existsForStudentClassMonth($studentId, (int) $classId, $month)) {
+                        $skippedCount++;
+
+                        continue;
+                    }
+
                     $attendanceRows = $this->attendanceRecordRepository->getFeeCountedAttendancesByStudentClassInMonth(
                         $studentId,
                         (int) $classId,
@@ -84,14 +86,13 @@ class TuitionInvoiceService extends BaseService
 
                     foreach ($attendanceRows as $attendanceRow) {
                         $sessionDate = Carbon::parse($attendanceRow->session_date);
-                        $effectiveEnrollment = $this->classEnrollmentRepository->findEffectiveEnrollmentForDate(
-                            (int) $classId,
-                            $studentId,
-                            $sessionDate
+                        $totalStudyFee += $this->resolveAttendanceRowFee(
+                            enrollment: $enrollment,
+                            classId: (int) $classId,
+                            studentId: $studentId,
+                            attendanceRow: $attendanceRow,
+                            sessionDate: $sessionDate,
                         );
-
-                        $totalStudyFee += $effectiveEnrollment?->getEffectiveFeeForDate($sessionDate)
-                            ?? (int) $enrollment->class->base_fee_per_session;
                     }
 
                     $previousInvoice = $this->tuitionInvoiceRepository->findPreviousMonthInvoice(
@@ -103,13 +104,20 @@ class TuitionInvoiceService extends BaseService
                     $previousDebt = max((int) ($previousInvoice?->getRemainingAmount() ?? 0), 0);
                     $totalAmount = $totalStudyFee + $previousDebt;
 
-                    $invoice = $this->tuitionInvoiceRepository->create([
+                    $this->tuitionInvoiceRepository->create([
                         'invoice_number' => $this->tuitionInvoiceRepository->getNextInvoiceNumber($month),
                         'student_id' => $studentId,
                         'class_id' => (int) $classId,
                         'month' => $month,
-                        'total_sessions' => $totalSessions,
-                        'attended_sessions' => $attendanceRows->count(),
+                        'total_sessions' => $attendanceRows->pluck('schedule_instance_id')->unique()->count(),
+                        'attended_sessions' => $attendanceRows
+                            ->whereIn('status', [
+                                AttendanceStatus::Present->value,
+                                AttendanceStatus::Late->value,
+                            ])
+                            ->pluck('schedule_instance_id')
+                            ->unique()
+                            ->count(),
                         'total_study_fee' => $totalStudyFee,
                         'previous_debt' => $previousDebt,
                         'total_amount' => $totalAmount,
@@ -124,6 +132,10 @@ class TuitionInvoiceService extends BaseService
             }
 
             if ($createdCount === 0) {
+                if ($skippedCount > 0) {
+                    throw new ServiceException("Tháng {$month} không có hóa đơn mới để tạo. Dữ liệu hiện có đã được giữ nguyên.");
+                }
+
                 throw new ServiceException("Không có dữ liệu phù hợp để tạo hóa đơn tháng {$month}.");
             }
 
@@ -139,8 +151,11 @@ class TuitionInvoiceService extends BaseService
 
             return ServiceReturn::success([
                 'created_count' => $createdCount,
+                'skipped_count' => $skippedCount,
                 'month' => $month,
-            ], "Đã tạo {$createdCount} hóa đơn học phí tháng {$monthDate->format('m/Y')}");
+            ], $skippedCount > 0
+                ? "Đã tạo {$createdCount} hóa đơn mới, bỏ qua {$skippedCount} hóa đơn đã tồn tại của tháng {$monthDate->format('m/Y')}"
+                : "Đã tạo {$createdCount} hóa đơn học phí tháng {$monthDate->format('m/Y')}");
         }, useTransaction: true);
     }
 
@@ -172,7 +187,7 @@ class TuitionInvoiceService extends BaseService
     public function recordBulkPayment(EloquentCollection $invoices, array $data): ServiceReturn
     {
         return $this->execute(function () use ($invoices, $data) {
-            $payableInvoices = $invoices->filter(
+            $payableInvoices = $this->resolveBulkInvoices($invoices)->filter(
                 fn (TuitionInvoice $invoice) => $invoice->getRemainingAmount() > 0 && ! $invoice->is_locked
             );
 
@@ -200,6 +215,68 @@ class TuitionInvoiceService extends BaseService
                 'total_paid' => $totalPaid,
             ], "Đã thanh toán {$processedCount} hóa đơn");
         }, useTransaction: true);
+    }
+
+    public function getStudentMonthlyInvoiceDetail(TuitionInvoice $invoice): ServiceReturn
+    {
+        return $this->execute(function () use ($invoice) {
+            $invoice->loadMissing('student.user');
+
+            $monthlyInvoices = $this->tuitionInvoiceRepository->getStudentInvoicesForMonth(
+                (int) $invoice->student_id,
+                $invoice->month
+            );
+
+            if ($monthlyInvoices->isEmpty()) {
+                throw new ServiceException('Không tìm thấy dữ liệu học phí của học sinh trong tháng này.');
+            }
+
+            $subjectItems = $monthlyInvoices
+                ->groupBy(fn ($item) => $item->subject_name ?: 'Chưa gán môn học')
+                ->map(function ($items, $subjectName) {
+                    $firstItem = $items->first();
+
+                    return [
+                        'subject_name' => $subjectName,
+                        'class_names' => $items->pluck('class_name')->filter()->unique()->implode(', '),
+                        'grade_levels' => $items
+                            ->pluck('class_grade_level')
+                            ->filter(fn ($level) => $level !== null)
+                            ->map(fn ($level) => GradeLevel::tryFrom((int) $level)?->label())
+                            ->filter()
+                            ->unique()
+                            ->implode(', '),
+                        'teacher_names' => $items->pluck('teacher_name')->filter()->unique()->implode(', '),
+                        'total_sessions' => (int) $items->sum('total_sessions'),
+                        'attended_sessions' => (int) $items->sum('attended_sessions'),
+                        'total_study_fee' => (int) $items->sum('total_study_fee'),
+                        'previous_debt' => (int) $items->sum('previous_debt'),
+                        'total_amount' => (int) $items->sum('total_amount'),
+                        'paid_amount' => (int) $items->sum('paid_amount'),
+                        'remaining_amount' => (int) $items->sum(fn (TuitionInvoice $item) => $item->getRemainingAmount()),
+                        'payment_method' => $firstItem?->payment_method,
+                    ];
+                })
+                ->values();
+
+            $totals = [
+                'total_sessions' => (int) $subjectItems->sum('total_sessions'),
+                'attended_sessions' => (int) $subjectItems->sum('attended_sessions'),
+                'total_study_fee' => (int) $subjectItems->sum('total_study_fee'),
+                'previous_debt' => (int) $subjectItems->sum('previous_debt'),
+                'total_amount' => (int) $subjectItems->sum('total_amount'),
+                'paid_amount' => (int) $subjectItems->sum('paid_amount'),
+                'remaining_amount' => (int) $subjectItems->sum('remaining_amount'),
+            ];
+
+            return ServiceReturn::success([
+                'invoice' => $invoice->refresh(),
+                'student' => $invoice->student,
+                'month' => $invoice->month,
+                'items' => $subjectItems,
+                'totals' => $totals,
+            ]);
+        });
     }
 
     public function updateInvoice(TuitionInvoice $invoice, array $data): ServiceReturn
@@ -253,8 +330,16 @@ class TuitionInvoiceService extends BaseService
                 'cancel_reason' => $cancelReason,
             ]);
 
+            $latestActiveLog = $invoice->logs()
+                ->where('is_cancelled', false)
+                ->whereKeyNot($paymentLog->id)
+                ->orderByDesc('paid_at')
+                ->orderByDesc('id')
+                ->first();
+
             $invoice->update([
                 'paid_amount' => max((int) $invoice->paid_amount - (int) $paymentLog->amount, 0),
+                'payment_method' => $latestActiveLog?->payment_method?->value,
             ]);
 
             $invoice = $this->tuitionInvoiceRepository->syncStatus($invoice->refresh());
@@ -330,10 +415,16 @@ class TuitionInvoiceService extends BaseService
         );
     }
 
-    public function prepareBulkInvoiceZip(EloquentCollection $invoices): ServiceReturn
+    public function prepareBulkInvoiceZip(EloquentCollection $invoices, int $paymentMethod): ServiceReturn
     {
-        return $this->execute(function () use ($invoices) {
-            $exportableInvoices = $invoices
+        return $this->execute(function () use ($invoices, $paymentMethod) {
+            $selectedPaymentMethod = PaymentMethod::tryFrom($paymentMethod);
+
+            if (! $selectedPaymentMethod) {
+                throw new ServiceException('Phương thức xuất hóa đơn không hợp lệ.');
+            }
+
+            $exportableInvoices = $this->resolveBulkInvoices($invoices)
                 ->filter(fn (TuitionInvoice $invoice) => filled($invoice->id))
                 ->values();
 
@@ -357,7 +448,8 @@ class TuitionInvoiceService extends BaseService
                 throw new RuntimeException("Không thể tạo thư mục tạm tại {$directory}.");
             }
 
-            $fileName = 'hoa-don-hoc-phi-' . now()->format('Ymd-His') . '-' . Str::random(6) . '.zip';
+            $methodSlug = str($selectedPaymentMethod->label())->slug('-');
+            $fileName = 'hoa-don-hoc-phi-' . $methodSlug . '-' . now()->format('Ymd-His') . '-' . Str::random(6) . '.zip';
             $filePath = $directory . DIRECTORY_SEPARATOR . $fileName;
             $zip = new ZipArchive();
 
@@ -369,7 +461,7 @@ class TuitionInvoiceService extends BaseService
                 foreach ($exportableInvoices as $invoice) {
                     $zip->addFromString(
                         $invoice->invoice_number . '.pdf',
-                        $this->renderInvoicePdfContent($invoice)
+                        $this->renderInvoicePdfContent($invoice, $selectedPaymentMethod)
                     );
                 }
             } catch (\Throwable $e) {
@@ -386,14 +478,15 @@ class TuitionInvoiceService extends BaseService
 
             $this->logAction(
                 'export_bulk_tuition_invoice',
-                'Xuất ZIP ' . $exportableInvoices->count() . ' hóa đơn học phí lúc ' . now()->format('d/m/Y H:i:s')
+                'Xuất ZIP ' . $exportableInvoices->count() . ' hóa đơn học phí theo phương thức '
+                . $selectedPaymentMethod->label() . ' lúc ' . now()->format('d/m/Y H:i:s')
             );
 
             return ServiceReturn::success([
                 'file_name' => $fileName,
                 'file_path' => $filePath,
                 'count' => $exportableInvoices->count(),
-            ], "Đã chuẩn bị {$exportableInvoices->count()} hóa đơn để tải về");
+            ], "Đã chuẩn bị {$exportableInvoices->count()} hóa đơn {$selectedPaymentMethod->label()} để tải về");
         });
     }
 
@@ -445,6 +538,7 @@ class TuitionInvoiceService extends BaseService
 
         $invoice->update([
             'paid_amount' => (int) $invoice->paid_amount + $amount,
+            'payment_method' => $data['payment_method'],
         ]);
 
         return $this->tuitionInvoiceRepository->syncStatus($invoice->refresh());
@@ -482,12 +576,68 @@ class TuitionInvoiceService extends BaseService
         Logging::userActivity($action, $description, auth()->id());
     }
 
-    protected function renderInvoicePdfContent(TuitionInvoice $invoice): string
+    protected function renderInvoicePdfContent(TuitionInvoice $invoice, ?PaymentMethod $exportPaymentMethod = null): string
     {
         return Pdf::loadView('pdfs.tuition-invoice', [
             'invoice' => $invoice,
+            'exportPaymentMethod' => $exportPaymentMethod,
         ])
             ->setPaper('a4')
             ->output();
+    }
+
+    protected function resolveBulkInvoices(EloquentCollection $records): EloquentCollection
+    {
+        $pairs = $records
+            ->map(function ($record) {
+                $studentId = (int) ($record->student_id ?? 0);
+                $month = (string) ($record->month ?? '');
+
+                if ($studentId <= 0 || $month === '') {
+                    return null;
+                }
+
+                return [
+                    'student_id' => $studentId,
+                    'month' => $month,
+                ];
+            })
+            ->filter()
+            ->unique(fn (array $pair) => $pair['student_id'] . '|' . $pair['month'])
+            ->values()
+            ->all();
+
+        return $this->tuitionInvoiceRepository->getInvoicesForStudentMonthPairs($pairs);
+    }
+
+    protected function resolveAttendanceRowFee(
+        $enrollment,
+        int $classId,
+        int $studentId,
+        object $attendanceRow,
+        Carbon $sessionDate
+    ): int {
+        if ($attendanceRow->participant_fee_amount !== null) {
+            return (int) $attendanceRow->participant_fee_amount;
+        }
+
+        $feeType = isset($attendanceRow->fee_type) ? FeeType::tryFrom((int) $attendanceRow->fee_type) : null;
+
+        if ($feeType === FeeType::Free) {
+            return 0;
+        }
+
+        if ($attendanceRow->custom_fee_per_session !== null) {
+            return (int) $attendanceRow->custom_fee_per_session;
+        }
+
+        $effectiveEnrollment = $this->classEnrollmentRepository->findEffectiveEnrollmentForDate(
+            $classId,
+            $studentId,
+            $sessionDate
+        );
+
+        return $effectiveEnrollment?->getEffectiveFeeForDate($sessionDate)
+            ?? (int) $enrollment->class->base_fee_per_session;
     }
 }
