@@ -14,6 +14,7 @@ use App\Core\Logs\Logging;
 use App\Core\Services\BaseService;
 use App\Core\Services\ServiceException;
 use App\Core\Services\ServiceReturn;
+use App\Models\Student;
 use Barryvdh\DomPDF\Facade\Pdf;
 use App\Models\Notification;
 use App\Models\TuitionInvoice;
@@ -26,6 +27,7 @@ use App\Repositories\TuitionInvoiceRepository;
 use App\Repositories\UserLogRepository;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use RuntimeException;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
@@ -111,10 +113,21 @@ class TuitionInvoiceService extends BaseService
                         'month' => $month,
                         'total_sessions' => $attendanceRows->pluck('schedule_instance_id')->unique()->count(),
                         'attended_sessions' => $attendanceRows
-                            ->whereIn('status', [
-                                AttendanceStatus::Present->value,
-                                AttendanceStatus::Late->value,
-                            ])
+                            ->filter(function ($attendanceRow) {
+                                $status = $attendanceRow->status;
+
+                                if ($status instanceof AttendanceStatus) {
+                                    return in_array($status, [
+                                        AttendanceStatus::Present,
+                                        AttendanceStatus::Late,
+                                    ], true);
+                                }
+
+                                return in_array((int) $status, [
+                                    AttendanceStatus::Present->value,
+                                    AttendanceStatus::Late->value,
+                                ], true);
+                            })
                             ->pluck('schedule_instance_id')
                             ->unique()
                             ->count(),
@@ -195,14 +208,33 @@ class TuitionInvoiceService extends BaseService
                 throw new ServiceException('Không có hóa đơn nào hợp lệ để thanh toán.');
             }
 
+            $amount = (int) ($data['amount'] ?? 0);
+
+            if ($amount <= 0) {
+                throw new ServiceException('Số tiền thanh toán phải lớn hơn 0.');
+            }
+
+            $totalRemaining = (int) $payableInvoices->sum(fn (TuitionInvoice $invoice) => $invoice->getRemainingAmount());
+
+            if ($amount > $totalRemaining) {
+                throw new ServiceException('Số tiền thanh toán không được lớn hơn tổng số tiền còn lại.');
+            }
+
             $processedCount = 0;
             $totalPaid = 0;
+            $remainingToAllocate = $amount;
 
             foreach ($payableInvoices as $invoice) {
-                $amount = $invoice->getRemainingAmount();
-                $this->applyPayment($invoice, $amount, $data);
+                if ($remainingToAllocate <= 0) {
+                    break;
+                }
+
+                $paymentAmount = min($invoice->getRemainingAmount(), $remainingToAllocate);
+
+                $this->applyPayment($invoice, $paymentAmount, $data);
                 $processedCount++;
-                $totalPaid += $amount;
+                $totalPaid += $paymentAmount;
+                $remainingToAllocate -= $paymentAmount;
             }
 
             $this->logAction(
@@ -374,6 +406,33 @@ class TuitionInvoiceService extends BaseService
         }, useTransaction: true);
     }
 
+    public function sendBulkReminder(EloquentCollection $records): ServiceReturn
+    {
+        return $this->execute(function () use ($records) {
+            $invoices = $this->resolveBulkInvoices($records)
+                ->filter(fn (TuitionInvoice $invoice) => $invoice->getRemainingAmount() > 0 && ! $invoice->is_locked)
+                ->values();
+
+            if ($invoices->isEmpty()) {
+                throw new ServiceException('Không có hóa đơn hợp lệ để nhắc đóng học phí.');
+            }
+
+            foreach ($invoices as $invoice) {
+                $this->createInvoiceNotification(
+                    $invoice,
+                    'Nhắc đóng học phí',
+                    "Hóa đơn {$invoice->invoice_number} còn " . number_format($invoice->getRemainingAmount(), 0, ',', '.') . 'đ cần thanh toán.'
+                );
+            }
+
+            $this->logAction('remind_bulk_tuition_invoice', "Nhắc đóng học phí {$invoices->count()} hóa đơn");
+
+            return ServiceReturn::success([
+                'processed_count' => $invoices->count(),
+            ], "Đã tạo nhắc đóng học phí cho {$invoices->count()} hóa đơn");
+        }, useTransaction: true);
+    }
+
     public function sendReceipt(TuitionInvoice $invoice): ServiceReturn
     {
         return $this->execute(function () use ($invoice) {
@@ -400,17 +459,13 @@ class TuitionInvoiceService extends BaseService
 
     public function downloadInvoicePdf(TuitionInvoice $invoice): Response
     {
-        $invoice->loadMissing([
-            'student.user',
-            'class.teacher',
-            'logs.changedBy',
-        ]);
+        $pdfData = $this->buildMonthlyPdfData($invoice);
 
-        $this->logAction('export_tuition_invoice', "Xuất PDF hóa đơn {$invoice->invoice_number}");
+        $this->logAction('export_tuition_invoice', "Xuất PDF hóa đơn {$pdfData['document_number']}");
 
         return response()->streamDownload(
-            fn () => print($this->renderInvoicePdfContent($invoice)),
-            $invoice->invoice_number . '.pdf',
+            fn () => print($this->renderInvoicePdfContent($pdfData)),
+            Str::slug($pdfData['file_name']) . '.pdf',
             ['Content-Type' => 'application/pdf']
         );
     }
@@ -424,23 +479,18 @@ class TuitionInvoiceService extends BaseService
                 throw new ServiceException('Phương thức xuất hóa đơn không hợp lệ.');
             }
 
-            $exportableInvoices = $this->resolveBulkInvoices($invoices)
-                ->filter(fn (TuitionInvoice $invoice) => filled($invoice->id))
+            $exportableRecords = $invoices
+                ->filter(fn ($record) => filled($record->student_id) && filled($record->month))
+                ->unique(fn ($record) => $record->student_id . '|' . $record->month)
                 ->values();
 
-            if ($exportableInvoices->isEmpty()) {
+            if ($exportableRecords->isEmpty()) {
                 throw new ServiceException('Không có hóa đơn nào hợp lệ để xuất.');
             }
 
             if (! class_exists(ZipArchive::class)) {
                 throw new ServiceException('Máy chủ chưa hỗ trợ ZipArchive để xuất file ZIP.');
             }
-
-            $exportableInvoices->loadMissing([
-                'student.user',
-                'class.teacher',
-                'logs.changedBy',
-            ]);
 
             $directory = storage_path('app/temp/tuition-invoice-exports');
 
@@ -458,10 +508,12 @@ class TuitionInvoiceService extends BaseService
             }
 
             try {
-                foreach ($exportableInvoices as $invoice) {
+                foreach ($exportableRecords as $record) {
+                    $pdfData = $this->buildMonthlyPdfData($record, $selectedPaymentMethod);
+
                     $zip->addFromString(
-                        $invoice->invoice_number . '.pdf',
-                        $this->renderInvoicePdfContent($invoice, $selectedPaymentMethod)
+                        Str::slug($pdfData['file_name']) . '.pdf',
+                        $this->renderInvoicePdfContent($pdfData)
                     );
                 }
             } catch (\Throwable $e) {
@@ -478,15 +530,15 @@ class TuitionInvoiceService extends BaseService
 
             $this->logAction(
                 'export_bulk_tuition_invoice',
-                'Xuất ZIP ' . $exportableInvoices->count() . ' hóa đơn học phí theo phương thức '
+                'Xuất ZIP ' . $exportableRecords->count() . ' phiếu thu học phí theo phương thức '
                 . $selectedPaymentMethod->label() . ' lúc ' . now()->format('d/m/Y H:i:s')
             );
 
             return ServiceReturn::success([
                 'file_name' => $fileName,
                 'file_path' => $filePath,
-                'count' => $exportableInvoices->count(),
-            ], "Đã chuẩn bị {$exportableInvoices->count()} hóa đơn {$selectedPaymentMethod->label()} để tải về");
+                'count' => $exportableRecords->count(),
+            ], "Đã chuẩn bị {$exportableRecords->count()} phiếu thu {$selectedPaymentMethod->label()} để tải về");
         });
     }
 
@@ -576,14 +628,76 @@ class TuitionInvoiceService extends BaseService
         Logging::userActivity($action, $description, auth()->id());
     }
 
-    protected function renderInvoicePdfContent(TuitionInvoice $invoice, ?PaymentMethod $exportPaymentMethod = null): string
+    protected function renderInvoicePdfContent(array $pdfData): string
     {
         return Pdf::loadView('pdfs.tuition-invoice', [
-            'invoice' => $invoice,
-            'exportPaymentMethod' => $exportPaymentMethod,
+            'pdfData' => $pdfData,
         ])
             ->setPaper('a4')
             ->output();
+    }
+
+    protected function buildMonthlyPdfData(TuitionInvoice $invoice, ?PaymentMethod $exportPaymentMethod = null): array
+    {
+        $detailResult = $this->getStudentMonthlyInvoiceDetail($invoice);
+
+        if ($detailResult->isError()) {
+            throw new ServiceException($detailResult->getMessage());
+        }
+
+        $detailData = $detailResult->getData();
+        $student = $detailData['student'];
+        $month = $detailData['month'];
+        $items = collect($detailData['items'] ?? []);
+        $totals = $detailData['totals'] ?? [];
+        $monthlyInvoices = $this->tuitionInvoiceRepository
+            ->getStudentInvoicesForMonth((int) $invoice->student_id, $month)
+            ->loadMissing(['student.user', 'class.teacher', 'logs.changedBy']);
+
+        $logs = $monthlyInvoices
+            ->flatMap(fn (TuitionInvoice $monthlyInvoice) => $monthlyInvoice->logs->where('is_cancelled', false))
+            ->sortBy([
+                ['paid_at', 'asc'],
+                ['id', 'asc'],
+            ])
+            ->values();
+
+        $displayMonth = Carbon::createFromFormat('Y-m', $month)->format('m/Y');
+        $documentNumber = 'PT-' . str_replace('-', '', $month) . '-' . $student->id;
+        $gradeDisplay = $items->pluck('grade_levels')->filter()->unique()->implode(', ');
+
+        $subjectRows = $items->map(function (array $item) {
+            $sessions = max((int) ($item['total_sessions'] ?? 0), 0);
+            $studyFee = (int) ($item['total_study_fee'] ?? 0);
+
+            return [
+                'subject_name' => $item['subject_name'] ?? '-',
+                'class_names' => $item['class_names'] ?: '-',
+                'sessions' => $sessions,
+                'unit_price' => $sessions > 0 ? (int) round($studyFee / $sessions) : $studyFee,
+                'study_fee' => $studyFee,
+                'previous_debt' => (int) ($item['previous_debt'] ?? 0),
+                'total_amount' => (int) ($item['total_amount'] ?? 0),
+                'teacher_names' => $item['teacher_names'] ?: '-',
+                'grade_levels' => $item['grade_levels'] ?: '-',
+            ];
+        })->values();
+
+        return [
+            'document_number' => $documentNumber,
+            'file_name' => 'phieu-thu-' . $student->full_name . '-' . $month,
+            'logo_path' => public_path('assets/images/logo.png'),
+            'student' => $student,
+            'month' => $month,
+            'display_month' => $displayMonth,
+            'grade_display' => $gradeDisplay ?: '-',
+            'subject_count' => $subjectRows->count(),
+            'subject_rows' => $subjectRows,
+            'totals' => $totals,
+            'logs' => $logs,
+            'export_payment_method' => $exportPaymentMethod,
+            'issuer_name' => auth()->user()?->name ?? auth()->user()?->username ?? auth()->user()?->email ?? 'Hệ thống',
+        ];
     }
 
     protected function resolveBulkInvoices(EloquentCollection $records): EloquentCollection
