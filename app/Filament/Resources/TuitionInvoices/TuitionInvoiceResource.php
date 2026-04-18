@@ -4,6 +4,7 @@ namespace App\Filament\Resources\TuitionInvoices;
 
 use App\Filament\Navigation\NavigationGroup;
 use App\Filament\Resources\TuitionInvoices\Pages\ListTuitionInvoices;
+use App\Filament\Resources\TuitionInvoices\Pages\ViewTuitionInvoice;
 use App\Filament\Resources\TuitionInvoices\Tables\TuitionInvoicesTable;
 use App\Models\TuitionInvoice;
 use BackedEnum;
@@ -31,6 +32,7 @@ class TuitionInvoiceResource extends Resource
     {
         return [
             'index' => ListTuitionInvoices::route('/'),
+            'view' => ViewTuitionInvoice::route('/{record}'),
         ];
     }
 }

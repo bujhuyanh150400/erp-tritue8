@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Constants\InvoiceStatus;
+use App\Constants\PaymentMethod;
 use App\Core\Traits\HasBigIntId;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -25,6 +26,7 @@ class TuitionInvoice extends Model
         'previous_debt',
         'total_amount',
         'paid_amount',
+        'payment_method',
         'status',
         'is_locked',
         'note',
@@ -39,6 +41,7 @@ class TuitionInvoice extends Model
             'previous_debt' => 'decimal:0',
             'total_amount' => 'decimal:0',
             'paid_amount' => 'decimal:0',
+            'payment_method' => PaymentMethod::class,
         ];
     }
 

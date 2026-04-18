@@ -12,6 +12,11 @@ class TuitionInvoiceSummaryWidget extends StatsOverviewWidget
 {
     use InteractsWithPageTable;
 
+    protected function getColumns(): int
+    {
+        return 6;
+    }
+
     protected function getTablePage(): string
     {
         return ListTuitionInvoices::class;
@@ -23,18 +28,30 @@ class TuitionInvoiceSummaryWidget extends StatsOverviewWidget
         $summary = app(TuitionInvoiceRepository::class)->getSummaryStats($filters);
 
         return [
-            Stat::make('Tổng học phí tháng', number_format((int) $summary->total_study_fee, 0, ',', '.') . 'đ')
-                ->description('Tổng học phí phát sinh trong tháng đang lọc')
-                ->descriptionIcon('heroicon-m-banknotes')
-                ->color('warning'),
-            Stat::make('Tổng nợ cũ', number_format((int) $summary->total_previous_debt, 0, ',', '.') . 'đ')
-                ->description('Khoản công nợ chuyển từ kỳ trước')
-                ->descriptionIcon('heroicon-m-exclamation-triangle')
-                ->color('danger'),
-            Stat::make('Tổng phải thu', number_format((int) $summary->total_remaining, 0, ',', '.') . 'đ')
-                ->description('Số tiền còn phải thu sau khi trừ đã thanh toán')
-                ->descriptionIcon('heroicon-m-arrow-trending-up')
+            Stat::make('Tổng số học sinh đã đóng học phí', number_format((int) $summary->paid_student_count, 0, ',', '.'))
+                ->description('Đã phát sinh ít nhất một lần thanh toán')
+                ->descriptionIcon('heroicon-m-check-circle')
                 ->color('success'),
+            Stat::make('Tổng số học sinh chưa đóng học phí', number_format((int) $summary->unpaid_student_count, 0, ',', '.'))
+                ->description('Còn số tiền chưa tất toán')
+                ->descriptionIcon('heroicon-m-exclamation-circle')
+                ->color('danger'),
+            Stat::make('Số tiền đã tất toán', number_format((int) $summary->total_paid_amount, 0, ',', '.') . 'đ')
+                ->description('Tổng đã thu')
+                ->descriptionIcon('heroicon-m-banknotes')
+                ->color('success'),
+            Stat::make('Số tiền chưa tất toán', number_format((int) $summary->total_unpaid_amount, 0, ',', '.') . 'đ')
+                ->description('Tổng còn phải thu')
+                ->descriptionIcon('heroicon-m-arrow-trending-up')
+                ->color('danger'),
+            Stat::make('Thanh toán Tiền mặt', number_format((int) $summary->total_cash_amount, 0, ',', '.') . 'đ')
+                ->description('Thanh toán tiền mặt')
+                ->descriptionIcon('heroicon-m-wallet')
+                ->color('warning'),
+            Stat::make('Thanh toán Chuyển khoản', number_format((int) $summary->total_bank_transfer_amount, 0, ',', '.') . 'đ')
+                ->description('Thanh toán chuyển khoản')
+                ->descriptionIcon('heroicon-m-building-library')
+                ->color('info'),
         ];
     }
 }

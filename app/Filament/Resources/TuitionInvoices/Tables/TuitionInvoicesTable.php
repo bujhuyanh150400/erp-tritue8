@@ -6,6 +6,7 @@ use App\Constants\GradeLevel;
 use App\Constants\InvoiceStatus;
 use App\Constants\PaymentMethod;
 use App\Filament\Components\CustomSelect;
+use App\Filament\Resources\TuitionInvoices\TuitionInvoiceResource;
 use App\Models\TuitionInvoice;
 use App\Repositories\TuitionInvoiceLogRepository;
 use App\Repositories\TuitionInvoiceRepository;
@@ -41,54 +42,40 @@ class TuitionInvoicesTable
             ->modifyQueryUsing(function (Builder $query, TuitionInvoiceRepository $repository) {
                 return $repository->getListingQuery();
             })
+            ->checkIfRecordIsSelectableUsing(fn (TuitionInvoice $record): bool => $record->getRemainingAmount() > 0)
             ->columns([
-                TextColumn::make('invoice_number')
-                    ->label('Số HĐ')
-                    ->searchable()
-                    ->weight('bold'),
-
                 TextColumn::make('student_name')
-                    ->label('Học sinh')
-                    ->searchable(),
-
-                TextColumn::make('class_name')
-                    ->label('Lớp')
+                    ->label('Danh sách học sinh cần thanh toán tháng này')
                     ->searchable()
-                    ->description(fn (TuitionInvoice $record) => $record->teacher_name ?: null),
+                    ->weight('bold')
+                    ->description(function (TuitionInvoice $record) {
+                        $gradeLevel = filled($record->class_grade_level)
+                            ? GradeLevel::tryFrom((int) $record->class_grade_level)?->label()
+                            : null;
 
-                TextColumn::make('month')
-                    ->label('Tháng')
-                    ->badge(),
+                        return $gradeLevel ? 'Khối ' . $gradeLevel : null;
+                    }),
 
-                TextColumn::make('total_sessions')
-                    ->label('Tổng buổi'),
-
-                TextColumn::make('attended_sessions')
-                    ->label('Buổi có mặt'),
+                TextColumn::make('session_summary')
+                    ->label('Tổng số buổi / Buổi có mặt')
+                    ->state(fn (TuitionInvoice $record) => (int) $record->total_sessions . ' / ' . (int) $record->attended_sessions)
+                    ->badge()
+                    ->color('gray'),
 
                 TextColumn::make('total_study_fee')
-                    ->label('Học phí')
+                    ->label('Tổng học phí')
                     ->money('VND'),
 
                 TextColumn::make('previous_debt')
-                    ->label('Nợ cũ')
+                    ->label('Nợ cũ chưa đóng')
                     ->money('VND'),
 
                 TextColumn::make('total_amount')
                     ->label('Tổng phải thu')
                     ->money('VND'),
 
-                TextColumn::make('paid_amount')
-                    ->label('Đã thanh toán')
-                    ->money('VND'),
-
-                TextColumn::make('remaining_amount')
-                    ->label('Còn lại')
-                    ->money('VND')
-                    ->color(fn ($state) => ((int) $state > 0) ? 'danger' : 'success'),
-
                 TextColumn::make('status')
-                    ->label('Trạng thái')
+                    ->label('Trạng thái thanh toán')
                     ->badge()
                     ->formatStateUsing(fn (InvoiceStatus $state) => $state->label())
                     ->color(fn (InvoiceStatus $state) => match ($state) {
@@ -96,6 +83,36 @@ class TuitionInvoicesTable
                         InvoiceStatus::PartiallyPaid => 'warning',
                         InvoiceStatus::Paid => 'success',
                         InvoiceStatus::Cancelled => 'gray',
+                    }),
+
+                TextColumn::make('payment_method')
+                    ->label('Hình thức thanh toán')
+                    ->formatStateUsing(function ($state, TuitionInvoice $record) {
+                        if ((int) ($record->payment_method_count ?? 0) > 1) {
+                            return 'Nhiều phương thức';
+                        }
+
+                        if (blank($state)) {
+                            return (int) $record->paid_amount > 0 ? 'Đã thanh toán, chưa chọn phương thức' : 'Chưa thanh toán';
+                        }
+
+                        $paymentMethod = $state instanceof PaymentMethod
+                            ? $state
+                            : PaymentMethod::tryFrom((int) $state);
+
+                        return $paymentMethod?->label() ?? '-';
+                    })
+                    ->badge()
+                    ->color(function ($state) {
+                        $paymentMethod = $state instanceof PaymentMethod
+                            ? $state
+                            : (filled($state) ? PaymentMethod::tryFrom((int) $state) : null);
+
+                        return match ($paymentMethod) {
+                            PaymentMethod::Cash => 'warning',
+                            PaymentMethod::BankTransfer => 'info',
+                            default => 'gray',
+                        };
                     }),
             ])
             ->filters([
@@ -139,21 +156,19 @@ class TuitionInvoicesTable
                     }),
             ], layout: FiltersLayout::AboveContent)
             ->defaultSort('month', 'desc')
+            ->defaultKeySort(false)
             ->recordActions([
                 ActionGroup::make([
                     Action::make('view_detail')
                         ->label('Xem chi tiết')
                         ->icon(Heroicon::DocumentText)
-                        ->modalHeading(fn (TuitionInvoice $record) => 'Chi tiết hóa đơn ' . $record->invoice_number)
-                        ->modalContent(fn (TuitionInvoice $record) => view('filament.resources.tuition-invoices.invoice-detail', [
-                            'record' => $record->load(['student.user', 'class.teacher', 'logs.changedBy']),
-                        ])),
+                        ->url(fn (TuitionInvoice $record) => TuitionInvoiceResource::getUrl('view', ['record' => $record])),
 
                     Action::make('record_payment')
                         ->label('Thanh toán')
                         ->icon(Heroicon::Banknotes)
                         ->color('success')
-                        ->hidden(fn (TuitionInvoice $record) => $record->getRemainingAmount() <= 0 || $record->is_locked)
+                        ->hidden(fn (TuitionInvoice $record) => (int) ($record->invoice_count ?? 1) > 1 || $record->getRemainingAmount() <= 0 || $record->is_locked)
                         ->schema([
                             Grid::make(2)
                                 ->schema([
@@ -210,7 +225,7 @@ class TuitionInvoicesTable
                         ->label('Hủy thanh toán')
                         ->icon(Heroicon::ArrowUturnLeft)
                         ->color('danger')
-                        ->hidden(fn (TuitionInvoice $record) => $record->logs()->where('is_cancelled', false)->count() === 0)
+                        ->hidden(fn (TuitionInvoice $record) => (int) ($record->invoice_count ?? 1) > 1 || $record->logs()->where('is_cancelled', false)->count() === 0)
                         ->schema([
                             Select::make('log_id')
                                 ->label('Lần thanh toán')
@@ -267,7 +282,7 @@ class TuitionInvoicesTable
                         ->label('Chỉnh sửa')
                         ->icon(Heroicon::PencilSquare)
                         ->color('warning')
-                        ->hidden(fn (TuitionInvoice $record) => $record->is_locked)
+                        ->hidden(fn (TuitionInvoice $record) => (int) ($record->invoice_count ?? 1) > 1 || $record->is_locked)
                         ->fillForm(fn (TuitionInvoice $record) => [
                             'previous_debt' => (int) $record->previous_debt,
                             'note' => $record->note,
@@ -298,7 +313,7 @@ class TuitionInvoicesTable
                     Action::make('remind_payment')
                         ->label('Nhắc đóng học phí')
                         ->icon(Heroicon::BellAlert)
-                        ->hidden(fn (TuitionInvoice $record) => $record->getRemainingAmount() <= 0 || $record->is_locked)
+                        ->hidden(fn (TuitionInvoice $record) => (int) ($record->invoice_count ?? 1) > 1 || $record->getRemainingAmount() <= 0 || $record->is_locked)
                         ->action(function (TuitionInvoice $record) {
                             $result = app(TuitionInvoiceService::class)->sendReminder($record);
 
@@ -325,6 +340,7 @@ class TuitionInvoicesTable
                     Action::make('export_pdf')
                         ->label('Xuất PDF')
                         ->icon(Heroicon::DocumentArrowDown)
+                        ->hidden(fn (TuitionInvoice $record) => (int) ($record->invoice_count ?? 1) > 1)
                         ->url(fn (TuitionInvoice $record) => route('tuition-invoices.pdf', ['invoice' => $record]))
                         ->openUrlInNewTab(),
                 ]),
@@ -358,6 +374,31 @@ class TuitionInvoicesTable
                                 ->title($result->getMessage())
                                 ->body('Hệ thống đã thanh toán hết số tiền còn nợ của các hóa đơn đã chọn.')
                                 ->send();
+                        })
+                        ->deselectRecordsAfterCompletion(),
+                    BulkAction::make('export_bulk_pdf')
+                        ->label('Xuất hóa đơn hàng loạt')
+                        ->icon(Heroicon::ArchiveBoxArrowDown)
+                        ->color('info')
+                        ->requiresConfirmation()
+                        ->modalHeading('Xuất hóa đơn học phí hàng loạt')
+                        ->modalDescription('Hệ thống sẽ tạo một file ZIP chứa PDF của tất cả hóa đơn đã chọn.')
+                        ->schema([
+                            Select::make('payment_method')
+                                ->label('Phương thức xuất')
+                                ->options(PaymentMethod::options())
+                                ->required(),
+                        ])
+                        ->action(function (Collection $records, array $data) {
+                            $service = app(TuitionInvoiceService::class);
+                            $result = $service->prepareBulkInvoiceZip($records, (int) $data['payment_method']);
+
+                            if ($result->isError()) {
+                                Notification::make()->danger()->title('Lỗi')->body($result->getMessage())->send();
+                                throw new Halt();
+                            }
+
+                            return $service->downloadPreparedZip($result->getData());
                         })
                         ->deselectRecordsAfterCompletion(),
                 ]),

@@ -541,6 +541,7 @@
     - status (unsigned tinyint) - Trạng thái, lưu trong InvoiceStatus
     - is_locked (boolean) - TRUE sau khi chốt tháng. Không cho sửa nữa
     - note (text nullable) - Ghi chú
+    - payment_method (unsigned tinyint nullable) - Phương thức thanh toán (cash, transfer)
     - created_at (timestamp) - Thời gian tạo
     - updated_at (timestamp) - Thời gian cập nhật
 
