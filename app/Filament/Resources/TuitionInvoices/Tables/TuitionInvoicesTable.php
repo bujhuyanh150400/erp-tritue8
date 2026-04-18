@@ -351,15 +351,15 @@ class TuitionInvoicesTable
                     Action::make('export_pdf')
                         ->label('Xuất PDF')
                         ->icon(Heroicon::DocumentArrowDown)
-                        ->hidden(fn (TuitionInvoice $record) => (int) ($record->invoice_count ?? 1) > 1)
+                        ->hidden()
                         ->url(fn (TuitionInvoice $record) => route('tuition-invoices.pdf', ['invoice' => $record]))
                         ->openUrlInNewTab(),
 
                     Action::make('export_month_zip')
-                        ->label('Xuất ZIP')
-                        ->icon(Heroicon::ArchiveBoxArrowDown)
+                        ->label('Xuất PDF')
+                        ->icon(Heroicon::DocumentArrowDown)
                         ->color('info')
-                        ->hidden(fn (TuitionInvoice $record) => (int) ($record->invoice_count ?? 1) <= 1)
+                        ->hidden(fn (TuitionInvoice $record) => false)
                         ->schema([
                             Select::make('payment_method')
                                 ->label('Phương thức xuất')
