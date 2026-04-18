@@ -7,7 +7,6 @@ use App\Core\Repository\BaseRepository;
 use App\Models\SchoolClass;
 use App\Models\Student;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Support\Facades\DB;
 
 class StudentRepository extends BaseRepository implements FilterFilament
 {
@@ -68,6 +67,41 @@ class StudentRepository extends BaseRepository implements FilterFilament
             });
         }
 
+
+        return $query;
+    }
+
+    /**
+     * Áp dụng bộ lọc cho danh sách báo cáo học sinh (StudentReportResource).
+     * Chỉ kiểm tra trong tháng đã chọn học sinh đã có monthly_report hay chưa.
+     */
+    public function setStudentReportFilters(Builder $query, array $filters = []): Builder
+    {
+        $month = ! empty($filters['month']) ? (string) $filters['month'] : now()->format('Y-m');
+
+        $query->withExists([
+            'monthlyReports as has_monthly_report' => function (Builder $subQuery) use ($month) {
+                $subQuery->where('month', $month);
+            },
+        ]);
+
+        if (!empty($filters['class_id'])) {
+            $query->whereHas('activeClassEnrollments', function (Builder $subQuery) use ($filters) {
+                $subQuery->where('class_id', $filters['class_id']);
+            });
+        }
+
+        if (!empty($filters['keyword']) && !empty(trim((string) $filters['keyword']))) {
+            $keyword = trim((string) $filters['keyword']);
+            $query->where(function (Builder $subQuery) use ($keyword) {
+                $subQuery->where('students.full_name', 'like', "%{$keyword}%")
+                    ->orWhere('students.parent_phone', 'like', "%{$keyword}%");
+            });
+        }
+
+        if (!empty($filters['grade_level'])) {
+            $query->where('students.grade_level', $filters['grade_level']);
+        }
 
         return $query;
     }
