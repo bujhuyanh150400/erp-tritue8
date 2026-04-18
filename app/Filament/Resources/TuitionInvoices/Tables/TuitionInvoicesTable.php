@@ -33,9 +33,12 @@ use Filament\Tables\Filters\Filter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\HtmlString;
 
 class TuitionInvoicesTable
 {
+    protected static array $monthlyDetailCache = [];
+
     public static function configure(Table $table): Table
     {
         return $table
@@ -168,29 +171,18 @@ class TuitionInvoicesTable
                         ->label('Thanh toán')
                         ->icon(Heroicon::Banknotes)
                         ->color('success')
-                        ->hidden(fn (TuitionInvoice $record) => (int) ($record->invoice_count ?? 1) > 1 || $record->getRemainingAmount() <= 0 || $record->is_locked)
+                        ->modalWidth('7xl')
+                        ->hidden(fn (TuitionInvoice $record) => $record->getRemainingAmount() <= 0 || $record->is_locked)
                         ->schema([
-                            Grid::make(2)
-                                ->schema([
-                                    Placeholder::make('student_info')
-                                        ->label('Học sinh')
-                                        ->content(fn (TuitionInvoice $record) => $record->student_name ?? $record->student?->full_name ?? '-'),
-                                    Placeholder::make('class_info')
-                                        ->label('Lớp')
-                                        ->content(fn (TuitionInvoice $record) => $record->class_name ?? $record->class?->name ?? '-'),
-                                    Placeholder::make('month_info')
-                                        ->label('Tháng')
-                                        ->content(fn (TuitionInvoice $record) => $record->month),
-                                    Placeholder::make('total_amount')
-                                        ->label('Tổng phải thu')
-                                        ->content(fn (TuitionInvoice $record) => number_format((int) $record->total_amount, 0, ',', '.') . 'đ'),
-                                    Placeholder::make('paid_amount')
-                                        ->label('Đã thanh toán')
-                                        ->content(fn (TuitionInvoice $record) => number_format((int) $record->paid_amount, 0, ',', '.') . 'đ'),
-                                    Placeholder::make('remaining_amount')
-                                        ->label('Còn lại')
-                                        ->content(fn (TuitionInvoice $record) => number_format($record->getRemainingAmount(), 0, ',', '.') . 'đ'),
-                                ])
+                            Placeholder::make('monthly_invoice_overview')
+                                ->hiddenLabel()
+                                ->content(function (TuitionInvoice $record) {
+                                    return new HtmlString(
+                                        view('filament.resources.tuition-invoices.partials.payment-overview', [
+                                            'detailData' => self::getMonthlyInvoiceDetailData($record),
+                                        ])->render()
+                                    );
+                                })
                                 ->columnSpanFull(),
                             TextInput::make('amount')
                                 ->label('Số tiền thanh toán')
@@ -211,7 +203,12 @@ class TuitionInvoicesTable
                                 ->columnSpanFull(),
                         ])
                         ->action(function (TuitionInvoice $record, array $data) {
-                            $result = app(TuitionInvoiceService::class)->recordPayment($record, $data);
+                            $service = app(TuitionInvoiceService::class);
+                            $summary = self::getMonthlyInvoiceSummary($record);
+
+                            $result = (int) ($summary['subject_count'] ?? 0) > 1
+                                ? $service->recordBulkPayment(new Collection([$record]), $data)
+                                : $service->recordPayment($record, $data);
 
                             if ($result->isError()) {
                                 Notification::make()->danger()->title('Lỗi')->body($result->getMessage())->send();
@@ -324,6 +321,20 @@ class TuitionInvoicesTable
                                 ->send();
                         }),
 
+                    Action::make('remind_month_payment')
+                        ->label('Nhắc đóng học phí')
+                        ->icon(Heroicon::BellAlert)
+                        ->hidden(fn (TuitionInvoice $record) => (int) ($record->invoice_count ?? 1) <= 1 || $record->getRemainingAmount() <= 0 || $record->is_locked)
+                        ->action(function (TuitionInvoice $record) {
+                            $result = app(TuitionInvoiceService::class)->sendBulkReminder(new Collection([$record]));
+
+                            Notification::make()
+                                ->title($result->isSuccess() ? $result->getMessage() : 'Lỗi')
+                                ->body($result->isError() ? $result->getMessage() : null)
+                                ->color($result->isSuccess() ? 'success' : 'danger')
+                                ->send();
+                        }),
+
 //                    Action::make('send_receipt')
 //                        ->label('Gửi phiếu thu')
 //                        ->icon(Heroicon::PaperAirplane)
@@ -340,9 +351,32 @@ class TuitionInvoicesTable
                     Action::make('export_pdf')
                         ->label('Xuất PDF')
                         ->icon(Heroicon::DocumentArrowDown)
-                        ->hidden(fn (TuitionInvoice $record) => (int) ($record->invoice_count ?? 1) > 1)
+                        ->hidden()
                         ->url(fn (TuitionInvoice $record) => route('tuition-invoices.pdf', ['invoice' => $record]))
                         ->openUrlInNewTab(),
+
+                    Action::make('export_month_zip')
+                        ->label('Xuất PDF')
+                        ->icon(Heroicon::DocumentArrowDown)
+                        ->color('info')
+                        ->hidden(fn (TuitionInvoice $record) => false)
+                        ->schema([
+                            Select::make('payment_method')
+                                ->label('Phương thức xuất')
+                                ->options(PaymentMethod::options())
+                                ->required(),
+                        ])
+                        ->action(function (TuitionInvoice $record, array $data) {
+                            $service = app(TuitionInvoiceService::class);
+                            $result = $service->prepareBulkInvoiceZip(new Collection([$record]), (int) $data['payment_method']);
+
+                            if ($result->isError()) {
+                                Notification::make()->danger()->title('Lỗi')->body($result->getMessage())->send();
+                                throw new Halt();
+                            }
+
+                            return $service->downloadPreparedZip($result->getData());
+                        }),
                 ]),
             ])
             ->toolbarActions([
@@ -403,5 +437,36 @@ class TuitionInvoicesTable
                         ->deselectRecordsAfterCompletion(),
                 ]),
             ]);
+    }
+
+    protected static function getMonthlyInvoiceSummary(TuitionInvoice $record): array
+    {
+        $data = self::getMonthlyInvoiceDetailData($record);
+        $items = collect($data['items'] ?? []);
+        $totals = $data['totals'] ?? [];
+
+        return [
+            'subject_count' => $items->count(),
+            'total_sessions' => (int) ($totals['total_sessions'] ?? 0),
+            'attended_sessions' => (int) ($totals['attended_sessions'] ?? 0),
+            'total_study_fee' => (int) ($totals['total_study_fee'] ?? 0),
+            'previous_debt' => (int) ($totals['previous_debt'] ?? 0),
+            'total_amount' => (int) ($totals['total_amount'] ?? 0),
+            'paid_amount' => (int) ($totals['paid_amount'] ?? 0),
+            'remaining_amount' => (int) ($totals['remaining_amount'] ?? 0),
+        ];
+    }
+
+    protected static function getMonthlyInvoiceDetailData(TuitionInvoice $record): array
+    {
+        $cacheKey = (string) $record->student_id . '|' . (string) $record->month;
+
+        if (isset(self::$monthlyDetailCache[$cacheKey])) {
+            return self::$monthlyDetailCache[$cacheKey];
+        }
+
+        $result = app(TuitionInvoiceService::class)->getStudentMonthlyInvoiceDetail($record);
+
+        return self::$monthlyDetailCache[$cacheKey] = $result->isSuccess() ? $result->getData() : [];
     }
 }
